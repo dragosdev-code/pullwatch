@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "PR Live Extension",
+  "description": "A Chrome extension for real-time PR updates",
+  "version": "1.0.0",
+  "action": {
+    "default_popup": "index.html"
+  },
+  "permissions": ["storage", "activeTab", "notifications", "alarms"],
+  "host_permissions": ["https://api.github.com/*", "https://github.com/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}
