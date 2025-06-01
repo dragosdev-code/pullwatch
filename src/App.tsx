@@ -83,6 +83,31 @@ function App() {
     setShowTitleParticles(false);
   };
 
+  const handleTestNotification = async () => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        chrome.runtime.sendMessage(
+          { action: 'testNotification' },
+          (response: { success: boolean; error?: string }) => {
+            if (chrome.runtime.lastError) {
+              setError('Failed to send test notification');
+              return;
+            }
+
+            if (response.success) {
+              console.log('Test notification sent successfully');
+            } else {
+              setError(response.error || 'Failed to send test notification');
+            }
+          }
+        );
+      }
+    } catch (err) {
+      console.error('Failed to send test notification:', err);
+      setError('Failed to send test notification');
+    }
+  };
+
   const formatLastFetch = (timestamp: number | null) => {
     if (!timestamp) return null;
     const now = Date.now();
@@ -119,6 +144,16 @@ function App() {
           </button>
         </div>
       )}
+
+      {/* Debug test notification button - can be removed later */}
+      <div className="px-5 py-2 bg-blue-50 border-b border-blue-200">
+        <button
+          onClick={handleTestNotification}
+          className="text-xs text-blue-700 hover:text-blue-800 underline"
+        >
+          Test Notification
+        </button>
+      </div>
 
       {lastFetch && (
         <div className="px-5 py-2 bg-gray-50 border-b border-gray-200">
