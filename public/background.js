@@ -74,7 +74,7 @@ class GitHubService {
     return data;
   }
 
-  async fallbackToHTMLScraping() {
+  async HTMLScraping() {
     try {
       const response = await fetch(
         'https://github.com/pulls?q=is%3Apr+is%3Aopen+user-review-requested%3A%40me',
@@ -132,7 +132,7 @@ class GitHubService {
             `href="${relativeUrl.replace(
               /[.*+?^${}()|[\]\\]/g,
               '\\$&'
-            )}"[^>]*>.*?opened by.*?<a[^>]*>([^<]+)<`,
+            )}"[^>]*>.*?by.*?<a[^>]*>([^<]+)<`,
             'i'
           );
           const authorMatch = html.match(authorRegex);
@@ -214,63 +214,7 @@ class GitHubService {
   }
 
   async getReviewRequestedPRs() {
-    try {
-      // Try GraphQL first
-      const query = `
-        query {
-          viewer {
-            pullRequests(states: OPEN, first: 50, orderBy: { field: UPDATED_AT, direction: DESC }) {
-              nodes {
-                id
-                title
-                url
-                updatedAt
-                repository {
-                  nameWithOwner
-                }
-                author {
-                  login
-                }
-                reviewRequests(first: 10) {
-                  nodes {
-                    requestedReviewer {
-                      ... on User {
-                        login
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      `;
-
-      const response = await this.fetchWithGraphQL(query);
-
-      if (response.data?.viewer?.pullRequests?.nodes) {
-        const prs = response.data.viewer.pullRequests.nodes
-          .filter((pr) => {
-            return pr.reviewRequests?.nodes.some((request) => request.requestedReviewer?.login);
-          })
-          .map((pr) => ({
-            id: this.generateIdFromUrl(pr.url),
-            title: pr.title,
-            repository: pr.repository.nameWithOwner,
-            author: pr.author.login,
-            updatedAt: pr.updatedAt,
-            url: pr.url,
-            hasUnread: true,
-            isNew: false,
-          }));
-
-        return prs;
-      }
-    } catch (error) {
-      console.warn('GraphQL approach failed, falling back to HTML scraping:', error);
-    }
-
-    return this.fallbackToHTMLScraping();
+    return this.HTMLScraping();
   }
 
   clearCache() {
@@ -290,11 +234,27 @@ async function fetchAndUpdatePRs() {
     const currentPRs = result[STORAGE_KEY] || [];
     const currentPRIds = new Set(currentPRs.map((pr) => pr.id));
 
+    console.log(`Current PRs in storage: ${currentPRs.length}`);
+    console.log('Current PR IDs:', Array.from(currentPRIds));
+
     // Fetch new PRs
     const newPRs = await githubService.getReviewRequestedPRs();
+    console.log(`Fetched PRs: ${newPRs.length}`);
+    console.log(
+      'Fetched PR IDs:',
+      newPRs.map((pr) => pr.id)
+    );
 
     // Find truly new PRs
     const newlyAddedPRs = newPRs.filter((pr) => !currentPRIds.has(pr.id));
+    console.log(`New PRs detected: ${newlyAddedPRs.length}`);
+
+    if (newlyAddedPRs.length > 0) {
+      console.log(
+        'New PRs:',
+        newlyAddedPRs.map((pr) => ({ id: pr.id, title: pr.title }))
+      );
+    }
 
     // Update storage
     await chrome.storage.local.set({
@@ -305,9 +265,12 @@ async function fetchAndUpdatePRs() {
     // Update badge
     await updateBadge(newPRs.length);
 
-    // Show notifications for new PRs
-    if (newlyAddedPRs.length > 0) {
+    // Show notifications for new PRs (only if we have stored PRs before, to avoid notifications on first load)
+    if (newlyAddedPRs.length > 0 && currentPRs.length > 0) {
+      console.log('Attempting to show notifications for new PRs...');
       await showNewPRNotifications(newlyAddedPRs);
+    } else if (newlyAddedPRs.length > 0 && currentPRs.length === 0) {
+      console.log('Skipping notifications - this appears to be the first load');
     }
 
     console.log(
@@ -340,29 +303,51 @@ async function updateBadge(count) {
 // Show notifications for new PRs
 async function showNewPRNotifications(newPRs) {
   try {
+    console.log(`Showing notifications for ${newPRs.length} new PRs`);
+
+    // Check notification permission
+    const permission = await chrome.notifications.getPermissionLevel();
+    console.log('Notification permission level:', permission);
+
+    if (permission === 'denied') {
+      console.warn('Notifications are denied. Cannot show PR notifications.');
+      return;
+    }
+
     if (newPRs.length === 1) {
       // Single PR notification
       const pr = newPRs[0];
-      await chrome.notifications.create({
+      console.log('Creating single PR notification for:', pr.title);
+
+      const notificationId = await chrome.notifications.create({
         type: 'basic',
-        iconUrl: 'icon-48.png',
+        iconUrl: 'https://github.com/favicon.ico',
         title: 'New PR Review Request',
         message: `${pr.title}\n${pr.repository}`,
         contextMessage: `by ${pr.author}`,
         buttons: [{ title: 'View PR' }],
+        requireInteraction: true, // Keep notification visible until user interacts
       });
+
+      console.log('Single PR notification created with ID:', notificationId);
     } else {
       // Multiple PRs notification
-      await chrome.notifications.create({
+      console.log('Creating multiple PRs notification for:', newPRs.length, 'PRs');
+
+      const notificationId = await chrome.notifications.create({
         type: 'basic',
-        iconUrl: 'icon-48.png',
+        iconUrl: 'https://github.com/favicon.ico',
         title: 'New PR Review Requests',
         message: `${newPRs.length} new pull requests need your review`,
         contextMessage: 'Click to view all PRs',
+        requireInteraction: true, // Keep notification visible until user interacts
       });
+
+      console.log('Multiple PRs notification created with ID:', notificationId);
     }
   } catch (error) {
     console.error('Failed to show notification:', error);
+    console.error('Error details:', error.message, error.stack);
   }
 }
 
@@ -428,4 +413,46 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (request.action === 'testNotification') {
+    // Test notification to debug notification issues
+    testNotification()
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch((error) => {
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
+  }
 });
+
+// Test notification function
+async function testNotification() {
+  try {
+    console.log('Testing notification...');
+
+    // Check notification permission
+    const permission = await chrome.notifications.getPermissionLevel();
+    console.log('Test notification - Permission level:', permission);
+
+    if (permission === 'denied') {
+      throw new Error('Notifications are denied');
+    }
+
+    const notificationId = await chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'https://github.com/favicon.ico',
+      title: 'Test Notification',
+      message: 'This is a test notification from PR Live Extension',
+      contextMessage: 'If you see this, notifications are working!',
+      requireInteraction: true,
+    });
+
+    console.log('Test notification created with ID:', notificationId);
+    return notificationId;
+  } catch (error) {
+    console.error('Test notification failed:', error);
+    throw error;
+  }
+}
