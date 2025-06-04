@@ -180,7 +180,6 @@ class GitHubService {
     let url = null;
     let title = null;
 
-    // Strategy 1: GitHub's current structure - look for markdown-title class with js-navigation-open
     const githubCurrentPattern =
       /<a[^>]*class="[^"]*markdown-title[^"]*"[^>]*data-hovercard-type="pull_request"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/i;
     let match = containerHTML.match(githubCurrentPattern);
@@ -190,74 +189,10 @@ class GitHubService {
       title = match[2].trim();
     }
 
-    // Strategy 2: Alternative GitHub pattern - js-navigation-open with pull_request hovercard
-    if (!url) {
-      const altGithubPattern =
-        /<a[^>]*js-navigation-open[^>]*data-hovercard-type="pull_request"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/i;
-      match = containerHTML.match(altGithubPattern);
-      if (match) {
-        console.log('Found PR via alternative GitHub pattern:', match[1], match[2]);
-        url = match[1];
-        title = match[2].trim();
-      }
-    }
-
-    // Strategy 3: Look for any link with data-hovercard-type="pull_request"
-    if (!url) {
-      const hovercardPattern =
-        /<a[^>]*data-hovercard-type="pull_request"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/i;
-      match = containerHTML.match(hovercardPattern);
-      if (match) {
-        console.log('Found PR via hovercard pattern:', match[1], match[2]);
-        url = match[1];
-        title = match[2].trim();
-      }
-    }
-
-    // Strategy 4: Look for js-navigation-open with /pull/ in href
-    if (!url) {
-      const navPattern =
-        /<a[^>]*class="[^"]*js-navigation-open[^"]*"[^>]*href="([^"]*\/pull\/\d+)"[^>]*>([^<]*)<\/a>/i;
-      match = containerHTML.match(navPattern);
-      if (match) {
-        console.log('Found PR via navigation pattern:', match[1], match[2]);
-        url = match[1];
-        title = match[2].trim();
-      }
-    }
-
-    // Strategy 5: More flexible approach - find any link with /pull/ in href
-    if (!url) {
-      const flexiblePattern = /<a[^>]*href="([^"]*\/pull\/\d+)"[^>]*>([^<]*)<\/a>/gi;
-      const matches = [...containerHTML.matchAll(flexiblePattern)];
-      console.log(`Found ${matches.length} potential PR links`);
-
-      for (const match of matches) {
-        console.log('Checking PR link:', match[1]);
-        const linkUrl = match[1];
-        const titleHTML = match[2];
-        const linkTitle = titleHTML.replace(/<[^>]*>/g, '').trim();
-
-        // Skip empty titles or very short ones that are likely icons/buttons
-        if (linkTitle && linkTitle.length > 3) {
-          console.log('Found valid PR via flexible pattern:', linkUrl, linkTitle);
-          url = linkUrl;
-          title = linkTitle;
-          break;
-        } else {
-          console.log('Skipping link with title:', linkTitle);
-        }
-      }
-    }
-
     if (!url || !title) {
       console.log('No title element found in container');
       console.log('Tried patterns:');
       console.log('1. GitHub current pattern (markdown-title)');
-      console.log('2. Alternative GitHub pattern');
-      console.log('3. Hovercard pattern');
-      console.log('4. Navigation pattern');
-      console.log('5. Flexible pattern');
       return null;
     }
 
@@ -286,52 +221,16 @@ class GitHubService {
 
     console.log(`Extracted PR: ${title} - ${url}`);
 
-    // Try to find author info with multiple strategies based on the actual GitHub structure
-    let author = { login: 'Unknown', avatarUrl: '' };
+    const author = { login: 'Unknown', avatarUrl: '' };
 
-    // Strategy 1: Look for author link in the opened-by span with img tag
-    const githubAuthorPattern =
-      /<span[^>]*class="[^"]*opened-by[^"]*"[^>]*>.*?<a[^>]*data-hovercard-type="user"[^>]*>.*?<img[^>]*src="([^"]*)"[^>]*>([^<]*)<\/a>/is;
-    let authorMatch = containerHTML.match(githubAuthorPattern);
-    if (authorMatch) {
-      console.log('Found author via GitHub author pattern:', authorMatch[2]);
-      author.login = authorMatch[2].trim();
-      author.avatarUrl = authorMatch[1];
-    }
-
-    // Strategy 2: Look for user hovercard with img
-    if (author.login === 'Unknown') {
-      const userHovercardPattern =
-        /<a[^>]*data-hovercard-type="user"[^>]*>.*?<img[^>]*src="([^"]*)"[^>]*>([^<]*)<\/a>/is;
-      authorMatch = containerHTML.match(userHovercardPattern);
-      if (authorMatch) {
-        console.log('Found author via user hovercard pattern:', authorMatch[2]);
-        author.login = authorMatch[2].trim();
-        author.avatarUrl = authorMatch[1];
-      }
-    }
-
-    // Strategy 3: Extract from href path in user links
     if (author.login === 'Unknown') {
       const userLinkPattern =
         /<a[^>]*data-hovercard-type="user"[^>]*href="[^"]*author%3A([^"&]+)"[^>]*>([^<]*)<\/a>/i;
-      authorMatch = containerHTML.match(userLinkPattern);
+      const authorMatch = containerHTML.match(userLinkPattern);
       if (authorMatch) {
         console.log('Found author via user link pattern:', authorMatch[2]);
         author.login = authorMatch[2].trim();
         author.avatarUrl = `https://github.com/${authorMatch[1]}.png?size=40`;
-      }
-    }
-
-    // Strategy 4: Look for any img with avatar class
-    if (author.login === 'Unknown') {
-      const avatarPattern =
-        /<img[^>]*class="[^"]*avatar[^"]*"[^>]*src="https:\/\/avatars\.githubusercontent\.com\/([^?]+)\?[^"]*"[^>]*>/i;
-      authorMatch = containerHTML.match(avatarPattern);
-      if (authorMatch) {
-        console.log('Found author via avatar pattern:', authorMatch[1]);
-        author.login = authorMatch[1];
-        author.avatarUrl = `https://avatars.githubusercontent.com/${authorMatch[1]}?size=40`;
       }
     }
 
