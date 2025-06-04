@@ -7,218 +7,390 @@ const LAST_FETCH_KEY = 'last_fetch_time';
 
 class GitHubService {
   constructor() {
-    this.cachedCSRFToken = null;
+    this.baseURL = 'https://github.com';
+    // Use the search endpoint for PRs where user is requested as reviewer
+    this.reviewRequestsURL = `${this.baseURL}/pulls?q=is%3Aopen+is%3Apr+user-review-requested%3A%40me+`;
   }
 
-  async getCSRFToken() {
-    if (this.cachedCSRFToken) {
-      return this.cachedCSRFToken;
-    }
-
+  async fetchAssignedPRs() {
     try {
-      const response = await fetch('https://github.com/pulls', {
+      console.log('Fetching from URL:', this.reviewRequestsURL);
+
+      const response = await fetch(this.reviewRequestsURL, {
         credentials: 'include',
         headers: {
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'User-Agent': 'Mozilla/5.0 (compatible; GitHub PR Extension)',
         },
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
-        throw new Error('Failed to fetch GitHub page for CSRF token');
+        throw new Error(`GitHub request failed: ${response.status}`);
       }
 
       const html = await response.text();
+      console.log('HTML received, length:', html.length);
 
-      // Use regex to extract CSRF token since DOMParser is not available in service workers
-      const csrfMatch = html.match(/<meta\s+name="csrf-token"\s+content="([^"]+)"/);
-      const token = csrfMatch ? csrfMatch[1] : null;
+      // More specific login detection - look for actual login page indicators
+      const isLoginPage =
+        html.includes('<title>Sign in to GitHub') ||
+        html.includes('id="login"') ||
+        html.includes('class="auth-form"') ||
+        html.includes('name="login"') ||
+        html.includes('You must be signed in to see this page') ||
+        response.url.includes('/login') ||
+        response.url.includes('/session') ||
+        html.includes('action="/session"');
 
-      if (!token) {
-        throw new Error('CSRF token not found. Make sure you are logged into GitHub.');
+      // Look for positive indicators that we're logged in and on a search results page
+      const isLoggedIn =
+        html.includes('class="Header-link"') || // GitHub header with user menu
+        html.includes('data-test-selector="avatar"') || // User avatar
+        html.includes('aria-label="View profile and more"') || // User dropdown
+        html.includes('href="/settings/profile"') || // Settings link
+        html.includes('class="search-title"') || // Search results page
+        html.includes('data-testid="results-list"') || // Search results
+        html.includes('js-issue-row') || // Issue/PR rows
+        html.includes('No results matched your search'); // Valid search page with no results
+
+      console.log('Login page indicators:', isLoginPage);
+      console.log('Logged in indicators:', isLoggedIn);
+
+      if (isLoginPage && !isLoggedIn) {
+        console.log('Detected login page - not logged in');
+        throw new Error('Not logged in to GitHub');
       }
 
-      this.cachedCSRFToken = token;
-      return token;
+      // Check if we got a search results page
+      if (
+        !html.includes('pull request') &&
+        !html.includes('No results matched') &&
+        !html.includes('js-issue-row')
+      ) {
+        console.log('Unexpected page content - might not be search results');
+        console.log(
+          'Page title from HTML:',
+          html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || 'No title found'
+        );
+
+        // Still try to parse it - might be a different page format
+      }
+
+      return this.parseAssignedPRsFromHTML(html);
     } catch (error) {
-      throw new Error(`Failed to get CSRF token: ${error.message}`);
+      console.error('Error fetching PRs:', error);
+      throw error;
     }
   }
 
-  async fetchWithGraphQL(query) {
-    const csrfToken = await this.getCSRFToken();
-
-    const response = await fetch('https://github.com/_graphql', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': csrfToken,
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ query }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error('Not authenticated. Please log into GitHub first.');
-      }
-      throw new Error(`GitHub GraphQL request failed: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    if (data.errors && data.errors.length > 0) {
-      throw new Error(`GraphQL error: ${data.errors[0].message}`);
-    }
-
-    return data;
-  }
-
-  async HTMLScraping() {
-    try {
-      const response = await fetch(
-        'https://github.com/pulls?q=is%3Apr+is%3Aopen+user-review-requested%3A%40me',
-        {
-          credentials: 'include',
-          headers: {
-            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch PRs page: ${response.status}`);
-      }
-
-      const html = await response.text();
-      return this.parseHTMLForPRs(html);
-    } catch (error) {
-      console.error('HTML scraping fallback failed:', error);
-      return [];
-    }
-  }
-
-  parseHTMLForPRs(html) {
+  parseAssignedPRsFromHTML(html) {
     const prs = [];
 
-    try {
-      // Use regex to find PR links since DOMParser is not available in service workers
-      // Look for pull request links in the format /owner/repo/pull/number
-      const prLinkRegex = /<a[^>]*href="([^"]*\/pull\/\d+)"[^>]*>([^<]*)<\/a>/gi;
-      const matches = [...html.matchAll(prLinkRegex)];
+    // Debug: Check what we actually received
+    console.log('HTML length:', html.length);
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    console.log('Page title:', titleMatch?.[1] || 'No title found');
 
-      const seenUrls = new Set();
+    // Selectors for GitHub search results page (adapted for regex)
+    const prSelectors = [
+      // GitHub search results selectors
+      'js-issue-row', // Main search result row
+      'Box-row', // Generic box row
+      'issue-list-item', // Issue list item
+      'data-hovercard-type="pull_request"', // PR-specific
+    ];
 
-      for (const match of matches) {
-        try {
-          const relativeUrl = match[1];
-          const title = match[2].trim();
+    let prElements = [];
 
-          if (!title || !relativeUrl || seenUrls.has(relativeUrl)) continue;
-
-          seenUrls.add(relativeUrl);
-
-          const url = `https://github.com${relativeUrl}`;
-          const urlParts = relativeUrl.split('/');
-          const repository =
-            urlParts.length >= 3 ? `${urlParts[1]}/${urlParts[2]}` : 'Unknown Repository';
-
-          // Try to extract additional info with more regex patterns
-          let author = 'Unknown Author';
-          let updatedAt = new Date().toISOString();
-
-          // Look for author information near this PR link
-          const authorRegex = new RegExp(
-            `href="${relativeUrl.replace(
-              /[.*+?^${}()|[\]\\]/g,
-              '\\$&'
-            )}"[^>]*>.*?by.*?<a[^>]*>([^<]+)<`,
-            'i'
+    // Try to find PR containers using various patterns
+    for (const selector of prSelectors) {
+      let pattern;
+      if (selector === 'data-hovercard-type="pull_request"') {
+        // Special case for hovercard attribute
+        pattern = new RegExp(`<[^>]*${selector}[^>]*>(.*?)</[^>]*>`, 'gis');
+      } else {
+        // Regular class-based selectors - improved to capture full container
+        if (selector === 'js-issue-row') {
+          // For js-issue-row, match the full div container with proper nesting
+          pattern = new RegExp(
+            `<div[^>]*class="[^"]*${selector}[^"]*"[^>]*>.*?</div>(?=\\s*(?:<div[^>]*class="[^"]*${selector}|</div>|$))`,
+            'gis'
           );
-          const authorMatch = html.match(authorRegex);
-          if (authorMatch) {
-            author = authorMatch[1].trim();
-          }
-
-          // Look for relative-time near this PR
-          const timeRegex = new RegExp(
-            `href="${relativeUrl.replace(
-              /[.*+?^${}()|[\]\\]/g,
-              '\\$&'
-            )}".*?<relative-time[^>]*datetime="([^"]+)"`,
-            'i'
-          );
-          const timeMatch = html.match(timeRegex);
-          if (timeMatch) {
-            updatedAt = timeMatch[1];
-          }
-
-          const id = this.generateIdFromUrl(relativeUrl);
-
-          prs.push({
-            id,
-            title,
-            repository,
-            author,
-            updatedAt,
-            url,
-            hasUnread: true,
-            isNew: false,
-          });
-        } catch (error) {
-          console.warn('Failed to parse PR match:', error);
+        } else {
+          pattern = new RegExp(`<[^>]*class="[^"]*${selector}[^"]*"[^>]*>(.*?)</[^>]*>`, 'gis');
         }
       }
 
-      // If we didn't find any PRs with the main regex, try a simpler approach
-      if (prs.length === 0) {
-        console.warn('No PRs found with detailed regex, trying simpler approach');
-        const simplePRRegex = /\/[^\/]+\/[^\/]+\/pull\/\d+/g;
-        const simpleMatches = html.match(simplePRRegex);
+      const matches = [...html.matchAll(pattern)];
+      console.log(`Selector "${selector}" found ${matches.length} elements`);
 
-        if (simpleMatches) {
-          const uniqueUrls = [...new Set(simpleMatches)];
-          uniqueUrls.forEach((relativeUrl, index) => {
-            const urlParts = relativeUrl.split('/');
-            const repository =
-              urlParts.length >= 3 ? `${urlParts[1]}/${urlParts[2]}` : 'Unknown Repository';
-
-            prs.push({
-              id: this.generateIdFromUrl(relativeUrl),
-              title: `Pull Request #${urlParts[urlParts.length - 1]}`,
-              repository,
-              author: 'Unknown Author',
-              updatedAt: new Date().toISOString(),
-              url: `https://github.com${relativeUrl}`,
-              hasUnread: true,
-              isNew: false,
-            });
-          });
-        }
+      if (matches.length > 0) {
+        prElements = matches;
+        break;
       }
-    } catch (error) {
-      console.error('Failed to parse HTML with regex:', error);
     }
 
+    // If no specific PR selectors work, try to find any links to PRs
+    if (prElements.length === 0) {
+      console.log('No PR containers found, looking for PR links...');
+      const prLinkPattern = /<a[^>]*href="[^"]*\/pull\/\d+[^"]*"[^>]*>([^<]*)<\/a>/gi;
+      const allLinks = [...html.matchAll(prLinkPattern)];
+      console.log(`Found ${allLinks.length} PR links in total`);
+
+      // Group links by finding their containing elements
+      const containerPattern =
+        /<(?:div|article|li|tr)[^>]*>.*?<a[^>]*href="([^"]*\/pull\/\d+)[^"]*"[^>]*>([^<]*)<\/a>.*?<\/(?:div|article|li|tr)>/gi;
+      prElements = [...html.matchAll(containerPattern)];
+      console.log(`Extracted ${prElements.length} unique PR containers`);
+    }
+
+    prElements.forEach((element, index) => {
+      try {
+        console.log(`Processing element ${index}`);
+        const pr = this.extractPRDataFromElement(element, html);
+        if (pr) {
+          console.log(`Successfully extracted PR: ${pr.title}`);
+          prs.push(pr);
+        } else {
+          console.log(`Failed to extract PR data from element ${index}`);
+        }
+      } catch (error) {
+        console.log(`Error parsing PR element ${index}:`, error);
+      }
+    });
+
+    console.log(`Total PRs extracted: ${prs.length}`);
+    prs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     return prs;
   }
 
-  generateIdFromUrl(url) {
-    let hash = 0;
-    for (let i = 0; i < url.length; i++) {
-      const char = url.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash;
+  extractPRDataFromElement(element, fullHTML) {
+    // element is either a regex match array or container HTML
+    const containerHTML = typeof element === 'string' ? element : element[0];
+
+    // DEBUG: Log the container HTML to see what we're working with (can be removed later)
+    console.log('=== DEBUG: Container HTML ===');
+    console.log(containerHTML.substring(0, 300) + '...');
+    console.log('=== END DEBUG ===');
+
+    // Try multiple strategies to find the PR link based on actual GitHub structure
+    let url = null;
+    let title = null;
+
+    // Strategy 1: GitHub's current structure - look for markdown-title class with js-navigation-open
+    const githubCurrentPattern =
+      /<a[^>]*class="[^"]*markdown-title[^"]*"[^>]*data-hovercard-type="pull_request"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/i;
+    let match = containerHTML.match(githubCurrentPattern);
+    if (match) {
+      console.log('Found PR via GitHub current pattern (markdown-title):', match[1], match[2]);
+      url = match[1];
+      title = match[2].trim();
     }
-    return Math.abs(hash);
+
+    // Strategy 2: Alternative GitHub pattern - js-navigation-open with pull_request hovercard
+    if (!url) {
+      const altGithubPattern =
+        /<a[^>]*js-navigation-open[^>]*data-hovercard-type="pull_request"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/i;
+      match = containerHTML.match(altGithubPattern);
+      if (match) {
+        console.log('Found PR via alternative GitHub pattern:', match[1], match[2]);
+        url = match[1];
+        title = match[2].trim();
+      }
+    }
+
+    // Strategy 3: Look for any link with data-hovercard-type="pull_request"
+    if (!url) {
+      const hovercardPattern =
+        /<a[^>]*data-hovercard-type="pull_request"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/i;
+      match = containerHTML.match(hovercardPattern);
+      if (match) {
+        console.log('Found PR via hovercard pattern:', match[1], match[2]);
+        url = match[1];
+        title = match[2].trim();
+      }
+    }
+
+    // Strategy 4: Look for js-navigation-open with /pull/ in href
+    if (!url) {
+      const navPattern =
+        /<a[^>]*class="[^"]*js-navigation-open[^"]*"[^>]*href="([^"]*\/pull\/\d+)"[^>]*>([^<]*)<\/a>/i;
+      match = containerHTML.match(navPattern);
+      if (match) {
+        console.log('Found PR via navigation pattern:', match[1], match[2]);
+        url = match[1];
+        title = match[2].trim();
+      }
+    }
+
+    // Strategy 5: More flexible approach - find any link with /pull/ in href
+    if (!url) {
+      const flexiblePattern = /<a[^>]*href="([^"]*\/pull\/\d+)"[^>]*>([^<]*)<\/a>/gi;
+      const matches = [...containerHTML.matchAll(flexiblePattern)];
+      console.log(`Found ${matches.length} potential PR links`);
+
+      for (const match of matches) {
+        console.log('Checking PR link:', match[1]);
+        const linkUrl = match[1];
+        const titleHTML = match[2];
+        const linkTitle = titleHTML.replace(/<[^>]*>/g, '').trim();
+
+        // Skip empty titles or very short ones that are likely icons/buttons
+        if (linkTitle && linkTitle.length > 3) {
+          console.log('Found valid PR via flexible pattern:', linkUrl, linkTitle);
+          url = linkUrl;
+          title = linkTitle;
+          break;
+        } else {
+          console.log('Skipping link with title:', linkTitle);
+        }
+      }
+    }
+
+    if (!url || !title) {
+      console.log('No title element found in container');
+      console.log('Tried patterns:');
+      console.log('1. GitHub current pattern (markdown-title)');
+      console.log('2. Alternative GitHub pattern');
+      console.log('3. Hovercard pattern');
+      console.log('4. Navigation pattern');
+      console.log('5. Flexible pattern');
+      return null;
+    }
+
+    // Get the URL and ensure it's absolute
+    if (url.startsWith('/')) {
+      url = `https://github.com${url}`;
+    } else if (url && !url.startsWith('http')) {
+      url = `https://github.com/${url}`;
+    }
+
+    if (!url || !url.includes('/pull/')) {
+      console.log('No valid URL found');
+      return null;
+    }
+
+    // Clean title of any HTML tags
+    title = title.replace(/<[^>]*>/g, '').trim();
+
+    // Extract PR number from URL
+    const numberMatch = url.match(/\/pull\/(\d+)/);
+    const number = numberMatch ? parseInt(numberMatch[1]) : null;
+
+    // Extract repository name
+    const repoMatch = url.match(/https:\/\/github\.com\/([^\/]+\/[^\/]+)/);
+    const repoName = repoMatch ? repoMatch[1] : 'Unknown';
+
+    console.log(`Extracted PR: ${title} - ${url}`);
+
+    // Try to find author info with multiple strategies based on the actual GitHub structure
+    let author = { login: 'Unknown', avatarUrl: '' };
+
+    // Strategy 1: Look for author link in the opened-by span with img tag
+    const githubAuthorPattern =
+      /<span[^>]*class="[^"]*opened-by[^"]*"[^>]*>.*?<a[^>]*data-hovercard-type="user"[^>]*>.*?<img[^>]*src="([^"]*)"[^>]*>([^<]*)<\/a>/is;
+    let authorMatch = containerHTML.match(githubAuthorPattern);
+    if (authorMatch) {
+      console.log('Found author via GitHub author pattern:', authorMatch[2]);
+      author.login = authorMatch[2].trim();
+      author.avatarUrl = authorMatch[1];
+    }
+
+    // Strategy 2: Look for user hovercard with img
+    if (author.login === 'Unknown') {
+      const userHovercardPattern =
+        /<a[^>]*data-hovercard-type="user"[^>]*>.*?<img[^>]*src="([^"]*)"[^>]*>([^<]*)<\/a>/is;
+      authorMatch = containerHTML.match(userHovercardPattern);
+      if (authorMatch) {
+        console.log('Found author via user hovercard pattern:', authorMatch[2]);
+        author.login = authorMatch[2].trim();
+        author.avatarUrl = authorMatch[1];
+      }
+    }
+
+    // Strategy 3: Extract from href path in user links
+    if (author.login === 'Unknown') {
+      const userLinkPattern =
+        /<a[^>]*data-hovercard-type="user"[^>]*href="[^"]*author%3A([^"&]+)"[^>]*>([^<]*)<\/a>/i;
+      authorMatch = containerHTML.match(userLinkPattern);
+      if (authorMatch) {
+        console.log('Found author via user link pattern:', authorMatch[2]);
+        author.login = authorMatch[2].trim();
+        author.avatarUrl = `https://github.com/${authorMatch[1]}.png?size=40`;
+      }
+    }
+
+    // Strategy 4: Look for any img with avatar class
+    if (author.login === 'Unknown') {
+      const avatarPattern =
+        /<img[^>]*class="[^"]*avatar[^"]*"[^>]*src="https:\/\/avatars\.githubusercontent\.com\/([^?]+)\?[^"]*"[^>]*>/i;
+      authorMatch = containerHTML.match(avatarPattern);
+      if (authorMatch) {
+        console.log('Found author via avatar pattern:', authorMatch[1]);
+        author.login = authorMatch[1];
+        author.avatarUrl = `https://avatars.githubusercontent.com/${authorMatch[1]}?size=40`;
+      }
+    }
+
+    // Try to find time info with multiple selectors for search results
+    let createdAt = new Date().toISOString();
+    const timePatterns = [
+      /<relative-time[^>]*datetime="([^"]*)"[^>]*>/i,
+      /<time[^>]*datetime="([^"]*)"[^>]*>/i,
+      /datetime="([^"]*)"[^>]*>/i,
+    ];
+
+    for (const pattern of timePatterns) {
+      const timeMatch = containerHTML.match(pattern);
+      if (timeMatch) {
+        try {
+          createdAt = new Date(timeMatch[1]).toISOString();
+          break;
+        } catch (e) {
+          console.log('Could not parse datetime:', timeMatch[1]);
+        }
+      }
+    }
+
+    return {
+      id: number || Date.now(), // Use PR number as ID, fallback to timestamp
+      title,
+      url,
+      number,
+      createdAt,
+      updatedAt: createdAt,
+      repository: repoName, // Return as string to match interface
+      author: author.login, // Return as string to match interface
+      hasUnread: true,
+      isNew: false,
+    };
+  }
+
+  formatTimeAgo(dateString) {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffMs = now - date;
+    const diffMinutes = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMinutes < 60) {
+      return `${diffMinutes}m ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours}h ago`;
+    } else if (diffDays < 7) {
+      return `${diffDays}d ago`;
+    } else {
+      const weeks = Math.floor(diffDays / 7);
+      return `${weeks}w ago`;
+    }
   }
 
   async getReviewRequestedPRs() {
-    return this.HTMLScraping();
-  }
-
-  clearCache() {
-    this.cachedCSRFToken = null;
+    return this.fetchAssignedPRs();
   }
 }
 
@@ -278,11 +450,6 @@ async function fetchAndUpdatePRs() {
     );
   } catch (error) {
     console.error('Background fetch failed:', error);
-
-    // Clear cache if auth error
-    if (error.message.includes('authenticated')) {
-      githubService.clearCache();
-    }
   }
 }
 
@@ -297,6 +464,76 @@ async function updateBadge(count) {
     }
   } catch (error) {
     console.error('Failed to update badge:', error);
+  }
+}
+
+// Play notification sound using offscreen document
+async function playNotificationSound() {
+  try {
+    console.log('Attempting to play notification sound...');
+
+    // First try to ensure offscreen document exists
+    await ensureOffscreenDocument();
+
+    // Send message to offscreen document to play sound
+    try {
+      console.log('Sending play sound message to offscreen document...');
+      const response = await chrome.runtime.sendMessage({
+        action: 'playNotificationSound',
+      });
+      console.log('Offscreen document sound response:', response);
+      return;
+    } catch (offscreenError) {
+      console.error('Offscreen document sound failed:', offscreenError);
+    }
+
+    // Fallback: Try to send to popup if it's open
+    try {
+      console.log('Trying popup fallback...');
+      chrome.runtime
+        .sendMessage({
+          action: 'playAudioInPopup',
+        })
+        .catch(() => {
+          console.log('Popup not available for audio playback');
+        });
+    } catch (popupError) {
+      console.error('Popup audio fallback failed:', popupError);
+    }
+  } catch (error) {
+    console.error('All audio playback methods failed:', error);
+  }
+}
+
+// Ensure offscreen document exists
+async function ensureOffscreenDocument() {
+  try {
+    // Check if offscreen document already exists
+    const existingContexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
+      documentUrls: [chrome.runtime.getURL('offscreen.html')],
+    });
+
+    if (existingContexts.length > 0) {
+      console.log('Offscreen document already exists');
+      return;
+    }
+
+    // Create offscreen document
+    console.log('Creating offscreen document for audio...');
+    await chrome.offscreen.createDocument({
+      url: chrome.runtime.getURL('offscreen.html'),
+      reasons: ['AUDIO_PLAYBACK'],
+      justification: 'Play notification sounds when popup is closed',
+    });
+
+    console.log('Offscreen document created successfully');
+
+    // Wait a bit for the document to load
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  } catch (error) {
+    console.error('Failed to create offscreen document:', error);
+    throw error;
   }
 }
 
@@ -325,8 +562,9 @@ async function showNewPRNotifications(newPRs) {
         title: 'New PR Review Request',
         message: `${pr.title}\n${pr.repository}`,
         contextMessage: `by ${pr.author}`,
-        buttons: [{ title: 'View PR' }],
-        requireInteraction: true, // Keep notification visible until user interacts
+        requireInteraction: false, // macOS often works better without this
+        silent: false, // Enable notification sound
+        priority: 2, // High priority to ensure sound
       });
 
       console.log('Single PR notification created with ID:', notificationId);
@@ -340,10 +578,18 @@ async function showNewPRNotifications(newPRs) {
         title: 'New PR Review Requests',
         message: `${newPRs.length} new pull requests need your review`,
         contextMessage: 'Click to view all PRs',
-        requireInteraction: true, // Keep notification visible until user interacts
+        requireInteraction: false, // macOS often works better without this
+        silent: false, // Enable notification sound
+        priority: 2, // High priority to ensure sound
       });
 
       console.log('Multiple PRs notification created with ID:', notificationId);
+    }
+
+    // Play fallback sound for macOS (since system notifications might be silent)
+    if (navigator.platform.includes('Mac')) {
+      console.log('macOS detected, playing fallback notification sound...');
+      setTimeout(() => playNotificationSound(), 100); // Small delay to ensure notification is shown first
     }
   } catch (error) {
     console.error('Failed to show notification:', error);
@@ -391,7 +637,7 @@ chrome.runtime.onInstalled.addListener(() => {
   fetchAndUpdatePRs();
 });
 
-// Handle messages from popup
+// Handle messages from popup and offscreen document
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'fetchPRs') {
     fetchAndUpdatePRs()
@@ -425,12 +671,58 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     return true;
   }
+
+  if (request.action === 'testNotificationWithoutPopup') {
+    // Test notification and sound without relying on popup
+    testNotificationWithoutPopup()
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch((error) => {
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
+  }
+
+  if (request.action === 'startTestInterval') {
+    // Start test interval for notifications every 5 seconds
+    startTestNotificationInterval();
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (request.action === 'stopTestInterval') {
+    // Stop test interval
+    stopTestNotificationInterval();
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (request.action === 'checkSoundSettings') {
+    // Provide instructions for enabling notification sounds
+    checkSoundSettings()
+      .then((instructions) => {
+        sendResponse({ success: true, instructions });
+      })
+      .catch((error) => {
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
+  }
+
+  if (request.action === 'offscreenReady') {
+    console.log('Offscreen document is ready');
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // Test notification function
 async function testNotification() {
   try {
     console.log('Testing notification...');
+    console.log('Platform:', navigator.platform);
+    console.log('User agent:', navigator.userAgent);
 
     // Check notification permission
     const permission = await chrome.notifications.getPermissionLevel();
@@ -440,19 +732,153 @@ async function testNotification() {
       throw new Error('Notifications are denied');
     }
 
+    // Try a simpler notification first
     const notificationId = await chrome.notifications.create({
       type: 'basic',
       iconUrl: 'https://github.com/favicon.ico',
       title: 'Test Notification',
       message: 'This is a test notification from PR Live Extension',
       contextMessage: 'If you see this, notifications are working!',
-      requireInteraction: true,
+      requireInteraction: false, // Try without requireInteraction first
+      silent: false, // Enable notification sound
+      priority: 2, // High priority to ensure sound
     });
 
     console.log('Test notification created with ID:', notificationId);
+
+    // Play fallback sound for macOS (since system notifications might be silent)
+    if (navigator.platform.includes('Mac')) {
+      console.log('macOS detected, playing fallback sound for test notification...');
+      setTimeout(() => playNotificationSound(), 100); // Small delay to ensure notification is shown first
+    }
+
+    // Add a listener to check if notification was displayed
+    chrome.notifications.onClosed.addListener((closedNotificationId, byUser) => {
+      if (closedNotificationId === notificationId) {
+        console.log('Test notification closed:', { id: closedNotificationId, byUser });
+      }
+    });
+
+    chrome.notifications.onClicked.addListener((clickedNotificationId) => {
+      if (clickedNotificationId === notificationId) {
+        console.log('Test notification clicked:', clickedNotificationId);
+      }
+    });
+
+    // Wait a bit and check if notification still exists
+    setTimeout(async () => {
+      try {
+        const exists = await new Promise((resolve) => {
+          chrome.notifications.getAll((notifications) => {
+            resolve(notificationId in notifications);
+          });
+        });
+        console.log('Test notification still exists after 2 seconds:', exists);
+      } catch (e) {
+        console.log('Error checking notification existence:', e);
+      }
+    }, 2000);
+
     return notificationId;
   } catch (error) {
     console.error('Test notification failed:', error);
     throw error;
+  }
+}
+
+// Test notification without popup dependency
+async function testNotificationWithoutPopup() {
+  try {
+    console.log('Testing notification without popup dependency...');
+
+    // Create notification
+    const notificationId = await chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'https://github.com/favicon.ico',
+      title: 'Test Notification (No Popup)',
+      message: 'Testing sound with offscreen document',
+      contextMessage: 'This should work even with popup closed',
+      requireInteraction: false,
+      silent: false,
+      priority: 2,
+    });
+
+    console.log('Test notification (no popup) created with ID:', notificationId);
+
+    // Play sound using offscreen document (not popup)
+    console.log('Playing sound using offscreen document...');
+    await playNotificationSound();
+
+    return notificationId;
+  } catch (error) {
+    console.error('Test notification without popup failed:', error);
+    throw error;
+  }
+}
+
+// Test interval for notifications
+let testNotificationInterval = null;
+let testNotificationCount = 0;
+
+function startTestNotificationInterval() {
+  // Clear any existing interval
+  if (testNotificationInterval) {
+    clearInterval(testNotificationInterval);
+  }
+
+  testNotificationCount = 0;
+  console.log('Starting test notification interval (every 5 seconds)...');
+
+  testNotificationInterval = setInterval(async () => {
+    testNotificationCount++;
+    console.log(`Test notification interval #${testNotificationCount}`);
+
+    try {
+      await testNotificationWithoutPopup();
+    } catch (error) {
+      console.error('Test interval notification failed:', error);
+    }
+  }, 5000); // 5 seconds
+
+  console.log('Test notification interval started');
+}
+
+function stopTestNotificationInterval() {
+  if (testNotificationInterval) {
+    clearInterval(testNotificationInterval);
+    testNotificationInterval = null;
+    console.log(`Test notification interval stopped after ${testNotificationCount} notifications`);
+  } else {
+    console.log('No test notification interval was running');
+  }
+}
+
+// Check sound settings and provide instructions
+async function checkSoundSettings() {
+  const platform = navigator.platform;
+  const isMac = platform.includes('Mac');
+
+  if (isMac) {
+    return {
+      platform: 'macOS',
+      instructions: [
+        'To enable notification sounds on macOS:',
+        '1. Open System Preferences → Notifications & Focus',
+        '2. Find "Google Chrome" in the list',
+        '3. Make sure "Play sound for notifications" is checked',
+        '4. Set notification style to "Alerts" (not "Banners")',
+        '5. In Chrome, go to chrome://settings/content/notifications',
+        '6. Make sure "Sites can ask to send notifications" is enabled',
+        '7. Check that GitHub.com is not in the blocked list',
+      ],
+    };
+  } else {
+    return {
+      platform: 'Other',
+      instructions: [
+        'Notification sounds should work by default on your platform.',
+        "If you don't hear sounds, check your system notification settings.",
+      ],
+    };
   }
 }
