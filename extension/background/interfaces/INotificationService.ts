@@ -7,7 +7,7 @@ export interface INotificationService {
   /**
    * Shows notifications for new pull requests.
    */
-  showNewPRNotifications(newPR: PullRequest): Promise<void>;
+  showNewPRNotifications(newPRs: PullRequest | PullRequest[], forceShow?: boolean): Promise<void>;
 
   /**
    * Handles notification clicks.

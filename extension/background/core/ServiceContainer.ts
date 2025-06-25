@@ -100,9 +100,9 @@ export class ServiceContainer {
     const initPromises: Promise<void>[] = [];
 
     for (const [key, service] of this.services) {
-      if (service && typeof service.initialize === 'function') {
+      if (service && typeof (service as any).initialize === 'function') {
         initPromises.push(
-          service.initialize().catch((error: unknown) => {
+          (service as any).initialize().catch((error: unknown) => {
             console.error(`Failed to initialize service '${key}':`, error);
             throw error;
           })
@@ -120,9 +120,9 @@ export class ServiceContainer {
     const disposePromises: Promise<void>[] = [];
 
     for (const [key, service] of this.services) {
-      if (service && typeof service.dispose === 'function') {
+      if (service && typeof (service as any).dispose === 'function') {
         disposePromises.push(
-          service.dispose().catch((error: unknown) => {
+          (service as any).dispose().catch((error: unknown) => {
             console.error(`Failed to dispose service '${key}':`, error);
           })
         );

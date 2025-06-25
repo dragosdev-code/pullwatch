@@ -6,6 +6,7 @@ import type { PullRequest } from '../../common/types';
 
 /**
  * NotificationService handles Chrome extension notifications with sound integration.
+ * Manages all notification-related functionality including visual notifications and sound alerts.
  */
 export class NotificationService implements INotificationService {
   private debugService: IDebugService;
@@ -29,47 +30,121 @@ export class NotificationService implements INotificationService {
     this.debugService.log('[NotificationService] Notification service initialized');
   }
 
-  async showNewPRNotifications(newPR: PullRequest): Promise<void> {
-    // Stub implementation
+  async showNewPRNotifications(
+    newPRs: PullRequest | PullRequest[],
+    forceShow = false
+  ): Promise<void> {
+    try {
+      // Check if notifications are enabled (unless forced)
+      const settings = await this.storageService.getExtensionSettings();
+      if (!forceShow && !settings.notificationsEnabled) {
+        this.debugService.log('[NotificationService] Notifications disabled, skipping');
+        return;
+      }
 
-    this.createNotification({
-      type: 'basic',
-      iconUrl: 'https://github.com/favicon.ico',
-      title: 'New PR Review Request',
-      message: `${newPR.title}\n${newPR.repoName}`,
-      contextMessage: `by ${newPR.author.login}`,
-      requireInteraction: false, // macOS often works better without this
-      silent: false, // Enable notification sound
-      priority: 2, // High priority to ensure sound
-    });
+      // Normalize input to array
+      const prsArray = Array.isArray(newPRs) ? newPRs : [newPRs];
+      this.debugService.log(
+        `[NotificationService] Showing notifications for ${prsArray.length} PR(s)`
+      );
 
-    this.debugService.log(`[NotificationService] Would show ${newPR.title} notification`);
+      // Show visual notifications for each PR
+      for (const pr of prsArray) {
+        await this.createNotification({
+          type: 'basic',
+          iconUrl: 'https://github.com/favicon.ico', // Use extension icon
+          title:
+            prsArray.length === 1
+              ? 'New PR Review Request'
+              : `New PR Review Request (${prsArray.indexOf(pr) + 1}/${prsArray.length})`,
+          message: `${pr.title}`,
+          contextMessage: `${pr.repoName} by ${pr.author.login}`,
+          requireInteraction: false,
+          silent: false, // Allow Chrome to play its notification sound
+          priority: 2,
+        });
+
+        this.debugService.log(`[NotificationService] Visual notification shown for: ${pr.title}`);
+      }
+
+      // Play sound notification if enabled (separate from visual notifications)
+      if (settings.soundEnabled) {
+        try {
+          await this.soundService.playNotificationSound();
+          this.debugService.log(
+            `[NotificationService] Sound notification played for ${prsArray.length} new PR(s)`
+          );
+        } catch (soundError) {
+          this.debugService.error(
+            '[NotificationService] Error playing notification sound:',
+            soundError
+          );
+          // Don't fail the entire notification if sound fails
+        }
+      } else {
+        this.debugService.log('[NotificationService] Sound notifications disabled, skipping sound');
+      }
+    } catch (error) {
+      this.debugService.error('[NotificationService] Error showing notifications:', error);
+      throw error;
+    }
   }
 
   async handleNotificationClick(notificationId: string): Promise<void> {
-    // Stub implementation
-    this.debugService.log(`[NotificationService] Notification clicked: ${notificationId}`);
+    try {
+      this.debugService.log(`[NotificationService] Notification clicked: ${notificationId}`);
+
+      // Clear the clicked notification
+      await this.clearNotification(notificationId);
+
+      // Could open the PR URL in a new tab here
+      // chrome.tabs.create({ url: prUrl });
+    } catch (error) {
+      this.debugService.error('[NotificationService] Error handling notification click:', error);
+    }
   }
 
   async createNotification(options: chrome.notifications.NotificationCreateOptions): Promise<void> {
-    // Stub implementation
-    chrome.notifications.create(options);
-    this.debugService.log(`[NotificationService] Creating notification: ${options.title}`);
+    try {
+      const notificationId = await chrome.notifications.create(options);
+      this.debugService.log(
+        `[NotificationService] Created notification: ${notificationId} - ${options.title}`
+      );
+    } catch (error) {
+      this.debugService.error('[NotificationService] Error creating notification:', error);
+      throw error;
+    }
   }
 
   async clearNotification(notificationId: string): Promise<void> {
-    // Stub implementation
-    this.debugService.log(`[NotificationService] Clearing notification: ${notificationId}`);
+    try {
+      await chrome.notifications.clear(notificationId);
+      this.debugService.log(`[NotificationService] Cleared notification: ${notificationId}`);
+    } catch (error) {
+      this.debugService.error('[NotificationService] Error clearing notification:', error);
+    }
   }
 
   async clearAllNotifications(): Promise<void> {
-    // Stub implementation
-    this.debugService.log('[NotificationService] Clearing all notifications');
+    try {
+      const notifications = await this.getAllNotifications();
+      for (const id of notifications) {
+        await this.clearNotification(id);
+      }
+      this.debugService.log('[NotificationService] Cleared all notifications');
+    } catch (error) {
+      this.debugService.error('[NotificationService] Error clearing all notifications:', error);
+    }
   }
 
   async getAllNotifications(): Promise<string[]> {
-    // Stub implementation
-    return [];
+    try {
+      const notifications = await chrome.notifications.getAll();
+      return Object.keys(notifications);
+    } catch (error) {
+      this.debugService.error('[NotificationService] Error getting notifications:', error);
+      return [];
+    }
   }
 
   async areNotificationsEnabled(): Promise<boolean> {
@@ -79,10 +154,18 @@ export class NotificationService implements INotificationService {
 
   async setNotificationsEnabled(enabled: boolean): Promise<void> {
     await this.storageService.setExtensionSettings({ notificationsEnabled: enabled });
+    this.debugService.log(
+      `[NotificationService] Notifications ${enabled ? 'enabled' : 'disabled'}`
+    );
   }
 
   async dispose(): Promise<void> {
-    this.debugService.log('[NotificationService] Notification service disposed');
-    this.initialized = false;
+    try {
+      await this.clearAllNotifications();
+      this.debugService.log('[NotificationService] Notification service disposed');
+      this.initialized = false;
+    } catch (error) {
+      this.debugService.error('[NotificationService] Error during disposal:', error);
+    }
   }
 }
