@@ -1,7 +1,7 @@
 import { useSpring, animated } from '@react-spring/web';
 import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
-import type { PullRequest } from './types';
+import type { PullRequest } from '../../extension/common/types';
 
 interface PRItemProps {
   pr: PullRequest;
@@ -34,7 +34,17 @@ export const PRItem = ({ pr, isNew }: PRItemProps) => {
   });
 
   const formatTimeAgo = (dateString: string) => {
-    return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    try {
+      const date = new Date(dateString);
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        return 'Unknown date';
+      }
+      return formatDistanceToNow(date, { addSuffix: true });
+    } catch (error) {
+      console.warn('Invalid date string:', dateString, error);
+      return 'Unknown date';
+    }
   };
 
   return (
@@ -70,12 +80,13 @@ export const PRItem = ({ pr, isNew }: PRItemProps) => {
             )}
           </div>
           <p className="text-xs text-gray-500 truncate">
-            {pr.repository} • {pr.author} • {formatTimeAgo(pr.updatedAt)}
+            {pr.repoName} • {pr.author.login} • {formatTimeAgo(pr.createdAt || '')}
           </p>
         </div>
-        {pr.hasUnread && (
-          <div className="w-2.5 h-2.5 bg-red-500 rounded-full ml-3 flex-shrink-0 mt-1"></div>
-        )}
+        <div
+          className="w-2.5 h-2.5 bg-red-500 rounded-full ml-3 flex-shrink-0 mt-1"
+          style={{ display: 'none' }}
+        ></div>
       </div>
     </animated.a>
   );

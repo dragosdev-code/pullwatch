@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Header, PRList, Footer, type PullRequest } from './components';
+import { Header, PRList, Footer } from './components';
+import type { PullRequest } from '../extension/common/types';
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
@@ -7,7 +8,6 @@ function App() {
   const [prs, setPrs] = useState<PullRequest[]>([]);
   const [showTitleParticles, setShowTitleParticles] = useState(false);
   const [hasEverLoaded, setHasEverLoaded] = useState(false);
-  const [lastFetch, setLastFetch] = useState<number | null>(null);
 
   // Load PRs from storage on component mount
   useEffect(() => {
@@ -31,23 +31,26 @@ function App() {
     }
   }, []);
 
+  console.log('prs', prs);
+
   const loadPRsFromStorage = async () => {
     try {
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         // We're in the extension context
         chrome.runtime.sendMessage(
           { action: 'getPRs' },
-          (response: { prs: PullRequest[]; lastFetch: number | null }) => {
+          (response: { success: boolean; data?: PullRequest[]; error?: string }) => {
             if (chrome.runtime.lastError) {
               console.error('Error getting PRs from background:', chrome.runtime.lastError);
               return;
             }
 
-            if (response) {
-              const storedPRs = response.prs || [];
+            if (response && response.success) {
+              const storedPRs = response.data || [];
               setPrs(storedPRs);
-              setLastFetch(response.lastFetch);
-              setHasEverLoaded(storedPRs.length > 0 || response.lastFetch !== null);
+              setHasEverLoaded(storedPRs.length > 0);
+            } else {
+              console.error('Failed to get PRs:', response?.error);
             }
           }
         );
@@ -66,18 +69,20 @@ function App() {
         // We're in the extension context - ask background script to fetch
         chrome.runtime.sendMessage(
           { action: 'fetchPRs' },
-          (response: { success: boolean; error?: string }) => {
+          (response: { success: boolean; data?: PullRequest[]; error?: string }) => {
             if (chrome.runtime.lastError) {
               setError('Failed to communicate with background script');
               setIsLoading(false);
               return;
             }
 
-            if (response.success) {
-              // Reload data from storage after successful fetch
-              loadPRsFromStorage();
+            if (response && response.success) {
+              // Use the fresh data directly instead of reloading from storage
+              const freshPRs = response.data || [];
+              setPrs(freshPRs);
+              setHasEverLoaded(true);
             } else {
-              setError(response.error || 'Failed to fetch PRs');
+              setError(response?.error || 'Failed to fetch PRs');
             }
             setIsLoading(false);
           }
@@ -278,21 +283,6 @@ function App() {
     }
   };
 
-  const formatLastFetch = (timestamp: number | null) => {
-    if (!timestamp) return null;
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / (1000 * 60));
-
-    if (minutes < 1) return 'Just now';
-    if (minutes === 1) return '1 minute ago';
-    if (minutes < 60) return `${minutes} minutes ago`;
-
-    const hours = Math.floor(minutes / 60);
-    if (hours === 1) return '1 hour ago';
-    return `${hours} hours ago`;
-  };
-
   return (
     <div className="w-[380px] h-[400px] bg-white rounded-2xl relative overflow-hidden border-0 shadow-none flex flex-col">
       <Header
@@ -352,12 +342,6 @@ function App() {
           </button>
         </div>
       </div>
-
-      {lastFetch && (
-        <div className="px-5 py-2 bg-gray-50 border-b border-gray-200">
-          <p className="text-xs text-gray-500">Last updated: {formatLastFetch(lastFetch)}</p>
-        </div>
-      )}
 
       <PRList prs={prs} newPrIds={new Set()} hasEverLoaded={hasEverLoaded} />
 

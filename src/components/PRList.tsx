@@ -1,9 +1,9 @@
-import type { PullRequest } from './types';
+import type { PullRequest } from '../../extension/common/types';
 import { PRItem } from './PRItem';
 
 interface PRListProps {
   prs: PullRequest[];
-  newPrIds: Set<number>;
+  newPrIds: Set<string>;
   hasEverLoaded?: boolean;
 }
 
@@ -32,9 +32,10 @@ export const PRList = ({ prs, newPrIds, hasEverLoaded = false }: PRListProps) =>
   return (
     <div className="h-[360px] overflow-y-auto">
       <div className="space-y-0">
-        {prs.map((pr) => (
-          <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} />
-        ))}
+        {prs.map((pr) => {
+          // Ensure required properties exist with defaults
+          return <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} />;
+        })}
       </div>
     </div>
   );
