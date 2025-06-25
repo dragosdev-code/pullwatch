@@ -1,301 +1,44 @@
 import { useState, useEffect } from 'react';
 import { Header, PRList, Footer } from './components';
-import type { PullRequest } from '../extension/common/types';
+import { TestArea } from './components/TestArea';
+import { usePRs, useRefreshPRs, usePRUpdates } from './hooks';
 
 function App() {
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [prs, setPrs] = useState<PullRequest[]>([]);
-  const [showTitleParticles, setShowTitleParticles] = useState(false);
-  const [hasEverLoaded, setHasEverLoaded] = useState(false);
 
-  // Load PRs from storage on component mount
+  const { data: prs = [], isLoading, error: queryError, isSuccess } = usePRs();
+  const refreshPRsMutation = useRefreshPRs();
+  const prUpdates = usePRUpdates();
+
   useEffect(() => {
-    loadPRsFromStorage();
+    const cleanup = prUpdates.setupListener();
+    return cleanup;
+  }, [prUpdates]);
 
-    // Listen for messages from background script
-    const messageListener = (message: { action: string; data?: PullRequest[] }) => {
-      if (message.action === 'playAudioInPopup') {
-        console.log('Received request to play audio in popup');
-        playNotificationSound();
-      } else if (message.action === 'prDataUpdated') {
-        console.log('Received PR data update from background');
-        const updatedPRs = message.data || [];
-        setPrs(updatedPRs);
-        setHasEverLoaded(updatedPRs.length > 0);
-      }
-    };
-
-    if (typeof chrome !== 'undefined' && chrome.runtime) {
-      chrome.runtime.onMessage.addListener(messageListener);
-
-      // Cleanup
-      return () => {
-        chrome.runtime.onMessage.removeListener(messageListener);
-      };
+  useEffect(() => {
+    if (queryError) {
+      setError(queryError.message);
     }
-  }, []);
-
-  console.log('prs', prs);
-
-  const loadPRsFromStorage = async () => {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        // We're in the extension context
-        chrome.runtime.sendMessage(
-          { action: 'getPRs' },
-          (response: { success: boolean; data?: PullRequest[]; error?: string }) => {
-            if (chrome.runtime.lastError) {
-              console.error('Error getting PRs from background:', chrome.runtime.lastError);
-              return;
-            }
-
-            if (response && response.success) {
-              const storedPRs = response.data || [];
-              setPrs(storedPRs);
-              setHasEverLoaded(storedPRs.length > 0);
-            } else {
-              console.error('Failed to get PRs:', response?.error);
-            }
-          }
-        );
-      }
-    } catch (error) {
-      console.error('Failed to load PRs from storage:', error);
-    }
-  };
+  }, [queryError]);
 
   const handleRefresh = async () => {
-    setIsLoading(true);
     setError(null);
-
     try {
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        // We're in the extension context - ask background script to fetch
-        chrome.runtime.sendMessage(
-          { action: 'fetchPRs' },
-          (response: { success: boolean; data?: PullRequest[]; error?: string }) => {
-            if (chrome.runtime.lastError) {
-              setError('Failed to communicate with background script');
-              setIsLoading(false);
-              return;
-            }
-
-            if (response && response.success) {
-              // Use the fresh data directly instead of reloading from storage
-              const freshPRs = response.data || [];
-              setPrs(freshPRs);
-              setHasEverLoaded(true);
-            } else {
-              setError(response?.error || 'Failed to fetch PRs');
-            }
-            setIsLoading(false);
-          }
-        );
-      } else {
-        // Fallback for development/web context
-        setError('Extension context not available. Please load as Chrome extension.');
-        setIsLoading(false);
-      }
+      await refreshPRsMutation.mutateAsync();
     } catch (err) {
-      console.error('Failed to fetch PRs:', err);
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch pull requests. Please try again.'
-      );
-      setIsLoading(false);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to refresh PRs';
+      setError(errorMessage);
     }
   };
 
-  const handleTitleParticlesComplete = () => {
-    setShowTitleParticles(false);
-  };
-
-  const playNotificationSound = () => {
-    try {
-      console.log('Playing notification sound in popup...');
-
-      // Method 1: Try Web Audio API with better error handling
-      try {
-        const audioContext = new (window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-
-        console.log('AudioContext state:', audioContext.state);
-
-        // Resume audio context if it's suspended (required for user interaction)
-        if (audioContext.state === 'suspended') {
-          console.log('AudioContext suspended, resuming...');
-          audioContext.resume().then(() => {
-            playBeepSound(audioContext);
-          });
-        } else {
-          playBeepSound(audioContext);
-        }
-
-        function playBeepSound(ctx: AudioContext) {
-          // Create a more pleasant notification sound - two-tone beep
-          const times = [0, 0.15];
-          const frequencies = [800, 1000];
-
-          times.forEach((time, index) => {
-            const oscillator = ctx.createOscillator();
-            const gainNode = ctx.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(ctx.destination);
-
-            oscillator.frequency.setValueAtTime(frequencies[index], ctx.currentTime + time);
-            gainNode.gain.setValueAtTime(0.3, ctx.currentTime + time);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + time + 0.1);
-
-            oscillator.start(ctx.currentTime + time);
-            oscillator.stop(ctx.currentTime + time + 0.1);
-          });
-
-          console.log('Web Audio API beep sounds triggered');
-        }
-
-        return;
-      } catch (webAudioError) {
-        console.warn('Web Audio API failed:', webAudioError);
-      }
-
-      // Method 2: Try HTML5 Audio with a system sound
-      try {
-        console.log('Trying system beep sound...');
-        // Use a simple beep sound that should work cross-platform
-        const audio = new Audio(
-          'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQ4AAAC0tbWyrrKos6ixqyAA'
-        );
-        audio.volume = 0.5;
-        audio
-          .play()
-          .then(() => {
-            console.log('HTML5 Audio beep played successfully');
-          })
-          .catch((playError) => {
-            console.warn('HTML5 Audio play failed:', playError);
-          });
-        return;
-      } catch (htmlAudioError) {
-        console.warn('HTML5 Audio failed:', htmlAudioError);
-      }
-
-      console.log('All audio methods attempted');
-    } catch (error) {
-      console.error('Failed to play sound in popup:', error);
-    }
-  };
-
-  const handleTestNotification = async () => {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage(
-          { action: 'testNotification' },
-          (response: { success: boolean; error?: string }) => {
-            if (chrome.runtime.lastError) {
-              setError('Failed to send test notification');
-              return;
-            }
-
-            if (response.success) {
-              console.log('Test notification sent successfully');
-              // Play sound in popup as well since background might not work
-              setTimeout(() => playNotificationSound(), 200);
-            } else {
-              setError(response.error || 'Failed to send test notification');
-            }
-          }
-        );
-      }
-    } catch (err) {
-      console.error('Failed to send test notification:', err);
-      setError('Failed to send test notification');
-    }
-  };
-
-  const handleTestOffscreenNotification = async () => {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage(
-          { action: 'testNotificationWithoutPopup' },
-          (response: { success: boolean; error?: string }) => {
-            if (chrome.runtime.lastError) {
-              setError('Failed to send offscreen test notification');
-              return;
-            }
-
-            if (response.success) {
-              console.log('Offscreen test notification sent successfully');
-            } else {
-              setError(response.error || 'Failed to send offscreen test notification');
-            }
-          }
-        );
-      }
-    } catch (err) {
-      console.error('Failed to send offscreen test notification:', err);
-      setError('Failed to send offscreen test notification');
-    }
-  };
-
-  const handleStartTestInterval = async () => {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage(
-          { action: 'startTestInterval' },
-          (response: { success: boolean; error?: string }) => {
-            if (chrome.runtime.lastError) {
-              setError('Failed to start test interval');
-              return;
-            }
-
-            if (response.success) {
-              console.log('Test interval started - notifications every 5 seconds');
-            } else {
-              setError(response.error || 'Failed to start test interval');
-            }
-          }
-        );
-      }
-    } catch (err) {
-      console.error('Failed to start test interval:', err);
-      setError('Failed to start test interval');
-    }
-  };
-
-  const handleStopTestInterval = async () => {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.runtime) {
-        chrome.runtime.sendMessage(
-          { action: 'stopTestInterval' },
-          (response: { success: boolean; error?: string }) => {
-            if (chrome.runtime.lastError) {
-              setError('Failed to stop test interval');
-              return;
-            }
-
-            if (response.success) {
-              console.log('Test interval stopped');
-            } else {
-              setError(response.error || 'Failed to stop test interval');
-            }
-          }
-        );
-      }
-    } catch (err) {
-      console.error('Failed to stop test interval:', err);
-      setError('Failed to stop test interval');
-    }
-  };
+  const hasEverLoaded = isSuccess || prs.length > 0;
 
   return (
     <div className="w-[380px] h-[400px] bg-white rounded-2xl relative overflow-hidden border-0 shadow-none flex flex-col">
       <Header
         prCount={prs.length}
-        isLoading={isLoading}
-        showTitleParticles={showTitleParticles}
+        isLoading={isLoading || refreshPRsMutation.isPending}
         onRefresh={handleRefresh}
-        onTitleParticlesComplete={handleTitleParticlesComplete}
       />
 
       {error && (
@@ -310,45 +53,13 @@ function App() {
         </div>
       )}
 
-      {/* Debug test notification buttons - can be removed later */}
-      <div className="px-5 py-2 bg-blue-50 border-b border-blue-200">
-        <div className="space-x-2 mb-2">
-          <button
-            onClick={handleTestNotification}
-            className="text-xs text-blue-700 hover:text-blue-800 underline"
-          >
-            Test Notification
-          </button>
-          <button
-            onClick={playNotificationSound}
-            className="text-xs text-green-700 hover:text-green-800 underline"
-          >
-            Test Sound Only
-          </button>
-          <button
-            onClick={handleTestOffscreenNotification}
-            className="text-xs text-purple-700 hover:text-purple-800 underline"
-          >
-            Test Offscreen
-          </button>
-        </div>
-        <div className="space-x-2">
-          <button
-            onClick={handleStartTestInterval}
-            className="text-xs text-orange-700 hover:text-orange-800 underline font-semibold"
-          >
-            ▶ Start 5s Test
-          </button>
-          <button
-            onClick={handleStopTestInterval}
-            className="text-xs text-red-700 hover:text-red-800 underline font-semibold"
-          >
-            ⏹ Stop Test
-          </button>
-        </div>
-      </div>
+      <TestArea setError={setError} />
 
-      <PRList prs={prs} newPrIds={new Set()} hasEverLoaded={hasEverLoaded} />
+      <PRList
+        prs={prs}
+        newPrIds={new Set(prs.filter((pr) => pr.isNew).map((pr) => pr.id))}
+        hasEverLoaded={hasEverLoaded}
+      />
 
       <Footer />
     </div>
