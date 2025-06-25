@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Header, PRList, Footer } from './components';
 import { TestArea } from './components/TestArea';
-import { usePRs, useRefreshPRs, usePRUpdates } from './hooks';
+import { usePRs, useRefreshPRs, usePRUpdates, useDebug } from './hooks';
 
 function App() {
   const [error, setError] = useState<string | null>(null);
+  const { isDebugMode } = useDebug();
 
   const { data: prs = [], isLoading, error: queryError, isSuccess } = usePRs();
   const refreshPRsMutation = useRefreshPRs();
@@ -53,7 +54,7 @@ function App() {
         </div>
       )}
 
-      <TestArea setError={setError} />
+      {isDebugMode && <TestArea setError={setError} />}
 
       <PRList
         prs={prs}
