@@ -48,6 +48,17 @@ export interface IPRService {
   }): Promise<PullRequest[]>;
 
   /**
+   * Compares old and new PR lists to identify new PRs.
+   */
+  comparePRs(
+    oldPRs: PullRequest[],
+    freshPRs: PullRequest[]
+  ): {
+    newPRs: PullRequest[];
+    allPRsWithStatus: PullRequest[];
+  };
+
+  /**
    * Initializes the PR service.
    */
   initialize(): Promise<void>;

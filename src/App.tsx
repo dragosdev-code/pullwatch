@@ -14,10 +14,15 @@ function App() {
     loadPRsFromStorage();
 
     // Listen for messages from background script
-    const messageListener = (message: { action: string }) => {
+    const messageListener = (message: { action: string; data?: PullRequest[] }) => {
       if (message.action === 'playAudioInPopup') {
         console.log('Received request to play audio in popup');
         playNotificationSound();
+      } else if (message.action === 'prDataUpdated') {
+        console.log('Received PR data update from background');
+        const updatedPRs = message.data || [];
+        setPrs(updatedPRs);
+        setHasEverLoaded(updatedPRs.length > 0);
       }
     };
 

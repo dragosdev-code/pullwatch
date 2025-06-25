@@ -21,6 +21,7 @@ import { IBadgeService } from '../interfaces/IBadgeService';
 import { INotificationService } from '../interfaces/INotificationService';
 import { IStorageService } from '../interfaces/IStorageService';
 import { ISoundService } from '../interfaces/ISoundService';
+import { IGitHubService } from '../interfaces/IGitHubService';
 
 /**
  * EventService coordinates Chrome extension events and handles message routing.
@@ -253,25 +254,108 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      if (this.isMessageAction(message, 'getPRs') || this.isMessageAction(message, 'fetchPRs')) {
-        const prService = this.serviceContainer.getService<IPRService>('prService');
+      const prService = this.serviceContainer.getService<IPRService>('prService');
 
-        // Always fetch fresh data to ensure storage is up-to-date
-        const forceRefresh = this.isMessageAction(message, 'fetchPRs');
-        this.debugService.log(
-          `[EventService] Calling fetchAndUpdatePRs with forceRefresh: ${forceRefresh}`
-        );
+      if (this.isMessageAction(message, 'getPRs')) {
+        // getPRs: Return stored PRs immediately, then fetch fresh data in background
+        this.debugService.log('[EventService] Getting stored PRs and fetching fresh data');
 
-        const prs = await prService.fetchAndUpdatePRs(forceRefresh);
-        this.debugService.log(`[EventService] fetchAndUpdatePRs returned:`, prs);
+        // 1. Get stored PRs immediately for fast response
+        const storedPRs = await prService.getStoredPRs();
+        this.debugService.log(`[EventService] getStoredPRs returned ${storedPRs.length} PRs`);
+
+        // 2. Send stored PRs immediately
+        const response = { success: true, data: storedPRs };
+        this.debugService.log(`[EventService] Sending immediate response with stored PRs`);
+        sendResponse(response);
+
+        // 3. Fetch fresh data in background (don't wait for response)
+        this.fetchFreshDataInBackground(prService);
+      } else if (this.isMessageAction(message, 'fetchPRs')) {
+        // fetchPRs: Fetch fresh data from GitHub and update storage (manual refresh)
+        this.debugService.log('[EventService] Manual refresh - fetching fresh PRs from GitHub');
+        const prs = await prService.fetchAndUpdatePRs(true); // force refresh
+        this.debugService.log(`[EventService] fetchAndUpdatePRs returned ${prs.length} PRs`);
 
         const response = { success: true, data: prs };
-        this.debugService.log(`[EventService] Sending response:`, response);
+        this.debugService.log(`[EventService] Sending response with fresh PRs`);
         sendResponse(response);
       }
     } catch (error) {
-      this.debugService.error('[EventService] Error getting up-to-date PRs:', error);
-      sendResponse({ success: false, error: 'Failed to get PRs' });
+      this.debugService.error('[EventService] Error handling PR data actions:', error);
+      sendResponse({ success: false, error: 'Failed to handle PR action' });
+    }
+  }
+
+  /**
+   * Fetches fresh data in the background and notifies popup if data changed.
+   */
+  private async fetchFreshDataInBackground(prService: IPRService): Promise<void> {
+    try {
+      this.debugService.log('[EventService] Background fetch started');
+
+      // Get current stored PRs for comparison
+      const storedPRs = await prService.getStoredPRs();
+
+      // Fetch fresh PRs from GitHub (without updating storage yet)
+      const gitHubService = this.serviceContainer.getService<IGitHubService>('gitHubService');
+      const freshPRs = await gitHubService.fetchAssignedPRs();
+
+      // Use PRService's comparison logic to check for changes
+      const { newPRs, allPRsWithStatus } = prService.comparePRs(storedPRs, freshPRs);
+
+      // Check if there are any changes (new PRs or different data)
+      const hasChanges =
+        newPRs.length > 0 ||
+        JSON.stringify(storedPRs.map((pr) => ({ id: pr.id, title: pr.title }))) !==
+          JSON.stringify(allPRsWithStatus.map((pr) => ({ id: pr.id, title: pr.title })));
+
+      if (hasChanges) {
+        this.debugService.log(
+          `[EventService] Background fetch detected changes: ${newPRs.length} new PRs, updating storage and notifying popup`
+        );
+
+        // Update storage with the new data
+        const storageService = this.serviceContainer.getService<IStorageService>('storageService');
+        const badgeService = this.serviceContainer.getService<IBadgeService>('badgeService');
+        const notificationService =
+          this.serviceContainer.getService<INotificationService>('notificationService');
+
+        await storageService.setStoredPRs(allPRsWithStatus);
+        await storageService.setLastFetchTime(Date.now());
+        await badgeService.setPRCountBadge(allPRsWithStatus.length);
+
+        // Show notifications for new PRs
+        if (newPRs.length > 0) {
+          await notificationService.showNewPRNotifications(newPRs);
+        }
+
+        // Send message to popup to update its display
+        try {
+          await chrome.runtime.sendMessage({
+            action: 'prDataUpdated',
+            data: allPRsWithStatus,
+          });
+        } catch (messageError) {
+          // Popup might be closed - that's ok, just log it
+          this.debugService.log(
+            '[EventService] Could not notify popup (likely closed):',
+            messageError
+          );
+        }
+      } else {
+        this.debugService.log('[EventService] Background fetch completed - no changes detected');
+      }
+    } catch (error) {
+      this.debugService.error('[EventService] Error in background fetch:', error);
+
+      // Set error badge if background fetch fails
+      try {
+        const badgeService = this.serviceContainer.getService<IBadgeService>('badgeService');
+        await badgeService.setErrorBadge();
+      } catch (badgeError) {
+        this.debugService.error('[EventService] Failed to set error badge:', badgeError);
+      }
     }
   }
 

@@ -85,7 +85,7 @@ export class PRService implements IPRService {
    * Compares old and new PR lists to identify new PRs.
    * Only considers PRs as "new" if they weren't in the old list (not when PRs are missing).
    */
-  private comparePRs(
+  public comparePRs(
     oldPRs: PullRequest[],
     freshPRs: PullRequest[]
   ): {
@@ -150,18 +150,34 @@ export class PRService implements IPRService {
     return stored?.prs || [];
   }
 
-  async markPRsAsRead(): Promise<void> {
+  async markPRsAsRead(prIds: string[]): Promise<void> {
     try {
-      this.debugService.log('[PRService] Marking PRs as read');
+      this.debugService.log(`[PRService] Marking ${prIds.length} PRs as read:`, prIds);
 
-      // Get current PRs and mark them all as not new
+      // Get current PRs
       const currentPRs = await this.getStoredPRs();
-      const updatedPRs = currentPRs.map((pr) => ({ ...pr, isNew: false }));
+
+      // If no specific IDs provided, mark all as read
+      if (prIds.length === 0) {
+        const updatedPRs = currentPRs.map((pr) => ({ ...pr, isNew: false }));
+        await this.storageService.setStoredPRs(updatedPRs);
+        this.debugService.log(`[PRService] Marked all ${updatedPRs.length} PRs as read`);
+        return;
+      }
+
+      // Mark only specified PRs as read
+      const prIdSet = new Set(prIds);
+      const updatedPRs = currentPRs.map((pr) => {
+        if (prIdSet.has(pr.id)) {
+          return { ...pr, isNew: false };
+        }
+        return pr;
+      });
 
       // Update storage
       await this.storageService.setStoredPRs(updatedPRs);
 
-      this.debugService.log(`[PRService] Marked ${updatedPRs.length} PRs as read`);
+      this.debugService.log(`[PRService] Marked ${prIds.length} specific PRs as read`);
     } catch (error) {
       this.debugService.error('[PRService] Error marking PRs as read:', error);
       throw error;

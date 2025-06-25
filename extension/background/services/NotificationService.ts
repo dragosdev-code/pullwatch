@@ -60,7 +60,7 @@ export class NotificationService implements INotificationService {
           message: `${pr.title}`,
           contextMessage: `${pr.repoName} by ${pr.author.login}`,
           requireInteraction: false,
-          silent: false, // Allow Chrome to play its notification sound
+          silent: true, // Allow Chrome to play its notification sound
           priority: 2,
         });
 
