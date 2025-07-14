@@ -3,6 +3,9 @@
   "name": "PR Live Extension",
   "description": "A Chrome extension for real-time PR updates",
   "version": "1.0.0",
+  "icons": {
+    "128": "logo.png"
+  },
   "action": {
     "default_popup": "index.html"
   },
