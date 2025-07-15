@@ -1,7 +1,10 @@
 export { Header } from './Header';
+export { Footer } from './Footer';
 export { PRList } from './PRList';
 export { PRItem } from './PRItem';
-export { Footer } from './Footer';
 export { RefreshButton } from './RefreshButton';
+export { TestArea } from './TestArea';
 export { TitleParticleCanvas } from './TitleParticleCanvas';
+export { Tabs, TabPanel, useTabs } from './ui/tabs';
+export type { Tab, UseTabsOptions, UseTabsReturn } from './ui/tabs';
 export * from './types';

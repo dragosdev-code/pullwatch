@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Header, PRList, Footer } from './components';
+import { useEffect, useMemo } from 'react';
+import { Header, PRList, Footer, Tabs, TabPanel, type Tab } from './components';
 import { TestArea } from './components/TestArea';
 import { usePRs, usePRUpdates } from './hooks';
 import { useStorageSync } from './hooks/useStorageSync';
@@ -23,6 +23,20 @@ function App() {
 
   const hasEverLoaded = isSuccess || prs.length > 0;
 
+  const tabs: Tab[] = useMemo(
+    () => [
+      { id: 'reviews', label: 'To Review', count: prs.length },
+      { id: 'changes', label: 'Need Changes', count: 0 },
+      { id: 'merged', label: 'Merged', count: 0 },
+    ],
+    [prs.length]
+  );
+
+  const handleTabChange = (tabId: string) => {
+    console.log('Tab changed to:', tabId);
+    //TODO: Add any additional logic when tabs change
+  };
+
   return (
     <div className="w-[380px] h-[400px] bg-white rounded-2xl relative overflow-hidden border-0 shadow-none flex flex-col">
       <Header prCount={prs.length} />
@@ -41,11 +55,41 @@ function App() {
 
       {isDebugMode && <TestArea />}
 
-      <PRList
-        prs={prs}
-        newPrIds={new Set(prs.filter((pr) => pr.isNew).map((pr) => pr.id))}
-        hasEverLoaded={hasEverLoaded}
-      />
+      {/* Tabs Component */}
+      <Tabs
+        tabs={tabs}
+        className="flex-1 flex flex-col"
+        defaultTab="reviews"
+        onChange={handleTabChange}
+      >
+        <TabPanel tabId="reviews" className="flex-1 flex flex-col">
+          <PRList
+            prs={prs}
+            newPrIds={new Set(prs.filter((pr) => pr.isNew).map((pr) => pr.id))}
+            hasEverLoaded={hasEverLoaded}
+          />
+        </TabPanel>
+
+        <TabPanel tabId="changes" className="flex-1 flex flex-col">
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="text-center">
+              <div className="text-2xl mb-2">🔄</div>
+              <p className="text-sm text-gray-600 font-medium mb-1">Changes Requested</p>
+              <p className="text-xs text-gray-500">PRs that need your attention</p>
+            </div>
+          </div>
+        </TabPanel>
+
+        <TabPanel tabId="merged" className="flex-1 flex flex-col">
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="text-center">
+              <div className="text-2xl mb-2">✅</div>
+              <p className="text-sm text-gray-600 font-medium mb-1">Recently Merged</p>
+              <p className="text-xs text-gray-500">Your completed PRs</p>
+            </div>
+          </div>
+        </TabPanel>
+      </Tabs>
 
       <Footer />
     </div>
