@@ -1,10 +1,8 @@
 import { useTestNotification } from '../hooks';
+import { useSetGlobalError } from '../stores';
 
-type Props = {
-  setError: (error: string) => void;
-};
-
-export const TestArea = ({ setError }: Props) => {
+export const TestArea = () => {
+  const setGlobalError = useSetGlobalError();
   const testNotificationMutation = useTestNotification();
   const playNotificationSound = () => {
     try {
@@ -67,7 +65,7 @@ export const TestArea = ({ setError }: Props) => {
       setTimeout(() => playNotificationSound(), 200);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to send test notification';
-      setError(errorMessage);
+      setGlobalError(errorMessage);
     }
   };
 
@@ -78,21 +76,21 @@ export const TestArea = ({ setError }: Props) => {
           { action: 'testNotificationWithoutPopup' },
           (response: { success: boolean; error?: string }) => {
             if (chrome.runtime.lastError) {
-              setError('Failed to send offscreen test notification');
+              setGlobalError('Failed to send offscreen test notification');
               return;
             }
 
             if (response.success) {
               console.log('Offscreen test notification sent successfully');
             } else {
-              setError(response.error || 'Failed to send offscreen test notification');
+              setGlobalError(response.error || 'Failed to send offscreen test notification');
             }
           }
         );
       }
     } catch (err) {
       console.error('Failed to send offscreen test notification:', err);
-      setError('Failed to send offscreen test notification');
+      setGlobalError('Failed to send offscreen test notification');
     }
   };
 
@@ -103,21 +101,21 @@ export const TestArea = ({ setError }: Props) => {
           { action: 'startTestInterval' },
           (response: { success: boolean; error?: string }) => {
             if (chrome.runtime.lastError) {
-              setError('Failed to start test interval');
+              setGlobalError('Failed to start test interval');
               return;
             }
 
             if (response.success) {
               console.log('Test interval started - notifications every 5 seconds');
             } else {
-              setError(response.error || 'Failed to start test interval');
+              setGlobalError(response.error || 'Failed to start test interval');
             }
           }
         );
       }
     } catch (err) {
       console.error('Failed to start test interval:', err);
-      setError('Failed to start test interval');
+      setGlobalError('Failed to start test interval');
     }
   };
 
@@ -128,21 +126,21 @@ export const TestArea = ({ setError }: Props) => {
           { action: 'stopTestInterval' },
           (response: { success: boolean; error?: string }) => {
             if (chrome.runtime.lastError) {
-              setError('Failed to stop test interval');
+              setGlobalError('Failed to stop test interval');
               return;
             }
 
             if (response.success) {
               console.log('Test interval stopped');
             } else {
-              setError(response.error || 'Failed to stop test interval');
+              setGlobalError(response.error || 'Failed to stop test interval');
             }
           }
         );
       }
     } catch (err) {
       console.error('Failed to stop test interval:', err);
-      setError('Failed to stop test interval');
+      setGlobalError('Failed to stop test interval');
     }
   };
   return (

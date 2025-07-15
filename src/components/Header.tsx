@@ -1,14 +1,40 @@
 import { RefreshButton } from './RefreshButton';
-import { useDebug } from '../hooks';
+import {
+  useHandleGithubClick,
+  useDebugPending,
+  useSetGlobalError,
+  useClearGlobalError,
+} from '../stores';
+import { usePRs, useRefreshPRs } from '../hooks';
+import { useEffect } from 'react';
 
 interface HeaderProps {
   prCount: number;
-  isLoading: boolean;
-  onRefresh: () => void;
 }
 
-export const Header = ({ prCount, isLoading, onRefresh }: HeaderProps) => {
-  const { handleGithubClick, isDebugPending } = useDebug();
+export const Header = ({ prCount }: HeaderProps) => {
+  const handleGithubClick = useHandleGithubClick();
+  const isDebugPending = useDebugPending();
+  const setGlobalError = useSetGlobalError();
+  const clearGlobalError = useClearGlobalError();
+  const { isLoading: isLoadingPRs, error: queryError } = usePRs();
+  const refreshPRsMutation = useRefreshPRs();
+
+  useEffect(() => {
+    if (queryError) {
+      setGlobalError(queryError.message);
+    }
+  }, [queryError, setGlobalError]);
+
+  const handleRefresh = async () => {
+    clearGlobalError();
+    try {
+      await refreshPRsMutation.mutateAsync();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to refresh PRs';
+      setGlobalError(errorMessage);
+    }
+  };
 
   return (
     <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100 relative">
@@ -32,7 +58,10 @@ export const Header = ({ prCount, isLoading, onRefresh }: HeaderProps) => {
         </span>
       </div>
 
-      <RefreshButton isLoading={isLoading} onRefresh={onRefresh} />
+      <RefreshButton
+        isLoading={refreshPRsMutation.isPending || isLoadingPRs}
+        onRefresh={handleRefresh}
+      />
     </div>
   );
 };
