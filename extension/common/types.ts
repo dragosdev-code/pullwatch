@@ -22,7 +22,7 @@ export interface PullRequest {
   labels?: string[];
   isNew?: boolean; // Helper flag for notifications
   html_url?: string; // This is often the same as url, from GitHub API
-  type: 'draft' | 'open';
+  type: 'draft' | 'open' | 'merged';
 }
 
 // Represents the structure of stored PR data

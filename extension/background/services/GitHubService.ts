@@ -423,7 +423,7 @@ export class GitHubService implements IGitHubService {
       }
 
       // Extract PR type (draft or open) using aria-label and fallbacks
-      let prType: 'draft' | 'open' = 'open';
+      let prType: 'draft' | 'open' | 'merged' = 'open';
       if (/aria-label="[^"]*Draft Pull Request[^"]*"/i.test(elementHtml)) {
         prType = 'draft';
         this.debugService.log(
@@ -432,6 +432,11 @@ export class GitHubService implements IGitHubService {
       } else if (/aria-label="[^"]*Open Pull Request[^"]*"/i.test(elementHtml)) {
         prType = 'open';
         this.debugService.log('[GitHubService-RegexParser] PR type detected from aria-label: open');
+      } else if (/aria-label="[^"]*Merged Pull Request[^"]*"/i.test(elementHtml)) {
+        prType = 'merged';
+        this.debugService.log(
+          '[GitHubService-RegexParser] PR type detected from aria-label: merged'
+        );
       } else {
         // Fallbacks: SVG class names or textual Draft badge
         if (
@@ -449,6 +454,11 @@ export class GitHubService implements IGitHubService {
           prType = 'open';
           this.debugService.log(
             '[GitHubService-RegexParser] PR type inferred from SVG class: open'
+          );
+        } else if (/octicon-git-merge/i.test(elementHtml)) {
+          prType = 'merged';
+          this.debugService.log(
+            '[GitHubService-RegexParser] PR type inferred from SVG class: merged'
           );
         } else {
           this.debugService.log(
