@@ -422,6 +422,41 @@ export class GitHubService implements IGitHubService {
         }
       }
 
+      // Extract PR type (draft or open) using aria-label and fallbacks
+      let prType: 'draft' | 'open' = 'open';
+      if (/aria-label="[^"]*Draft Pull Request[^"]*"/i.test(elementHtml)) {
+        prType = 'draft';
+        this.debugService.log(
+          '[GitHubService-RegexParser] PR type detected from aria-label: draft'
+        );
+      } else if (/aria-label="[^"]*Open Pull Request[^"]*"/i.test(elementHtml)) {
+        prType = 'open';
+        this.debugService.log('[GitHubService-RegexParser] PR type detected from aria-label: open');
+      } else {
+        // Fallbacks: SVG class names or textual Draft badge
+        if (
+          /octicon-git-pull-request-draft/i.test(elementHtml) ||
+          /(^|[^a-z])Draft([^a-z]|$)/i.test(elementHtml)
+        ) {
+          prType = 'draft';
+          this.debugService.log(
+            '[GitHubService-RegexParser] PR type inferred from SVG class or badge: draft'
+          );
+        } else if (
+          /octicon-git-pull-request(?!-)/i.test(elementHtml) ||
+          /color-fg-open/i.test(elementHtml)
+        ) {
+          prType = 'open';
+          this.debugService.log(
+            '[GitHubService-RegexParser] PR type inferred from SVG class: open'
+          );
+        } else {
+          this.debugService.log(
+            '[GitHubService-RegexParser] PR type not explicitly found; defaulting to open'
+          );
+        }
+      }
+
       const pr: PullRequest = {
         id: url,
         url,
@@ -430,6 +465,7 @@ export class GitHubService implements IGitHubService {
         repoName,
         author: { login: authorLogin },
         createdAt,
+        type: prType,
         isNew: false,
       };
 
@@ -440,6 +476,7 @@ export class GitHubService implements IGitHubService {
         repoName: pr.repoName,
         author: pr.author.login,
         createdAt: pr.createdAt,
+        type: pr.type,
       });
       this.debugService.log(
         '[GitHubService-RegexParser] ==================== ELEMENT EXTRACTION SUCCESS ===================='
