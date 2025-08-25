@@ -4,6 +4,7 @@
  */
 export const queryKeys = {
   prs: ['prs'] as const,
+  mergedPrs: ['mergedPrs'] as const,
   settings: ['settings'] as const,
   notifications: ['notifications'] as const,
 } as const;

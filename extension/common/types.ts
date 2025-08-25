@@ -4,6 +4,7 @@ import type {
   STORAGE_KEY_LAST_FETCH,
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
+  STORAGE_KEY_MERGED_PRS,
 } from './constants';
 
 // Represents the structure of a Pull Request
@@ -34,6 +35,7 @@ export interface StoredPRs {
 // For browser.storage.local.get/set operations
 export interface StorageItems {
   [STORAGE_KEY_PRS]?: StoredPRs;
+  [STORAGE_KEY_MERGED_PRS]?: StoredPRs;
   [STORAGE_KEY_LAST_FETCH]?: number; // Timestamp
   [STORAGE_KEY_SETTINGS]?: ExtensionSettings;
   [STORAGE_KEY_USER_DATA]?: UserData;

@@ -216,6 +216,10 @@ export class EventService implements IEventService {
       case 'fetchPRs':
         asyncWrapper(this.handlePRDataActions(message, sendResponse));
         break;
+      case 'getMergedPRs':
+      case 'fetchMergedPRs':
+        asyncWrapper(this.handleMergedPRDataActions(message, sendResponse));
+        break;
 
       case 'saveSettings':
       case 'getSettings':
@@ -284,6 +288,70 @@ export class EventService implements IEventService {
     } catch (error) {
       this.debugService.error('[EventService] Error handling PR data actions:', error);
       sendResponse({ success: false, error: 'Failed to handle PR action' });
+    }
+  }
+
+  /**
+   * Handles merged PR data related actions (getMergedPRs, fetchMergedPRs).
+   */
+  async handleMergedPRDataActions(
+    message: RuntimeMessage,
+    sendResponse: (response: MessageResponse) => void
+  ): Promise<void> {
+    try {
+      const storageService = this.serviceContainer.getService<IStorageService>('storageService');
+      const gitHubService = this.serviceContainer.getService<IGitHubService>('gitHubService');
+
+      if (this.isMessageAction(message, 'getMergedPRs')) {
+        this.debugService.log('[EventService] Getting stored merged PRs and fetching fresh data');
+
+        const stored = await storageService.getStoredMergedPRs();
+        const storedPRs = stored?.prs || [];
+        sendResponse({ success: true, data: storedPRs });
+
+        // Background refresh
+        this.fetchFreshMergedDataInBackground(storageService, gitHubService);
+      } else if (this.isMessageAction(message, 'fetchMergedPRs')) {
+        this.debugService.log(
+          '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
+        );
+        const merged = await gitHubService.fetchMergedPRs();
+        await storageService.setStoredMergedPRs(merged);
+        sendResponse({ success: true, data: merged });
+      }
+    } catch (error) {
+      this.debugService.error('[EventService] Error handling merged PR data actions:', error);
+      sendResponse({ success: false, error: 'Failed to handle merged PR action' });
+    }
+  }
+
+  /**
+   * Fetches fresh merged data in the background and notifies popup if data changed.
+   */
+  private async fetchFreshMergedDataInBackground(
+    storageService: IStorageService,
+    gitHubService: IGitHubService
+  ): Promise<void> {
+    try {
+      const stored = await storageService.getStoredMergedPRs();
+      const storedPRs = stored?.prs || [];
+      const fresh = await gitHubService.fetchMergedPRs();
+
+      const summarize = (list: PullRequest[]) => list.map((pr) => ({ id: pr.id, title: pr.title }));
+      const changed = JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(fresh));
+
+      if (changed) {
+        await storageService.setStoredMergedPRs(fresh);
+        try {
+          await chrome.runtime.sendMessage({ action: 'mergedPrDataUpdated', data: fresh });
+        } catch (e) {
+          this.debugService.log('[EventService] Could not notify popup for merged PRs:', e);
+        }
+      } else {
+        this.debugService.log('[EventService] Background merged fetch completed - no changes');
+      }
+    } catch (error) {
+      this.debugService.error('[EventService] Error in background merged fetch:', error);
     }
   }
 

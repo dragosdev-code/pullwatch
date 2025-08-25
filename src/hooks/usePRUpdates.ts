@@ -18,6 +18,10 @@ export function usePRUpdates() {
 
           // Update the cache with fresh data
           queryClient.setQueryData(queryKeys.prs, updatedPRs);
+        } else if (message.action === 'mergedPrDataUpdated') {
+          const updatedMerged = message.data as PullRequest[];
+          console.log('Received merged PR data update from background, updating cache');
+          queryClient.setQueryData(queryKeys.mergedPrs, updatedMerged);
         }
       });
     },

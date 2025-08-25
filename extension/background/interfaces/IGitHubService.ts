@@ -10,6 +10,11 @@ export interface IGitHubService {
   fetchAssignedPRs(): Promise<PullRequest[]>;
 
   /**
+   * Fetches user's merged pull requests from GitHub.
+   */
+  fetchMergedPRs(): Promise<PullRequest[]>;
+
+  /**
    * Fetches pull requests by query.
    */
   fetchPRsByQuery(query: string): Promise<PullRequest[]>;

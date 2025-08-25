@@ -2,6 +2,7 @@
 
 // Storage Keys
 export const STORAGE_KEY_PRS = 'github_prs';
+export const STORAGE_KEY_MERGED_PRS = 'github_merged_prs';
 export const STORAGE_KEY_LAST_FETCH = 'last_fetch_time';
 export const STORAGE_KEY_SETTINGS = 'settings'; // As per requirements
 export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
@@ -35,6 +36,9 @@ export const GITHUB_BASE_URL = 'https://github.com';
 // The query `user-review-requested:@me` searches for PRs where the authenticated user is requested for review.
 export const GITHUB_REVIEW_REQUESTS_URL_TEMPLATE = (baseUrl: string) =>
   `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+user-review-requested%3A%40me+`;
+
+export const GITHUB_MERGED_PRS_URL_TEMPLATE = (baseUrl: string) =>
+  `${baseUrl}/pulls?q=is%3Apr+is%3Amerged+author%3A%40me`;
 
 // Badge
 export const BADGE_COLOR_ACTIVE = '#007bff'; // Blue

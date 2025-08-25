@@ -10,9 +10,19 @@ export interface IStorageService {
   getStoredPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null>;
 
   /**
+   * Gets stored merged pull requests.
+   */
+  getStoredMergedPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null>;
+
+  /**
    * Sets stored pull requests.
    */
   setStoredPRs(prs: PullRequest[]): Promise<void>;
+
+  /**
+   * Sets stored merged pull requests.
+   */
+  setStoredMergedPRs(prs: PullRequest[]): Promise<void>;
 
   /**
    * Gets the last fetch timestamp.

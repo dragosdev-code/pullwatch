@@ -5,6 +5,7 @@ import type { PullRequest } from '../../common/types';
 import {
   GITHUB_BASE_URL,
   GITHUB_REVIEW_REQUESTS_URL_TEMPLATE,
+  GITHUB_MERGED_PRS_URL_TEMPLATE,
   USER_AGENT,
 } from '../../common/constants';
 
@@ -18,12 +19,14 @@ export class GitHubService implements IGitHubService {
   private initialized = false;
   private baseURL: string;
   private reviewRequestsURL: string;
+  private mergedPRsURL: string;
 
   constructor(debugService: IDebugService, storageService: IStorageService) {
     this.debugService = debugService;
     this.storageService = storageService;
     this.baseURL = GITHUB_BASE_URL;
     this.reviewRequestsURL = GITHUB_REVIEW_REQUESTS_URL_TEMPLATE(this.baseURL);
+    this.mergedPRsURL = GITHUB_MERGED_PRS_URL_TEMPLATE(this.baseURL);
   }
 
   /**
@@ -38,6 +41,60 @@ export class GitHubService implements IGitHubService {
     );
     this.initialized = true;
     this.debugService.log('[GitHubService] GitHub service initialized');
+  }
+
+  /**
+   * Fetches user's merged pull requests from GitHub.
+   */
+  async fetchMergedPRs(): Promise<PullRequest[]> {
+    this.debugService.log(
+      '[GitHubService] Attempting to fetch merged PRs from:',
+      this.mergedPRsURL
+    );
+    try {
+      const response = await fetch(this.mergedPRsURL, {
+        credentials: 'include',
+        headers: {
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'User-Agent': USER_AGENT,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      });
+
+      this.debugService.log('[GitHubService] Fetch merged response status:', response.status);
+      if (!response.ok) {
+        const errorMsg = `GitHub merged request failed: ${response.status}`;
+        this.debugService.error(`[GitHubService] ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      const html = await response.text();
+      this.debugService.log('[GitHubService] Merged HTML received. Length:', html.length);
+
+      const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
+      const isLoginPage =
+        pageTitle.includes('Sign in to GitHub') ||
+        html.includes('name="login"') ||
+        html.includes('action="/session"') ||
+        html.includes('class="auth-form"');
+      if (isLoginPage) {
+        throw new Error('NotLoggedIn: User is not logged in to GitHub.');
+      }
+
+      return this.parseAssignedPRsFromHTML(html);
+    } catch (error: unknown) {
+      this.debugService.error(
+        '[GitHubService] Error in fetchMergedPRs:',
+        error instanceof Error ? error.message : error
+      );
+      throw new Error(
+        `Network or parsing error while fetching merged PRs: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 
   /**

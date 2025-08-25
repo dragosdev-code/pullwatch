@@ -3,6 +3,7 @@ import type { IDebugService } from '../interfaces/IDebugService';
 import type { PullRequest, StorageItems, StoredPRs, UserData } from '../../common/types';
 import {
   STORAGE_KEY_PRS,
+  STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_LAST_FETCH,
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
@@ -131,6 +132,34 @@ export class StorageService implements IStorageService {
   }
 
   /**
+   * Gets stored merged pull requests.
+   */
+  async getStoredMergedPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null> {
+    try {
+      const data = await this.getStorageData(STORAGE_KEY_MERGED_PRS);
+      const storedPRs = (data as StorageItems)[STORAGE_KEY_MERGED_PRS] || null;
+
+      if (storedPRs) {
+        const result = {
+          prs: storedPRs.prs || [],
+          timestamp: storedPRs.lastUpdated ? new Date(storedPRs.lastUpdated).getTime() : Date.now(),
+        };
+        this.debugService.log(
+          '[StorageService] Retrieved stored merged PRs:',
+          result.prs.length,
+          'items'
+        );
+        return result;
+      }
+
+      return null;
+    } catch (error) {
+      this.debugService.error('[StorageService] Error getting stored merged PRs:', error);
+      return null;
+    }
+  }
+
+  /**
    * Sets stored pull requests.
    */
   async setStoredPRs(prs: PullRequest[]): Promise<void> {
@@ -143,6 +172,23 @@ export class StorageService implements IStorageService {
       this.debugService.log('[StorageService] Stored PRs updated:', prs.length, 'items');
     } catch (error) {
       this.debugService.error('[StorageService] Error setting stored PRs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sets stored merged pull requests.
+   */
+  async setStoredMergedPRs(prs: PullRequest[]): Promise<void> {
+    try {
+      const storedPRs: StoredPRs = {
+        prs,
+        lastUpdated: new Date().toISOString(),
+      };
+      await this.setStorageData({ [STORAGE_KEY_MERGED_PRS]: storedPRs });
+      this.debugService.log('[StorageService] Stored merged PRs updated:', prs.length, 'items');
+    } catch (error) {
+      this.debugService.error('[StorageService] Error setting stored merged PRs:', error);
       throw error;
     }
   }

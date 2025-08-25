@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Header, PRList, Footer, Tabs, TabPanel, type Tab } from './components';
 import { TestArea } from './components/TestArea';
-import { usePRs, usePRUpdates } from './hooks';
+import { usePRs, useMergedPRs, usePRUpdates } from './hooks';
 import { useStorageSync } from './hooks/useStorageSync';
 import { useGlobalError, useClearGlobalError, useDebugMode } from './stores';
 
@@ -14,6 +14,7 @@ function App() {
   useStorageSync();
 
   const { data: prs = [], isSuccess } = usePRs();
+  const { data: mergedPRs = [] } = useMergedPRs();
   const prUpdates = usePRUpdates();
 
   useEffect(() => {
@@ -27,9 +28,9 @@ function App() {
     () => [
       { id: 'reviews', label: 'To Review', count: prs.length },
       { id: 'changes', label: 'Need Changes', count: 0 },
-      { id: 'merged', label: 'Merged', count: 0 },
+      { id: 'merged', label: 'Merged', count: mergedPRs.length },
     ],
-    [prs.length]
+    [prs.length, mergedPRs.length]
   );
 
   const handleTabChange = (tabId: string) => {
@@ -81,13 +82,11 @@ function App() {
         </TabPanel>
 
         <TabPanel tabId="merged" className="flex-1 flex flex-col">
-          <div className="flex-1 flex items-center justify-center p-6">
-            <div className="text-center">
-              <div className="text-2xl mb-2">✅</div>
-              <p className="text-sm text-gray-600 font-medium mb-1">Recently Merged</p>
-              <p className="text-xs text-gray-500">Your completed PRs</p>
-            </div>
-          </div>
+          <PRList
+            prs={mergedPRs}
+            newPrIds={new Set(mergedPRs.filter((pr) => pr.isNew).map((pr) => pr.id))}
+            hasEverLoaded={hasEverLoaded}
+          />
         </TabPanel>
       </Tabs>
 

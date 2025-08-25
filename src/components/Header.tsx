@@ -5,7 +5,7 @@ import {
   useSetGlobalError,
   useClearGlobalError,
 } from '../stores';
-import { usePRs, useRefreshPRs } from '../hooks';
+import { useMergedPRs, usePRs, useRefreshMergedPRs, useRefreshPRs } from '../hooks';
 import { useEffect } from 'react';
 
 interface HeaderProps {
@@ -19,17 +19,20 @@ export const Header = ({ prCount }: HeaderProps) => {
   const clearGlobalError = useClearGlobalError();
   const { isLoading: isLoadingPRs, error: queryError } = usePRs();
   const refreshPRsMutation = useRefreshPRs();
+  const { isLoading: isLoadingMergedPRs, error: queryErrorMerged } = useMergedPRs();
+  const refreshMergedPRsMutation = useRefreshMergedPRs();
 
   useEffect(() => {
-    if (queryError) {
-      setGlobalError(queryError.message);
+    if (queryError || queryErrorMerged) {
+      setGlobalError(queryError?.message || queryErrorMerged?.message || '');
     }
-  }, [queryError, setGlobalError]);
+  }, [queryError, queryErrorMerged, setGlobalError]);
 
   const handleRefresh = async () => {
     clearGlobalError();
     try {
       await refreshPRsMutation.mutateAsync();
+      await refreshMergedPRsMutation.mutateAsync();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to refresh PRs';
       setGlobalError(errorMessage);
@@ -59,7 +62,12 @@ export const Header = ({ prCount }: HeaderProps) => {
       </div>
 
       <RefreshButton
-        isLoading={refreshPRsMutation.isPending || isLoadingPRs}
+        isLoading={
+          refreshPRsMutation.isPending ||
+          isLoadingPRs ||
+          refreshMergedPRsMutation.isPending ||
+          isLoadingMergedPRs
+        }
         onRefresh={handleRefresh}
       />
     </div>
