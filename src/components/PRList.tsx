@@ -29,14 +29,45 @@ export const PRList = ({ prs, newPrIds, hasEverLoaded = false }: PRListProps) =>
     );
   }
 
+  const pendingPRs = prs.filter((pr) => pr.reviewStatus !== 'reviewed');
+  const reviewedPRs = prs.filter((pr) => pr.reviewStatus === 'reviewed');
+
   return (
     <div className="h-[360px] overflow-y-auto">
-      <div className="space-y-0">
-        {prs.map((pr) => {
-          // Ensure required properties exist with defaults
-          return <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} />;
-        })}
-      </div>
+      {pendingPRs.length > 0 && (
+        <div className="space-y-0">
+          {pendingPRs.map((pr) => (
+            <PRItem
+              key={pr.id}
+              pr={pr}
+              isNew={newPrIds.has(pr.id)}
+              isReviewed={false}
+            />
+          ))}
+        </div>
+      )}
+
+      {reviewedPRs.length > 0 && (
+        <div className={pendingPRs.length > 0 ? 'mt-4' : ''}>
+          <div
+            className={`px-5 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400 ${
+              pendingPRs.length === 0 ? 'pt-4' : 'pt-0'
+            }`}
+          >
+            Reviewed
+          </div>
+          <div className="space-y-0">
+            {reviewedPRs.map((pr) => (
+              <PRItem
+                key={pr.id}
+                pr={pr}
+                isNew={false}
+                isReviewed
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

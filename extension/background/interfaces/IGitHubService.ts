@@ -10,6 +10,11 @@ export interface IGitHubService {
   fetchAssignedPRs(): Promise<PullRequest[]>;
 
   /**
+   * Fetches pull requests that the user has already reviewed but are still open.
+   */
+  fetchReviewedPRs(): Promise<PullRequest[]>;
+
+  /**
    * Fetches user's merged pull requests from GitHub.
    */
   fetchMergedPRs(): Promise<PullRequest[]>;

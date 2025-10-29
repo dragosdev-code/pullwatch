@@ -47,20 +47,87 @@ export class PRService implements IPRService {
       const oldPRs = storedData?.prs || [];
       this.debugService.log(`[PRService] Current stored PRs count: ${oldPRs.length}`);
 
-      // Fetch fresh PRs from GitHub
-      const freshPRs = await this.gitHubService.fetchAssignedPRs();
-      this.debugService.log(`[PRService] Fetched fresh PRs count: ${freshPRs.length}`);
+      const oldPendingPRs = oldPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
+      const oldReviewedPRs = oldPRs.filter((pr) => pr.reviewStatus === 'reviewed');
+      this.debugService.log(
+        `[PRService] Current stored pending PRs count: ${oldPendingPRs.length}`
+      );
 
-      // Compare PRs and identify new ones
-      const { newPRs, allPRsWithStatus } = this.comparePRs(oldPRs, freshPRs);
-      this.debugService.log(`[PRService] New PRs detected: ${newPRs.length}`);
+      // Fetch fresh PRs from GitHub
+      const [freshPendingPRsRaw, freshReviewedPRsRaw] = await Promise.all([
+        this.gitHubService.fetchAssignedPRs(),
+        this.gitHubService.fetchReviewedPRs(),
+      ]);
+      this.debugService.log(
+        `[PRService] Fetched fresh pending PRs: ${freshPendingPRsRaw.length}, reviewed PRs: ${freshReviewedPRsRaw.length}`
+      );
+
+      const freshPendingPRs = freshPendingPRsRaw.map((pr) => ({
+        ...pr,
+        reviewStatus: 'pending' as const,
+      }));
+
+      const { newPRs, allPRsWithStatus: pendingPRsWithStatus } = this.comparePRs(
+        oldPendingPRs,
+        freshPendingPRs
+      );
+      this.debugService.log(`[PRService] New pending PRs detected: ${newPRs.length}`);
+
+      const pendingIds = new Set(
+        pendingPRsWithStatus.map((pr) => {
+          const key = pr.id || pr.url;
+          return key;
+        })
+      );
+
+      const reviewedPRMap = new Map<string, PullRequest>();
+
+      const freshReviewedPRs = freshReviewedPRsRaw
+        .filter((pr) => {
+          const key = pr.id || pr.url;
+          return !pendingIds.has(key);
+        })
+        .map((pr) => {
+          const key = pr.id || pr.url;
+          const reviewedPR: PullRequest = {
+            ...pr,
+            reviewStatus: 'reviewed' as const,
+            isNew: false,
+          };
+          reviewedPRMap.set(key, reviewedPR);
+          return reviewedPR;
+        });
+
+      const preservedReviewedPRs = oldReviewedPRs
+        .filter((pr) => {
+          const key = pr.id || pr.url;
+          if (pendingIds.has(key)) {
+            return false;
+          }
+          if (reviewedPRMap.has(key)) {
+            return false;
+          }
+          return true;
+        })
+        .map((pr) => ({
+          ...pr,
+          reviewStatus: 'reviewed' as const,
+          isNew: false,
+        }));
+
+      const reviewedPRs = [...freshReviewedPRs, ...preservedReviewedPRs];
+
+      const allPRsWithStatus = [...pendingPRsWithStatus, ...reviewedPRs];
+      this.debugService.log(
+        `[PRService] Total PRs to store (pending + reviewed): ${allPRsWithStatus.length}`
+      );
 
       // Update storage with fresh data and last fetch time
       await this.storageService.setStoredPRs(allPRsWithStatus);
       await this.storageService.setLastFetchTime(Date.now());
 
       // Update badge with current count
-      await this.badgeService.setPRCountBadge(allPRsWithStatus.length);
+      await this.badgeService.setPRCountBadge(pendingPRsWithStatus.length);
 
       // Show notifications for new PRs (NotificationService handles sound)
       if (newPRs.length > 0 && !forceRefresh) {
@@ -110,15 +177,17 @@ export class PRService implements IPRService {
       const key = freshPR.id || freshPR.url;
       const existingPR = oldPRMap.get(key);
 
+      const reviewStatus = freshPR.reviewStatus ?? 'pending';
+
       if (!existingPR) {
         // This is a new PR - mark it as new and add to new PRs list
         this.debugService.log(`[PRService] New PR detected: ${freshPR.title} (${key})`);
-        const newPR = { ...freshPR, isNew: true };
+        const newPR = { ...freshPR, isNew: true, reviewStatus };
         newPRs.push(newPR);
         allPRsWithStatus.push(newPR);
       } else {
         // This PR already existed - preserve it but mark as not new
-        const existingPRUpdated = { ...freshPR, isNew: false };
+        const existingPRUpdated = { ...freshPR, isNew: false, reviewStatus };
         allPRsWithStatus.push(existingPRUpdated);
         this.debugService.log(`[PRService] Existing PR: ${freshPR.title} (${key})`);
       }

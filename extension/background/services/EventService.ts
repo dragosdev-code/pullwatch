@@ -364,19 +364,79 @@ export class EventService implements IEventService {
 
       // Get current stored PRs for comparison
       const storedPRs = await prService.getStoredPRs();
+      const storedPendingPRs = storedPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
+      const storedReviewedPRs = storedPRs.filter((pr) => pr.reviewStatus === 'reviewed');
 
       // Fetch fresh PRs from GitHub (without updating storage yet)
       const gitHubService = this.serviceContainer.getService<IGitHubService>('gitHubService');
-      const freshPRs = await gitHubService.fetchAssignedPRs();
+      const [freshPendingPRsRaw, freshReviewedPRsRaw] = await Promise.all([
+        gitHubService.fetchAssignedPRs(),
+        gitHubService.fetchReviewedPRs(),
+      ]);
 
-      // Use PRService's comparison logic to check for changes
-      const { newPRs, allPRsWithStatus } = prService.comparePRs(storedPRs, freshPRs);
+      const freshPendingPRs = freshPendingPRsRaw.map((pr) => ({
+        ...pr,
+        reviewStatus: 'pending' as const,
+      }));
+
+      const { newPRs, allPRsWithStatus: pendingPRsWithStatus } = prService.comparePRs(
+        storedPendingPRs,
+        freshPendingPRs
+      );
+
+      const pendingIds = new Set(
+        pendingPRsWithStatus.map((pr) => {
+          const key = pr.id || pr.url;
+          return key;
+        })
+      );
+
+      const reviewedPRMap = new Map<string, PullRequest>();
+
+      const freshReviewedPRs = freshReviewedPRsRaw
+        .filter((pr) => {
+          const key = pr.id || pr.url;
+          return !pendingIds.has(key);
+        })
+        .map((pr) => {
+          const key = pr.id || pr.url;
+          const reviewedPR: PullRequest = {
+            ...pr,
+            reviewStatus: 'reviewed' as const,
+            isNew: false,
+          };
+          reviewedPRMap.set(key, reviewedPR);
+          return reviewedPR;
+        });
+
+      const preservedReviewedPRs = storedReviewedPRs
+        .filter((pr) => {
+          const key = pr.id || pr.url;
+          if (pendingIds.has(key)) {
+            return false;
+          }
+          if (reviewedPRMap.has(key)) {
+            return false;
+          }
+          return true;
+        })
+        .map((pr) => ({
+          ...pr,
+          reviewStatus: 'reviewed' as const,
+          isNew: false,
+        }));
+
+      const reviewedPRs = [...freshReviewedPRs, ...preservedReviewedPRs];
+
+      const allPRsWithStatus = [...pendingPRsWithStatus, ...reviewedPRs];
 
       // Check if there are any changes (new PRs or different data)
+      const summarize = (list: PullRequest[]) =>
+        list.map((pr) => ({ id: pr.id, title: pr.title, reviewStatus: pr.reviewStatus }));
+
       const hasChanges =
         newPRs.length > 0 ||
-        JSON.stringify(storedPRs.map((pr) => ({ id: pr.id, title: pr.title }))) !==
-          JSON.stringify(allPRsWithStatus.map((pr) => ({ id: pr.id, title: pr.title })));
+        JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(allPRsWithStatus));
 
       if (hasChanges) {
         this.debugService.log(
@@ -391,7 +451,7 @@ export class EventService implements IEventService {
 
         await storageService.setStoredPRs(allPRsWithStatus);
         await storageService.setLastFetchTime(Date.now());
-        await badgeService.setPRCountBadge(allPRsWithStatus.length);
+        await badgeService.setPRCountBadge(pendingPRsWithStatus.length);
 
         // Show notifications for new PRs
         if (newPRs.length > 0) {

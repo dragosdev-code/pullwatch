@@ -22,15 +22,29 @@ function App() {
     return cleanup;
   }, [prUpdates]);
 
+  const pendingPRs = useMemo(
+    () => prs.filter((pr) => pr.reviewStatus !== 'reviewed'),
+    [prs]
+  );
+  const reviewedPRs = useMemo(
+    () => prs.filter((pr) => pr.reviewStatus === 'reviewed'),
+    [prs]
+  );
+
+  const orderedPRs = useMemo(
+    () => [...pendingPRs, ...reviewedPRs],
+    [pendingPRs, reviewedPRs]
+  );
+
   const hasEverLoaded = isSuccess || prs.length > 0;
 
   const tabs: Tab[] = useMemo(
     () => [
-      { id: 'reviews', label: 'To Review', count: prs.length },
+      { id: 'reviews', label: 'To Review', count: pendingPRs.length },
       { id: 'changes', label: 'Need Changes', count: 0 },
       { id: 'merged', label: 'Merged', count: mergedPRs.length },
     ],
-    [prs.length, mergedPRs.length]
+    [pendingPRs.length, mergedPRs.length]
   );
 
   const handleTabChange = (tabId: string) => {
@@ -40,7 +54,7 @@ function App() {
 
   return (
     <div className="w-[380px] h-[400px] bg-white rounded-2xl relative overflow-hidden border-0 shadow-none flex flex-col">
-      <Header prCount={prs.length} />
+      <Header prCount={pendingPRs.length} />
 
       {error && (
         <div className="px-5 py-3 bg-red-50 border-b border-red-200">
@@ -65,7 +79,7 @@ function App() {
       >
         <TabPanel tabId="reviews" className="flex-1 flex flex-col">
           <PRList
-            prs={prs}
+            prs={orderedPRs}
             newPrIds={new Set(prs.filter((pr) => pr.isNew).map((pr) => pr.id))}
             hasEverLoaded={hasEverLoaded}
           />

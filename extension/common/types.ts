@@ -24,6 +24,7 @@ export interface PullRequest {
   isNew?: boolean; // Helper flag for notifications
   html_url?: string; // This is often the same as url, from GitHub API
   type: 'draft' | 'open' | 'merged';
+  reviewStatus?: 'pending' | 'reviewed';
 }
 
 // Represents the structure of stored PR data

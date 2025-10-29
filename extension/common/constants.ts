@@ -40,6 +40,9 @@ export const GITHUB_REVIEW_REQUESTS_URL_TEMPLATE = (baseUrl: string) =>
 export const GITHUB_MERGED_PRS_URL_TEMPLATE = (baseUrl: string) =>
   `${baseUrl}/pulls?q=is%3Apr+is%3Amerged+author%3A%40me`;
 
+export const GITHUB_REVIEWED_PRS_URL_TEMPLATE = (baseUrl: string) =>
+  `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+reviewed-by%3A%40me+-user-review-requested%3A%40me`;
+
 // Badge
 export const BADGE_COLOR_ACTIVE = '#007bff'; // Blue
 export const BADGE_COLOR_INACTIVE = '#6c757d'; // Gray
