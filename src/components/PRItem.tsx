@@ -56,11 +56,11 @@ export const PRItem = ({ pr, isNew, isReviewed = false }: PRItemProps) => {
       style={isNew && !isReviewed ? slideSpring : {}}
       data-pr-id={pr.id}
       className={clsx(
-        'group block px-5 py-3 transition-all duration-200 cursor-pointer relative border-b border-gray-50',
+        'group block px-5 py-3 transition-all duration-200 cursor-pointer relative border-b border-gray-100',
         isReviewed
-          ? 'bg-gray-50 hover:bg-gray-100 border-gray-100'
-          : 'hover:bg-blue-50 hover:border-blue-100',
-        isNew && !isReviewed && 'bg-blue-25 border-blue-200'
+          ? 'bg-gray-50 text-gray-700 opacity-90 border-l-2 border-l-gray-200 hover:bg-gray-100 hover:opacity-100 hover:border-l-gray-300'
+          : 'bg-white text-gray-900 border-l-2 border-l-blue-500 hover:border-l-blue-600 hover:bg-blue-50',
+        isNew && !isReviewed && 'shadow-sm'
       )}
     >
       <div className="flex items-start justify-between">
@@ -118,13 +118,8 @@ export const PRItem = ({ pr, isNew, isReviewed = false }: PRItemProps) => {
             >
               {pr.title}
             </h3>
-            {isNew && !isReviewed && (
-              <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded">
-                New
-              </span>
-            )}
             {isReviewed && (
-              <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[11px] font-medium">
+              <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-[11px] font-medium">
                 <svg
                   width="10"
                   height="10"
@@ -143,13 +138,6 @@ export const PRItem = ({ pr, isNew, isReviewed = false }: PRItemProps) => {
             {pr.repoName} • {pr.author.login} • {formatTimeAgo(pr.createdAt || '')}
           </p>
         </div>
-        <div
-          className={clsx(
-            'w-2.5 h-2.5 rounded-full ml-3 flex-shrink-0 mt-1 transition-opacity duration-200',
-            isReviewed ? 'bg-emerald-400 opacity-0 group-hover:opacity-60' : 'bg-red-500'
-          )}
-          style={isReviewed ? undefined : { display: 'none' }}
-        ></div>
       </div>
     </animated.a>
   );

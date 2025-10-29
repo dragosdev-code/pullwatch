@@ -37,35 +37,16 @@ export const PRList = ({ prs, newPrIds, hasEverLoaded = false }: PRListProps) =>
       {pendingPRs.length > 0 && (
         <div className="space-y-0">
           {pendingPRs.map((pr) => (
-            <PRItem
-              key={pr.id}
-              pr={pr}
-              isNew={newPrIds.has(pr.id)}
-              isReviewed={false}
-            />
+            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isReviewed={false} />
           ))}
         </div>
       )}
 
       {reviewedPRs.length > 0 && (
-        <div className={pendingPRs.length > 0 ? 'mt-4' : ''}>
-          <div
-            className={`px-5 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400 ${
-              pendingPRs.length === 0 ? 'pt-4' : 'pt-0'
-            }`}
-          >
-            Reviewed
-          </div>
-          <div className="space-y-0">
-            {reviewedPRs.map((pr) => (
-              <PRItem
-                key={pr.id}
-                pr={pr}
-                isNew={false}
-                isReviewed
-              />
-            ))}
-          </div>
+        <div className="space-y-0">
+          {reviewedPRs.map((pr) => (
+            <PRItem key={pr.id} pr={pr} isNew={false} isReviewed />
+          ))}
         </div>
       )}
     </div>
