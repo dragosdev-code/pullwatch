@@ -7,6 +7,11 @@ import {
   GITHUB_REVIEW_REQUESTS_URL_TEMPLATE,
   GITHUB_MERGED_PRS_URL_TEMPLATE,
   GITHUB_REVIEWED_PRS_URL_TEMPLATE,
+  GITHUB_AUTHORED_APPROVED_URL_TEMPLATE,
+  GITHUB_AUTHORED_CHANGES_REQUESTED_URL_TEMPLATE,
+  GITHUB_AUTHORED_PENDING_URL_TEMPLATE,
+  GITHUB_AUTHORED_COMMENTED_URL_TEMPLATE,
+  GITHUB_AUTHORED_DRAFT_URL_TEMPLATE,
   USER_AGENT,
 } from '../../common/constants';
 
@@ -22,6 +27,11 @@ export class GitHubService implements IGitHubService {
   private reviewRequestsURL: string;
   private mergedPRsURL: string;
   private reviewedPRsURL: string;
+  private authoredApprovedURL: string;
+  private authoredChangesRequestedURL: string;
+  private authoredPendingURL: string;
+  private authoredCommentedURL: string;
+  private authoredDraftURL: string;
 
   constructor(debugService: IDebugService, storageService: IStorageService) {
     this.debugService = debugService;
@@ -30,6 +40,11 @@ export class GitHubService implements IGitHubService {
     this.reviewRequestsURL = GITHUB_REVIEW_REQUESTS_URL_TEMPLATE(this.baseURL);
     this.mergedPRsURL = GITHUB_MERGED_PRS_URL_TEMPLATE(this.baseURL);
     this.reviewedPRsURL = GITHUB_REVIEWED_PRS_URL_TEMPLATE(this.baseURL);
+    this.authoredApprovedURL = GITHUB_AUTHORED_APPROVED_URL_TEMPLATE(this.baseURL);
+    this.authoredChangesRequestedURL = GITHUB_AUTHORED_CHANGES_REQUESTED_URL_TEMPLATE(this.baseURL);
+    this.authoredPendingURL = GITHUB_AUTHORED_PENDING_URL_TEMPLATE(this.baseURL);
+    this.authoredCommentedURL = GITHUB_AUTHORED_COMMENTED_URL_TEMPLATE(this.baseURL);
+    this.authoredDraftURL = GITHUB_AUTHORED_DRAFT_URL_TEMPLATE(this.baseURL);
   }
 
   /**
@@ -269,6 +284,126 @@ export class GitHubService implements IGitHubService {
           error instanceof Error ? error.message : String(error)
         }`
       );
+    }
+  }
+
+  /**
+   * Fetches authored pull requests from GitHub (PRs created by the user).
+   * Fetches from multiple URLs to get different review statuses:
+   * - Approved
+   * - Changes Requested
+   * - Pending Review (no review yet)
+   * - Commented (note: GitHub doesn't properly support this filter yet)
+   * - Draft
+   */
+  async fetchAuthoredPRs(): Promise<PullRequest[]> {
+    this.debugService.log('[GitHubService] Fetching authored PRs from multiple URLs');
+
+    try {
+      // Fetch from all 5 URLs in parallel
+      const [approvedPRs, changesRequestedPRs, pendingPRs, draftPRs] = await Promise.all([
+        this.fetchFromURL(this.authoredApprovedURL, 'approved'),
+        this.fetchFromURL(this.authoredChangesRequestedURL, 'changes_requested'),
+        this.fetchFromURL(this.authoredPendingURL, 'pending'),
+        // this.fetchFromURL(this.authoredCommentedURL, 'commented'),
+        this.fetchFromURL(this.authoredDraftURL, 'draft'),
+      ]);
+
+      // Combine all PRs
+      const allAuthoredPRs = [...approvedPRs, ...changesRequestedPRs, ...pendingPRs, ...draftPRs];
+
+      this.debugService.log(
+        `[GitHubService] Fetched ${allAuthoredPRs.length} total authored PRs:`,
+        `approved=${approvedPRs.length}, changes_requested=${changesRequestedPRs.length},`,
+        `pending=${pendingPRs.length}, draft=${draftPRs.length}`
+      );
+
+      return allAuthoredPRs;
+    } catch (error: unknown) {
+      this.debugService.error(
+        '[GitHubService] Error in fetchAuthoredPRs:',
+        error instanceof Error ? error.message : error
+      );
+      if (
+        error instanceof Error &&
+        (error.message.startsWith('AuthenticationError') || error.message.startsWith('NotLoggedIn'))
+      ) {
+        throw error;
+      }
+      throw new Error(
+        `Network or parsing error while fetching authored PRs: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  /**
+   * Helper method to fetch PRs from a specific URL and tag them with authorReviewStatus.
+   */
+  private async fetchFromURL(
+    url: string,
+    authorReviewStatus: 'approved' | 'changes_requested' | 'pending' | 'commented' | 'draft'
+  ): Promise<PullRequest[]> {
+    this.debugService.log(`[GitHubService] Fetching ${authorReviewStatus} PRs from: ${url}`);
+
+    try {
+      const response = await fetch(url, {
+        credentials: 'include',
+        headers: {
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'User-Agent': USER_AGENT,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      });
+
+      if (!response.ok) {
+        const errorMsg = `GitHub request failed for ${authorReviewStatus}: ${response.status}`;
+        this.debugService.error(`[GitHubService] ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      const html = await response.text();
+      const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
+      const isLoginPage =
+        pageTitle.includes('Sign in to GitHub') ||
+        html.includes('name="login"') ||
+        html.includes('action="/session"') ||
+        html.includes('class="auth-form"');
+
+      if (isLoginPage) {
+        throw new Error('NotLoggedIn: User is not logged in to GitHub.');
+      }
+
+      const prs = this.parseAssignedPRsFromHTML(html);
+
+      // Tag each PR with its authorReviewStatus
+      return prs.map((pr) => ({
+        ...pr,
+        authorReviewStatus,
+      }));
+    } catch (error: unknown) {
+      // Log but don't fail the entire fetch if one URL fails
+      this.debugService.error(
+        `[GitHubService] Error fetching ${authorReviewStatus} PRs:`,
+        error instanceof Error ? error.message : error
+      );
+
+      // Re-throw authentication errors
+      if (
+        error instanceof Error &&
+        (error.message.startsWith('AuthenticationError') || error.message.startsWith('NotLoggedIn'))
+      ) {
+        throw error;
+      }
+
+      // For other errors, return empty array to allow other fetches to succeed
+      this.debugService.log(
+        `[GitHubService] Returning empty array for ${authorReviewStatus} due to error`
+      );
+      return [];
     }
   }
 

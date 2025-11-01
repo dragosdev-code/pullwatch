@@ -5,6 +5,7 @@ import type {
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
   STORAGE_KEY_MERGED_PRS,
+  STORAGE_KEY_AUTHORED_PRS,
 } from './constants';
 
 // Represents the structure of a Pull Request
@@ -25,6 +26,7 @@ export interface PullRequest {
   html_url?: string; // This is often the same as url, from GitHub API
   type: 'draft' | 'open' | 'merged';
   reviewStatus?: 'pending' | 'reviewed';
+  authorReviewStatus?: 'approved' | 'changes_requested' | 'pending' | 'commented' | 'draft';
 }
 
 // Represents the structure of stored PR data
@@ -37,6 +39,7 @@ export interface StoredPRs {
 export interface StorageItems {
   [STORAGE_KEY_PRS]?: StoredPRs;
   [STORAGE_KEY_MERGED_PRS]?: StoredPRs;
+  [STORAGE_KEY_AUTHORED_PRS]?: StoredPRs;
   [STORAGE_KEY_LAST_FETCH]?: number; // Timestamp
   [STORAGE_KEY_SETTINGS]?: ExtensionSettings;
   [STORAGE_KEY_USER_DATA]?: UserData;

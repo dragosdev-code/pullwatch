@@ -20,6 +20,11 @@ export interface IGitHubService {
   fetchMergedPRs(): Promise<PullRequest[]>;
 
   /**
+   * Fetches authored pull requests (PRs created by the user) with different review statuses.
+   */
+  fetchAuthoredPRs(): Promise<PullRequest[]>;
+
+  /**
    * Fetches pull requests by query.
    */
   fetchPRsByQuery(query: string): Promise<PullRequest[]>;

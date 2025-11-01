@@ -220,6 +220,10 @@ export class EventService implements IEventService {
       case 'fetchMergedPRs':
         asyncWrapper(this.handleMergedPRDataActions(message, sendResponse));
         break;
+      case 'getAuthoredPRs':
+      case 'fetchAuthoredPRs':
+        asyncWrapper(this.handleAuthoredPRDataActions(message, sendResponse));
+        break;
 
       case 'saveSettings':
       case 'getSettings':
@@ -352,6 +356,70 @@ export class EventService implements IEventService {
       }
     } catch (error) {
       this.debugService.error('[EventService] Error in background merged fetch:', error);
+    }
+  }
+
+  /**
+   * Handles authored PR data related actions (getAuthoredPRs, fetchAuthoredPRs).
+   */
+  async handleAuthoredPRDataActions(
+    message: RuntimeMessage,
+    sendResponse: (response: MessageResponse) => void
+  ): Promise<void> {
+    try {
+      const storageService = this.serviceContainer.getService<IStorageService>('storageService');
+      const gitHubService = this.serviceContainer.getService<IGitHubService>('gitHubService');
+
+      if (this.isMessageAction(message, 'getAuthoredPRs')) {
+        this.debugService.log('[EventService] Getting stored authored PRs and fetching fresh data');
+
+        const stored = await storageService.getStoredAuthoredPRs();
+        const storedPRs = stored?.prs || [];
+        sendResponse({ success: true, data: storedPRs });
+
+        // Background refresh
+        this.fetchFreshAuthoredDataInBackground(storageService, gitHubService);
+      } else if (this.isMessageAction(message, 'fetchAuthoredPRs')) {
+        this.debugService.log(
+          '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
+        );
+        const authored = await gitHubService.fetchAuthoredPRs();
+        await storageService.setStoredAuthoredPRs(authored);
+        sendResponse({ success: true, data: authored });
+      }
+    } catch (error) {
+      this.debugService.error('[EventService] Error handling authored PR data actions:', error);
+      sendResponse({ success: false, error: 'Failed to handle authored PR action' });
+    }
+  }
+
+  /**
+   * Fetches fresh authored data in the background and notifies popup if data changed.
+   */
+  private async fetchFreshAuthoredDataInBackground(
+    storageService: IStorageService,
+    gitHubService: IGitHubService
+  ): Promise<void> {
+    try {
+      const stored = await storageService.getStoredAuthoredPRs();
+      const storedPRs = stored?.prs || [];
+      const fresh = await gitHubService.fetchAuthoredPRs();
+
+      const summarize = (list: PullRequest[]) => list.map((pr) => ({ id: pr.id, title: pr.title }));
+      const changed = JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(fresh));
+
+      if (changed) {
+        await storageService.setStoredAuthoredPRs(fresh);
+        try {
+          await chrome.runtime.sendMessage({ action: 'authoredPrDataUpdated', data: fresh });
+        } catch (e) {
+          this.debugService.log('[EventService] Could not notify popup for authored PRs:', e);
+        }
+      } else {
+        this.debugService.log('[EventService] Background authored fetch completed - no changes');
+      }
+    } catch (error) {
+      this.debugService.error('[EventService] Error in background authored fetch:', error);
     }
   }
 

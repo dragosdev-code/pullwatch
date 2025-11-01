@@ -4,6 +4,7 @@ import type { PullRequest, StorageItems, StoredPRs, UserData } from '../../commo
 import {
   STORAGE_KEY_PRS,
   STORAGE_KEY_MERGED_PRS,
+  STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_LAST_FETCH,
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
@@ -189,6 +190,51 @@ export class StorageService implements IStorageService {
       this.debugService.log('[StorageService] Stored merged PRs updated:', prs.length, 'items');
     } catch (error) {
       this.debugService.error('[StorageService] Error setting stored merged PRs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Gets stored authored pull requests.
+   */
+  async getStoredAuthoredPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null> {
+    try {
+      const data = await this.getStorageData(STORAGE_KEY_AUTHORED_PRS);
+      const storedPRs = (data as StorageItems)[STORAGE_KEY_AUTHORED_PRS] || null;
+
+      if (storedPRs) {
+        const result = {
+          prs: storedPRs.prs || [],
+          timestamp: storedPRs.lastUpdated ? new Date(storedPRs.lastUpdated).getTime() : Date.now(),
+        };
+        this.debugService.log(
+          '[StorageService] Retrieved stored authored PRs:',
+          result.prs.length,
+          'items'
+        );
+        return result;
+      }
+
+      return null;
+    } catch (error) {
+      this.debugService.error('[StorageService] Error getting stored authored PRs:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Sets stored authored pull requests.
+   */
+  async setStoredAuthoredPRs(prs: PullRequest[]): Promise<void> {
+    try {
+      const storedPRs: StoredPRs = {
+        prs,
+        lastUpdated: new Date().toISOString(),
+      };
+      await this.setStorageData({ [STORAGE_KEY_AUTHORED_PRS]: storedPRs });
+      this.debugService.log('[StorageService] Stored authored PRs updated:', prs.length, 'items');
+    } catch (error) {
+      this.debugService.error('[StorageService] Error setting stored authored PRs:', error);
       throw error;
     }
   }

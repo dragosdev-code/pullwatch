@@ -5,7 +5,7 @@ import {
   useSetGlobalError,
   useClearGlobalError,
 } from '../stores';
-import { useMergedPRs, usePRs, useRefreshMergedPRs, useRefreshPRs } from '../hooks';
+import { useMergedPRs, usePRs, useAuthoredPRs, useRefreshMergedPRs, useRefreshPRs, useRefreshAuthoredPRs } from '../hooks';
 import { useEffect } from 'react';
 
 interface HeaderProps {
@@ -21,18 +21,23 @@ export const Header = ({ prCount }: HeaderProps) => {
   const refreshPRsMutation = useRefreshPRs();
   const { isLoading: isLoadingMergedPRs, error: queryErrorMerged } = useMergedPRs();
   const refreshMergedPRsMutation = useRefreshMergedPRs();
+  const { isLoading: isLoadingAuthoredPRs, error: queryErrorAuthored } = useAuthoredPRs();
+  const refreshAuthoredPRsMutation = useRefreshAuthoredPRs();
 
   useEffect(() => {
-    if (queryError || queryErrorMerged) {
-      setGlobalError(queryError?.message || queryErrorMerged?.message || '');
+    if (queryError || queryErrorMerged || queryErrorAuthored) {
+      setGlobalError(queryError?.message || queryErrorMerged?.message || queryErrorAuthored?.message || '');
     }
-  }, [queryError, queryErrorMerged, setGlobalError]);
+  }, [queryError, queryErrorMerged, queryErrorAuthored, setGlobalError]);
 
   const handleRefresh = async () => {
     clearGlobalError();
     try {
-      await refreshPRsMutation.mutateAsync();
-      await refreshMergedPRsMutation.mutateAsync();
+      await Promise.all([
+        refreshPRsMutation.mutateAsync(),
+        refreshMergedPRsMutation.mutateAsync(),
+        refreshAuthoredPRsMutation.mutateAsync(),
+      ]);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to refresh PRs';
       setGlobalError(errorMessage);
@@ -66,7 +71,9 @@ export const Header = ({ prCount }: HeaderProps) => {
           refreshPRsMutation.isPending ||
           isLoadingPRs ||
           refreshMergedPRsMutation.isPending ||
-          isLoadingMergedPRs
+          isLoadingMergedPRs ||
+          refreshAuthoredPRsMutation.isPending ||
+          isLoadingAuthoredPRs
         }
         onRefresh={handleRefresh}
       />

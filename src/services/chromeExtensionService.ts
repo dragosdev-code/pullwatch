@@ -60,6 +60,13 @@ export class ChromeExtensionService {
   }
 
   /**
+   * Gets stored authored PRs from the background script.
+   */
+  async getStoredAuthoredPRs(): Promise<PullRequest[]> {
+    return this.sendMessage<PullRequest[]>('getAuthoredPRs');
+  }
+
+  /**
    * Fetches fresh PRs from GitHub via the background script.
    * This forces a network request to GitHub.
    */
@@ -72,6 +79,13 @@ export class ChromeExtensionService {
    */
   async fetchFreshMergedPRs(): Promise<PullRequest[]> {
     return this.sendMessage<PullRequest[]>('fetchMergedPRs');
+  }
+
+  /**
+   * Fetches fresh authored PRs from GitHub via the background script.
+   */
+  async fetchFreshAuthoredPRs(): Promise<PullRequest[]> {
+    return this.sendMessage<PullRequest[]>('fetchAuthoredPRs');
   }
 
   /**

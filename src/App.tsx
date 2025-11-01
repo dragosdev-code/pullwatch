@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Header, PRList, Footer, Tabs, TabPanel, type Tab } from './components';
 import { TestArea } from './components/TestArea';
-import { usePRs, useMergedPRs, usePRUpdates } from './hooks';
+import { usePRs, useMergedPRs, useAuthoredPRs, usePRUpdates } from './hooks';
 import { useStorageSync } from './hooks/useStorageSync';
 import { useGlobalError, useClearGlobalError, useDebugMode } from './stores';
 
@@ -15,6 +15,7 @@ function App() {
 
   const { data: prs = [], isSuccess } = usePRs();
   const { data: mergedPRs = [] } = useMergedPRs();
+  const { data: authoredPRs = [] } = useAuthoredPRs();
   const prUpdates = usePRUpdates();
 
   useEffect(() => {
@@ -22,29 +23,20 @@ function App() {
     return cleanup;
   }, [prUpdates]);
 
-  const pendingPRs = useMemo(
-    () => prs.filter((pr) => pr.reviewStatus !== 'reviewed'),
-    [prs]
-  );
-  const reviewedPRs = useMemo(
-    () => prs.filter((pr) => pr.reviewStatus === 'reviewed'),
-    [prs]
-  );
+  const pendingPRs = useMemo(() => prs.filter((pr) => pr.reviewStatus !== 'reviewed'), [prs]);
+  const reviewedPRs = useMemo(() => prs.filter((pr) => pr.reviewStatus === 'reviewed'), [prs]);
 
-  const orderedPRs = useMemo(
-    () => [...pendingPRs, ...reviewedPRs],
-    [pendingPRs, reviewedPRs]
-  );
+  const orderedPRs = useMemo(() => [...pendingPRs, ...reviewedPRs], [pendingPRs, reviewedPRs]);
 
   const hasEverLoaded = isSuccess || prs.length > 0;
 
   const tabs: Tab[] = useMemo(
     () => [
       { id: 'reviews', label: 'To Review', count: pendingPRs.length },
-      { id: 'changes', label: 'Need Changes', count: 0 },
+      { id: 'authored', label: 'Authored', count: authoredPRs.length },
       { id: 'merged', label: 'Merged', count: mergedPRs.length },
     ],
-    [pendingPRs.length, mergedPRs.length]
+    [pendingPRs.length, authoredPRs.length, mergedPRs.length]
   );
 
   const handleTabChange = (tabId: string) => {
@@ -85,14 +77,13 @@ function App() {
           />
         </TabPanel>
 
-        <TabPanel tabId="changes" className="flex-1 flex flex-col">
-          <div className="flex-1 flex items-center justify-center p-6">
-            <div className="text-center">
-              <div className="text-2xl mb-2">🔄</div>
-              <p className="text-sm text-gray-600 font-medium mb-1">Changes Requested</p>
-              <p className="text-xs text-gray-500">PRs that need your attention</p>
-            </div>
-          </div>
+        <TabPanel tabId="authored" className="flex-1 flex flex-col">
+          <PRList
+            prs={authoredPRs}
+            newPrIds={new Set(authoredPRs.filter((pr) => pr.isNew).map((pr) => pr.id))}
+            hasEverLoaded={hasEverLoaded}
+            isAuthoredTab
+          />
         </TabPanel>
 
         <TabPanel tabId="merged" className="flex-1 flex flex-col">

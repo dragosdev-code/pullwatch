@@ -7,9 +7,31 @@ interface PRItemProps {
   pr: PullRequest;
   isNew: boolean;
   isReviewed?: boolean;
+  showAuthorStatus?: boolean;
 }
 
-export const PRItem = ({ pr, isNew, isReviewed = false }: PRItemProps) => {
+export const PRItem = ({ pr, isNew, isReviewed = false, showAuthorStatus = false }: PRItemProps) => {
+  // Determine the hover background color based on authorReviewStatus
+  const getHoverBg = () => {
+    if (!showAuthorStatus || !pr.authorReviewStatus) {
+      return isReviewed ? 'hover:bg-gray-100' : 'hover:bg-blue-50';
+    }
+    
+    switch (pr.authorReviewStatus) {
+      case 'changes_requested':
+        return 'hover:bg-red-50';
+      case 'approved':
+        return 'hover:bg-green-50';
+      case 'pending':
+        return 'hover:bg-gray-50';
+      case 'commented':
+        return 'hover:bg-blue-50';
+      case 'draft':
+        return 'hover:bg-slate-50';
+      default:
+        return 'hover:bg-blue-50';
+    }
+  };
   const slideSpring = useSpring({
     from: isNew
       ? {
@@ -59,7 +81,7 @@ export const PRItem = ({ pr, isNew, isReviewed = false }: PRItemProps) => {
         'group block px-5 py-3 transition-all duration-200 cursor-pointer relative border-b border-gray-100',
         isReviewed
           ? 'bg-gray-50 text-gray-700 opacity-90 border-l-2 border-l-gray-200 hover:bg-gray-100 hover:opacity-100 hover:border-l-gray-300'
-          : 'bg-white text-gray-900 border-l-2 border-l-blue-500 hover:border-l-blue-600 hover:bg-blue-50',
+          : `bg-white text-gray-900 border-l-2 border-l-blue-500 hover:border-l-blue-600 ${getHoverBg()}`,
         isNew && !isReviewed && 'shadow-sm'
       )}
     >
@@ -132,6 +154,85 @@ export const PRItem = ({ pr, isNew, isReviewed = false }: PRItemProps) => {
                 </svg>
                 Reviewed
               </span>
+            )}
+            {showAuthorStatus && pr.authorReviewStatus && (
+              <>
+                {pr.authorReviewStatus === 'changes_requested' && (
+                  <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[11px] font-medium">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-hidden="true"
+                      className="flex-shrink-0"
+                    >
+                      <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+                    </svg>
+                    Requested
+                  </span>
+                )}
+                {pr.authorReviewStatus === 'approved' && (
+                  <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[11px] font-medium">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-hidden="true"
+                      className="flex-shrink-0"
+                    >
+                      <path d="M13.78 3.22a.75.75 0 0 1 0 1.06l-6 6a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 0 1 1.06-1.06L7 8.69l5.47-5.47a.75.75 0 0 1 1.06 0Z" />
+                    </svg>
+                    Approved
+                  </span>
+                )}
+                {pr.authorReviewStatus === 'pending' && (
+                  <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-medium">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-hidden="true"
+                      className="flex-shrink-0"
+                    >
+                      <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 0 1 1.5 0Z" />
+                    </svg>
+                    Pending
+                  </span>
+                )}
+                {pr.authorReviewStatus === 'commented' && (
+                  <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[11px] font-medium">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-hidden="true"
+                      className="flex-shrink-0"
+                    >
+                      <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25Z" />
+                    </svg>
+                    Commented
+                  </span>
+                )}
+                {pr.authorReviewStatus === 'draft' && (
+                  <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px] font-medium">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-hidden="true"
+                      className="flex-shrink-0"
+                    >
+                      <path d="M3.25 1A2.25 2.25 0 0 1 4 5.372v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.251 2.251 0 0 1 3.25 1Zm9.5 14a2.25 2.25 0 1 1 0-4.5 2.25 2.25 0 0 1 0 4.5ZM2.5 3.25a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0ZM3.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm9.5 0a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM14 7.5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm0-4.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Z" />
+                    </svg>
+                    Draft
+                  </span>
+                )}
+              </>
             )}
           </div>
           <p className={clsx('text-xs truncate', isReviewed ? 'text-gray-400' : 'text-gray-500')}>

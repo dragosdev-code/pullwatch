@@ -3,6 +3,7 @@
 // Storage Keys
 export const STORAGE_KEY_PRS = 'github_prs';
 export const STORAGE_KEY_MERGED_PRS = 'github_merged_prs';
+export const STORAGE_KEY_AUTHORED_PRS = 'github_authored_prs';
 export const STORAGE_KEY_LAST_FETCH = 'last_fetch_time';
 export const STORAGE_KEY_SETTINGS = 'settings'; // As per requirements
 export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
@@ -42,6 +43,24 @@ export const GITHUB_MERGED_PRS_URL_TEMPLATE = (baseUrl: string) =>
 
 export const GITHUB_REVIEWED_PRS_URL_TEMPLATE = (baseUrl: string) =>
   `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+reviewed-by%3A%40me+-user-review-requested%3A%40me`;
+
+// Authored PRs URLs - for PRs created by the user
+export const GITHUB_AUTHORED_APPROVED_URL_TEMPLATE = (baseUrl: string) =>
+  `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+author%3A%40me+review%3Aapproved`;
+
+export const GITHUB_AUTHORED_CHANGES_REQUESTED_URL_TEMPLATE = (baseUrl: string) =>
+  `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+author%3A%40me+review%3Achanges_requested`;
+
+export const GITHUB_AUTHORED_PENDING_URL_TEMPLATE = (baseUrl: string) =>
+  `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+author%3A%40me+review%3Anone`;
+
+// Note: GitHub doesn't properly support the 'review:commented' filter yet - it may return empty results
+// This is a known limitation on GitHub's side, but we include it for future compatibility
+export const GITHUB_AUTHORED_COMMENTED_URL_TEMPLATE = (baseUrl: string) =>
+  `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+author%3A%40me+review%3Acommented`;
+
+export const GITHUB_AUTHORED_DRAFT_URL_TEMPLATE = (baseUrl: string) =>
+  `${baseUrl}/pulls?q=is%3Aopen+draft%3Atrue+is%3Apr+author%3A%40me`;
 
 // Badge
 export const BADGE_COLOR_ACTIVE = '#007bff'; // Blue
