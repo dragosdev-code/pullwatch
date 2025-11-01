@@ -95,7 +95,12 @@ export const PRList = ({
       {prs.length > 0 && (
         <>
           {prs.map((pr) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isReviewed={false} />
+            <PRItem
+              key={pr.id}
+              pr={pr}
+              isNew={newPrIds.has(pr.id)}
+              isReviewed={pr.reviewStatus === 'reviewed'}
+            />
           ))}
         </>
       )}
