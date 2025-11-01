@@ -5,7 +5,14 @@ import {
   useSetGlobalError,
   useClearGlobalError,
 } from '../stores';
-import { useMergedPRs, usePRs, useAuthoredPRs, useRefreshMergedPRs, useRefreshPRs, useRefreshAuthoredPRs } from '../hooks';
+import {
+  useMergedPRs,
+  usePRs,
+  useAuthoredPRs,
+  useRefreshMergedPRs,
+  useRefreshPRs,
+  useRefreshAuthoredPRs,
+} from '../hooks';
 import { useEffect } from 'react';
 
 interface HeaderProps {
@@ -26,7 +33,9 @@ export const Header = ({ prCount }: HeaderProps) => {
 
   useEffect(() => {
     if (queryError || queryErrorMerged || queryErrorAuthored) {
-      setGlobalError(queryError?.message || queryErrorMerged?.message || queryErrorAuthored?.message || '');
+      setGlobalError(
+        queryError?.message || queryErrorMerged?.message || queryErrorAuthored?.message || ''
+      );
     }
   }, [queryError, queryErrorMerged, queryErrorAuthored, setGlobalError]);
 
@@ -45,7 +54,7 @@ export const Header = ({ prCount }: HeaderProps) => {
   };
 
   return (
-    <div className="flex justify-between items-center px-5 py-4 border-b border-gray-100 relative">
+    <div className="flex justify-between items-center px-5 py-3 border-b border-gray-100 relative">
       <div className="flex items-center">
         <h1 className="text-base font-semibold text-gray-900">
           <button

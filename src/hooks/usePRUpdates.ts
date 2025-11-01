@@ -22,6 +22,10 @@ export function usePRUpdates() {
           const updatedMerged = message.data as PullRequest[];
           console.log('Received merged PR data update from background, updating cache');
           queryClient.setQueryData(queryKeys.mergedPrs, updatedMerged);
+        } else if (message.action === 'authoredPrDataUpdated') {
+          const updatedAuthored = message.data as PullRequest[];
+          console.log('Received authored PR data update from background, updating cache');
+          queryClient.setQueryData(queryKeys.authoredPrs, updatedAuthored);
         }
       });
     },

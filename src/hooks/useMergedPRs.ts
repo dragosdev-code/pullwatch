@@ -13,6 +13,7 @@ export function useMergedPRs() {
     gcTime: 1000 * 60 * 5,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData, // Keep showing old data while fetching
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
