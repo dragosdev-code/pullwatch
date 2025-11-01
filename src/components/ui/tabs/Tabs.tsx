@@ -28,12 +28,12 @@ export const Tabs: React.FC<TabsProps> = ({
     <TabsContext.Provider value={{ activeTab: tabsState.activeTab }}>
       <div className={`w-full overflow-hidden ${className}`}>
         {/* Tab Navigation */}
-        <div role="tablist" className="tabs tabs-border w-full flex-shrink-0">
+        <div role="tablist" className="tabs tabs-border w-full">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               role="tab"
-              className={`tab text-xs font-medium transition-all duration-200 ${
+              className={`tab flex-1 text-xs font-medium transition-all duration-200 ${
                 isActive(tab.id)
                   ? 'tab-active text-gray-900! hover:text-gray-900!'
                   : 'text-gray-500! hover:text-gray-900!'

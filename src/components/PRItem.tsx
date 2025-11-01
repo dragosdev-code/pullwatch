@@ -10,13 +10,18 @@ interface PRItemProps {
   showAuthorStatus?: boolean;
 }
 
-export const PRItem = ({ pr, isNew, isReviewed = false, showAuthorStatus = false }: PRItemProps) => {
+export const PRItem = ({
+  pr,
+  isNew,
+  isReviewed = false,
+  showAuthorStatus = false,
+}: PRItemProps) => {
   // Determine the hover background color based on authorReviewStatus
   const getHoverBg = () => {
     if (!showAuthorStatus || !pr.authorReviewStatus) {
       return isReviewed ? 'hover:bg-gray-100' : 'hover:bg-blue-50';
     }
-    
+
     switch (pr.authorReviewStatus) {
       case 'changes_requested':
         return 'hover:bg-red-50';
@@ -80,8 +85,8 @@ export const PRItem = ({ pr, isNew, isReviewed = false, showAuthorStatus = false
       className={clsx(
         'group block px-5 py-3 transition-all duration-200 cursor-pointer relative border-b border-gray-100',
         isReviewed
-          ? 'bg-gray-50 text-gray-700 opacity-90 border-l-2 border-l-gray-200 hover:bg-gray-100 hover:opacity-100 hover:border-l-gray-300'
-          : `bg-white text-gray-900 border-l-2 border-l-blue-500 hover:border-l-blue-600 ${getHoverBg()}`,
+          ? 'bg-gray-50 text-gray-700 opacity-90 border-l-2 hover:opacity-100'
+          : `bg-white text-gray-900 border-l-2 ${getHoverBg()}`,
         isNew && !isReviewed && 'shadow-sm'
       )}
     >
