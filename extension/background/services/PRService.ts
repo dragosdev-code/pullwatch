@@ -115,7 +115,10 @@ export class PRService implements IPRService {
           isNew: false,
         }));
 
-      const reviewedPRs = [...freshReviewedPRs, ...preservedReviewedPRs];
+      // Filter out reviewed PRs that are merged - they don't need to be shown in "To Review" tab
+      const reviewedPRs = [...freshReviewedPRs, ...preservedReviewedPRs].filter(
+        (pr) => pr.type !== 'merged'
+      );
 
       const allPRsWithStatus = [...pendingPRsWithStatus, ...reviewedPRs];
       this.debugService.log(
