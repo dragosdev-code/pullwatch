@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { Header, PRList, Footer, Tabs, TabPanel, type Tab } from './components';
+import { Header, PRList, Tabs, TabPanel, type Tab } from './components';
 import { TestArea } from './components/TestArea';
 import { usePRs, useMergedPRs, useAuthoredPRs, usePRUpdates } from './hooks';
 import { useStorageSync } from './hooks/useStorageSync';
@@ -69,15 +69,15 @@ function App() {
         defaultTab="reviews"
         onChange={handleTabChange}
       >
-        <TabPanel tabId="reviews" className="flex-1 flex flex-col">
+        <TabPanel tabId="reviews" className="flex-1 h-0">
           <PRList
             prs={orderedPRs}
-            newPrIds={new Set(prs.filter((pr) => pr.isNew).map((pr) => pr.id))}
+            newPrIds={new Set(orderedPRs.filter((pr) => pr.isNew).map((pr) => pr.id))}
             hasEverLoaded={hasEverLoaded}
           />
         </TabPanel>
 
-        <TabPanel tabId="authored" className="flex-1 flex flex-col">
+        <TabPanel tabId="authored" className="flex-1 h-0">
           <PRList
             prs={authoredPRs}
             newPrIds={new Set(authoredPRs.filter((pr) => pr.isNew).map((pr) => pr.id))}
@@ -86,7 +86,7 @@ function App() {
           />
         </TabPanel>
 
-        <TabPanel tabId="merged" className="flex-1 flex flex-col">
+        <TabPanel tabId="merged" className="flex-1 h-0">
           <PRList
             prs={mergedPRs}
             newPrIds={new Set(mergedPRs.filter((pr) => pr.isNew).map((pr) => pr.id))}
@@ -95,7 +95,7 @@ function App() {
         </TabPanel>
       </Tabs>
 
-      <Footer />
+      {/* <Footer /> */}
     </div>
   );
 }

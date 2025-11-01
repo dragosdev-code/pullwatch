@@ -16,25 +16,23 @@ export const PRList = ({
 }: PRListProps) => {
   if (prs.length === 0) {
     return (
-      <div className="h-[360px] overflow-y-auto">
-        <div className="flex items-center justify-center py-20">
-          {hasEverLoaded ? (
-            <p className="text-gray-500 text-sm italic">
-              {isAuthoredTab ? 'No PRs authored by you' : 'No PRs assigned to you for review'}
+      <div className="h-full flex items-center justify-center">
+        {hasEverLoaded ? (
+          <p className="text-gray-500 text-sm italic">
+            {isAuthoredTab ? 'No PRs authored by you' : 'No PRs assigned to you for review'}
+          </p>
+        ) : (
+          <div className="text-center">
+            <p className="text-gray-500 text-sm italic mb-2">
+              Click the refresh button to load your PRs
             </p>
-          ) : (
-            <div className="text-center">
-              <p className="text-gray-500 text-sm italic mb-2">
-                Click the refresh button to load your PRs
-              </p>
-              <div className="text-gray-400 text-xs">
-                {isAuthoredTab
-                  ? 'PRs you authored will appear here'
-                  : 'PRs requesting your review will appear here'}
-              </div>
+            <div className="text-gray-400 text-xs">
+              {isAuthoredTab
+                ? 'PRs you authored will appear here'
+                : 'PRs requesting your review will appear here'}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -48,29 +46,29 @@ export const PRList = ({
     const draftPRs = prs.filter((pr) => pr.authorReviewStatus === 'draft');
 
     return (
-      <div className="h-[360px] overflow-y-auto">
+      <div className="h-full overflow-y-auto">
         {changesRequestedPRs.length > 0 && (
-          <div className="space-y-0">
+          <>
             {changesRequestedPRs.map((pr) => (
               <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} showAuthorStatus />
             ))}
-          </div>
+          </>
         )}
 
         {approvedPRs.length > 0 && (
-          <div className="space-y-0">
+          <>
             {approvedPRs.map((pr) => (
               <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} showAuthorStatus />
             ))}
-          </div>
+          </>
         )}
 
         {pendingPRs.length > 0 && (
-          <div className="space-y-0">
+          <>
             {pendingPRs.map((pr) => (
               <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} showAuthorStatus />
             ))}
-          </div>
+          </>
         )}
 
         {commentedPRs.length > 0 && (
@@ -92,26 +90,14 @@ export const PRList = ({
     );
   }
 
-  // Default grouping for "To Review" tab
-  const pendingPRs = prs.filter((pr) => pr.reviewStatus !== 'reviewed');
-  const reviewedPRs = prs.filter((pr) => pr.reviewStatus === 'reviewed');
-
   return (
-    <div className="h-[360px] overflow-y-auto">
-      {pendingPRs.length > 0 && (
-        <div className="space-y-0">
-          {pendingPRs.map((pr) => (
+    <div className="h-full overflow-y-auto">
+      {prs.length > 0 && (
+        <>
+          {prs.map((pr) => (
             <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isReviewed={false} />
           ))}
-        </div>
-      )}
-
-      {reviewedPRs.length > 0 && (
-        <div className="space-y-0">
-          {reviewedPRs.map((pr) => (
-            <PRItem key={pr.id} pr={pr} isNew={false} isReviewed />
-          ))}
-        </div>
+        </>
       )}
     </div>
   );

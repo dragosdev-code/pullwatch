@@ -28,7 +28,7 @@ export const TabPanel: React.FC<TabPanelProps> = ({ tabId, children, className =
       role="tabpanel"
       id={`tabpanel-${tabId}`}
       aria-labelledby={`tab-${tabId}`}
-      className={`outline-none ${className}`}
+      className={`outline-none flex flex-col ${className}`}
       tabIndex={0}
     >
       {children}

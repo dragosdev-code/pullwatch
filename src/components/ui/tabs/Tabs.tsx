@@ -26,9 +26,9 @@ export const Tabs: React.FC<TabsProps> = ({
 
   return (
     <TabsContext.Provider value={{ activeTab: tabsState.activeTab }}>
-      <div className={`w-full ${className}`}>
+      <div className={`w-full overflow-hidden ${className}`}>
         {/* Tab Navigation */}
-        <div role="tablist" className="tabs tabs-border w-full">
+        <div role="tablist" className="tabs tabs-border w-full flex-shrink-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -61,7 +61,7 @@ export const Tabs: React.FC<TabsProps> = ({
         </div>
 
         {/* Tab Content */}
-        <div className="mt-0">{children}</div>
+        <div className="flex-1 min-h-0 flex flex-col">{children}</div>
       </div>
     </TabsContext.Provider>
   );
