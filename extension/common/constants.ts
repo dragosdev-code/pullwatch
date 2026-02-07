@@ -12,6 +12,9 @@ export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
 export const FETCH_INTERVAL_MINUTES = 1;
 export const FETCH_INTERVAL_MS = FETCH_INTERVAL_MINUTES * 60 * 1000;
 
+// Cache TTL
+export const CACHE_TTL_MS = 60 * 1000; // 1 minute
+
 // Event Names (from background.js and requirements)
 export const EVENT_FETCH_PRS = 'fetchPRs';
 export const EVENT_PLAY_SOUND = 'playNotificationSound'; // From offscreen.js
