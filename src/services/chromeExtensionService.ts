@@ -45,11 +45,11 @@ export class ChromeExtensionService {
   }
 
   /**
-   * Gets stored PRs from the background script.
+   * Gets stored assigned/review PRs from the background script.
    * This returns immediately with cached data.
    */
-  async getStoredPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>('getPRs');
+  async getStoredAssignedPRs(): Promise<PullRequest[]> {
+    return this.sendMessage<PullRequest[]>('getAssignedPRs');
   }
 
   /**
@@ -67,11 +67,11 @@ export class ChromeExtensionService {
   }
 
   /**
-   * Fetches fresh PRs from GitHub via the background script.
+   * Fetches fresh assigned/review PRs from GitHub via the background script.
    * This forces a network request to GitHub.
    */
-  async fetchFreshPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>('fetchPRs');
+  async fetchFreshAssignedPRs(): Promise<PullRequest[]> {
+    return this.sendMessage<PullRequest[]>('fetchAssignedPRs');
   }
 
   /**

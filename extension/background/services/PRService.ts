@@ -38,8 +38,8 @@ export class PRService implements IPRService {
     this.debugService.log('[PRService] PR service initialized');
   }
 
-  async fetchAndUpdatePRs(forceRefresh = false): Promise<PullRequest[]> {
-    this.debugService.log(`[PRService] Fetching and updating PRs (force: ${forceRefresh})`);
+  async fetchAndUpdateAssignedPRs(forceRefresh = false): Promise<PullRequest[]> {
+    this.debugService.log(`[PRService] Fetching and updating assigned PRs (force: ${forceRefresh})`);
 
     try {
       // Get current stored PRs for comparison
@@ -217,9 +217,73 @@ export class PRService implements IPRService {
     return { newPRs, allPRsWithStatus };
   }
 
-  async getStoredPRs(): Promise<PullRequest[]> {
+  async getStoredAssignedPRs(): Promise<PullRequest[]> {
     const stored = await this.storageService.getStoredPRs();
     return stored?.prs || [];
+  }
+
+  async getStoredAuthoredPRs(): Promise<PullRequest[]> {
+    const stored = await this.storageService.getStoredAuthoredPRs();
+    this.debugService.log(
+      `[PRService] Retrieved stored authored PRs: ${stored?.prs?.length ?? 0}`
+    );
+    return stored?.prs || [];
+  }
+
+  async getStoredMergedPRs(): Promise<PullRequest[]> {
+    const stored = await this.storageService.getStoredMergedPRs();
+    this.debugService.log(
+      `[PRService] Retrieved stored merged PRs: ${stored?.prs?.length ?? 0}`
+    );
+    return stored?.prs || [];
+  }
+
+  async updateAuthoredPRs(forceRefresh = false): Promise<PullRequest[]> {
+    this.debugService.log(
+      `[PRService] Updating authored PRs (force: ${forceRefresh})`
+    );
+
+    try {
+      const freshAuthoredPRs = await this.gitHubService.fetchAuthoredPRs();
+      this.debugService.log(
+        `[PRService] Fetched ${freshAuthoredPRs.length} authored PRs from GitHub`
+      );
+
+      await this.storageService.setStoredAuthoredPRs(freshAuthoredPRs);
+      await this.storageService.setLastFetchTime(Date.now());
+
+      this.debugService.log(
+        `[PRService] Successfully updated ${freshAuthoredPRs.length} authored PRs`
+      );
+      return freshAuthoredPRs;
+    } catch (error) {
+      this.debugService.error('[PRService] Error updating authored PRs:', error);
+      throw error;
+    }
+  }
+
+  async updateMergedPRs(forceRefresh = false): Promise<PullRequest[]> {
+    this.debugService.log(
+      `[PRService] Updating merged PRs (force: ${forceRefresh})`
+    );
+
+    try {
+      const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
+      this.debugService.log(
+        `[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`
+      );
+
+      await this.storageService.setStoredMergedPRs(freshMergedPRs);
+      await this.storageService.setLastFetchTime(Date.now());
+
+      this.debugService.log(
+        `[PRService] Successfully updated ${freshMergedPRs.length} merged PRs`
+      );
+      return freshMergedPRs;
+    } catch (error) {
+      this.debugService.error('[PRService] Error updating merged PRs:', error);
+      throw error;
+    }
   }
 
   async markPRsAsRead(prIds: string[]): Promise<void> {
@@ -227,7 +291,7 @@ export class PRService implements IPRService {
       this.debugService.log(`[PRService] Marking ${prIds.length} PRs as read:`, prIds);
 
       // Get current PRs
-      const currentPRs = await this.getStoredPRs();
+      const currentPRs = await this.getStoredAssignedPRs();
 
       // If no specific IDs provided, mark all as read
       if (prIds.length === 0) {
@@ -257,16 +321,16 @@ export class PRService implements IPRService {
   }
 
   async getNewPRs(): Promise<PullRequest[]> {
-    const prs = await this.getStoredPRs();
+    const prs = await this.getStoredAssignedPRs();
     return prs.filter((pr) => pr.isNew);
   }
 
   async refreshPRs(): Promise<PullRequest[]> {
-    return await this.fetchAndUpdatePRs(true);
+    return await this.fetchAndUpdateAssignedPRs(true);
   }
 
   async getPRStats(): Promise<{ total: number; new: number; lastUpdate: number | null }> {
-    const prs = await this.getStoredPRs();
+    const prs = await this.getStoredAssignedPRs();
     const newPRs = prs.filter((pr) => pr.isNew);
     const lastUpdate = await this.storageService.getLastFetchTime();
 
@@ -279,7 +343,7 @@ export class PRService implements IPRService {
 
   async filterPRs(): Promise<PullRequest[]> {
     // Stub implementation - could be extended for filtering by repo, author, etc.
-    return await this.getStoredPRs();
+    return await this.getStoredAssignedPRs();
   }
 
   async dispose(): Promise<void> {

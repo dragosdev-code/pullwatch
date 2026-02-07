@@ -11,7 +11,7 @@ export function useMergedPRs() {
     queryFn: () => chromeExtensionService.getStoredMergedPRs(),
     staleTime: 1000 * 30,
     gcTime: 1000 * 60 * 5,
-    refetchOnMount: true,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData, // Keep showing old data while fetching
     retry: 3,

@@ -5,14 +5,34 @@ import type { PullRequest } from '../../common/types';
  */
 export interface IPRService {
   /**
-   * Fetches and updates pull requests with state management.
+   * Fetches and updates assigned/review pull requests with state management.
    */
-  fetchAndUpdatePRs(forceRefresh?: boolean): Promise<PullRequest[]>;
+  fetchAndUpdateAssignedPRs(forceRefresh?: boolean): Promise<PullRequest[]>;
 
   /**
-   * Gets currently stored pull requests.
+   * Gets currently stored assigned/review pull requests.
    */
-  getStoredPRs(): Promise<PullRequest[]>;
+  getStoredAssignedPRs(): Promise<PullRequest[]>;
+
+  /**
+   * Gets currently stored authored pull requests.
+   */
+  getStoredAuthoredPRs(): Promise<PullRequest[]>;
+
+  /**
+   * Gets currently stored merged pull requests.
+   */
+  getStoredMergedPRs(): Promise<PullRequest[]>;
+
+  /**
+   * Fetches and updates authored pull requests with state management.
+   */
+  updateAuthoredPRs(forceRefresh?: boolean): Promise<PullRequest[]>;
+
+  /**
+   * Fetches and updates merged pull requests with state management.
+   */
+  updateMergedPRs(forceRefresh?: boolean): Promise<PullRequest[]>;
 
   /**
    * Marks pull requests as read/seen.

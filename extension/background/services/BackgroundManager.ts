@@ -60,7 +60,7 @@ export class BackgroundManager {
       await badgeService.setDefaultBadge();
 
       // Perform initial PR fetch
-      await prService.fetchAndUpdatePRs(true);
+      await prService.fetchAndUpdateAssignedPRs(true);
 
       this.debugLog('[BackgroundManager] Initial setup completed');
     } catch (error) {

@@ -1,5 +1,5 @@
-export { usePRs } from './usePRs';
-export { useRefreshPRs } from './useRefreshPRs';
+export { useAssignedPRs } from './useAssignedPRs';
+export { useRefreshAssignedPRs } from './useRefreshAssignedPRs';
 export { useMergedPRs } from './useMergedPRs';
 export { useRefreshMergedPRs } from './useRefreshMergedPRs';
 export { useAuthoredPRs } from './useAuthoredPRs';

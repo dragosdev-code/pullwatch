@@ -12,7 +12,7 @@ export function useAuthoredPRs() {
     queryFn: () => chromeExtensionService.getStoredAuthoredPRs(),
     staleTime: 1000 * 30, // 30 seconds - data is fresh for this long
     gcTime: 1000 * 60 * 5, // 5 minutes - cache for this long when unused
-    refetchOnMount: true, // Always refetch when component mounts
+    refetchOnMount: false, // Don't refetch when component mounts
     refetchOnWindowFocus: false, // Don't refetch on window focus for extensions
     placeholderData: (previousData) => previousData, // Keep showing old data while fetching
     retry: 3,

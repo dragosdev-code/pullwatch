@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Header, PRList, Tabs, TabPanel, type Tab } from './components';
 import { TestArea } from './components/TestArea';
-import { usePRs, useMergedPRs, useAuthoredPRs, usePRUpdates } from './hooks';
+import { useAssignedPRs, useMergedPRs, useAuthoredPRs, usePRUpdates } from './hooks';
 import { useStorageSync } from './hooks/useStorageSync';
 import { useGlobalError, useClearGlobalError, useDebugMode } from './stores';
 
@@ -13,7 +13,7 @@ function App() {
   // Sync with Chrome storage
   useStorageSync();
 
-  const { data: prs = [], isSuccess } = usePRs();
+  const { data: prs = [], isSuccess } = useAssignedPRs();
   const { data: mergedPRs = [] } = useMergedPRs();
   const { data: authoredPRs = [] } = useAuthoredPRs();
   const prUpdates = usePRUpdates();

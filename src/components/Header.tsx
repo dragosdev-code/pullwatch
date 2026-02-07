@@ -7,10 +7,10 @@ import {
 } from '../stores';
 import {
   useMergedPRs,
-  usePRs,
+  useAssignedPRs,
   useAuthoredPRs,
   useRefreshMergedPRs,
-  useRefreshPRs,
+  useRefreshAssignedPRs,
   useRefreshAuthoredPRs,
 } from '../hooks';
 import { useEffect } from 'react';
@@ -24,8 +24,8 @@ export const Header = ({ prCount }: HeaderProps) => {
   const isDebugPending = useDebugPending();
   const setGlobalError = useSetGlobalError();
   const clearGlobalError = useClearGlobalError();
-  const { isLoading: isLoadingPRs, error: queryError } = usePRs();
-  const refreshPRsMutation = useRefreshPRs();
+  const { isLoading: isLoadingPRs, error: queryError } = useAssignedPRs();
+  const refreshPRsMutation = useRefreshAssignedPRs();
   const { isLoading: isLoadingMergedPRs, error: queryErrorMerged } = useMergedPRs();
   const refreshMergedPRsMutation = useRefreshMergedPRs();
   const { isLoading: isLoadingAuthoredPRs, error: queryErrorAuthored } = useAuthoredPRs();

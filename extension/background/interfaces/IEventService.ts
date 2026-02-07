@@ -45,9 +45,9 @@ export interface IEventService {
   ): boolean;
 
   /**
-   * Handles PR data related actions (getPRs, fetchPRs).
+   * Handles assigned PR data related actions (getAssignedPRs, fetchAssignedPRs).
    */
-  handlePRDataActions(
+  handleAssignedPRDataActions(
     message: RuntimeMessage,
     sendResponse: (response: MessageResponse) => void
   ): Promise<void>;

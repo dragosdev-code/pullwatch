@@ -21,7 +21,6 @@ import { IBadgeService } from '../interfaces/IBadgeService';
 import { INotificationService } from '../interfaces/INotificationService';
 import { IStorageService } from '../interfaces/IStorageService';
 import { ISoundService } from '../interfaces/ISoundService';
-import { IGitHubService } from '../interfaces/IGitHubService';
 
 /**
  * EventService coordinates Chrome extension events and handles message routing.
@@ -121,7 +120,7 @@ export class EventService implements IEventService {
       }
 
       // Perform initial fetch after installation/update
-      await prService.fetchAndUpdatePRs(true);
+      await prService.fetchAndUpdateAssignedPRs(true);
     } catch (error) {
       this.debugService.error('[EventService] Error handling installation:', error);
     }
@@ -143,7 +142,7 @@ export class EventService implements IEventService {
       // Handle startup logic
       await permissionService.checkAllPermissions();
       await alarmService.setupFetchAlarm();
-      await prService.fetchAndUpdatePRs(true);
+      await prService.fetchAndUpdateAssignedPRs(true);
     } catch (error) {
       this.debugService.error('[EventService] Error handling startup:', error);
     }
@@ -161,7 +160,7 @@ export class EventService implements IEventService {
 
         // Get PR service and fetch PRs
         const prService = this.serviceContainer.getService<IPRService>('prService');
-        await prService.fetchAndUpdatePRs();
+        await prService.fetchAndUpdateAssignedPRs();
       } else {
         this.debugService.warn('[EventService] Unknown alarm triggered:', alarm.name);
       }
@@ -212,9 +211,9 @@ export class EventService implements IEventService {
     };
 
     switch (action) {
-      case 'getPRs':
-      case 'fetchPRs':
-        asyncWrapper(this.handlePRDataActions(message, sendResponse));
+      case 'getAssignedPRs':
+      case 'fetchAssignedPRs':
+        asyncWrapper(this.handleAssignedPRDataActions(message, sendResponse));
         break;
       case 'getMergedPRs':
       case 'fetchMergedPRs':
@@ -255,43 +254,42 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Handles PR data related actions (getPRs, fetchPRs).
+   * Handles assigned PR data related actions (getAssignedPRs, fetchAssignedPRs).
    */
-  async handlePRDataActions(
+  async handleAssignedPRDataActions(
     message: RuntimeMessage,
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
       const prService = this.serviceContainer.getService<IPRService>('prService');
 
-      if (this.isMessageAction(message, 'getPRs')) {
-        // getPRs: Return stored PRs immediately, then fetch fresh data in background
-        this.debugService.log('[EventService] Getting stored PRs and fetching fresh data');
+      if (this.isMessageAction(message, 'getAssignedPRs')) {
+        this.debugService.log('[EventService] Getting stored assigned PRs and fetching fresh data');
 
         // 1. Get stored PRs immediately for fast response
-        const storedPRs = await prService.getStoredPRs();
-        this.debugService.log(`[EventService] getStoredPRs returned ${storedPRs.length} PRs`);
+        const storedPRs = await prService.getStoredAssignedPRs();
+        this.debugService.log(`[EventService] getStoredAssignedPRs returned ${storedPRs.length} PRs`);
 
         // 2. Send stored PRs immediately
         const response = { success: true, data: storedPRs };
-        this.debugService.log(`[EventService] Sending immediate response with stored PRs`);
+        this.debugService.log(`[EventService] Sending immediate response with stored assigned PRs`);
         sendResponse(response);
 
         // 3. Fetch fresh data in background (don't wait for response)
         this.fetchFreshDataInBackground(prService);
-      } else if (this.isMessageAction(message, 'fetchPRs')) {
-        // fetchPRs: Fetch fresh data from GitHub and update storage (manual refresh)
-        this.debugService.log('[EventService] Manual refresh - fetching fresh PRs from GitHub');
-        const prs = await prService.fetchAndUpdatePRs(true); // force refresh
-        this.debugService.log(`[EventService] fetchAndUpdatePRs returned ${prs.length} PRs`);
+      } else if (this.isMessageAction(message, 'fetchAssignedPRs')) {
+        // fetchAssignedPRs: Fetch fresh data from GitHub and update storage (manual refresh)
+        this.debugService.log('[EventService] Manual refresh - fetching fresh assigned PRs from GitHub');
+        const prs = await prService.fetchAndUpdateAssignedPRs(true); // force refresh
+        this.debugService.log(`[EventService] fetchAndUpdateAssignedPRs returned ${prs.length} PRs`);
 
         const response = { success: true, data: prs };
-        this.debugService.log(`[EventService] Sending response with fresh PRs`);
+        this.debugService.log(`[EventService] Sending response with fresh assigned PRs`);
         sendResponse(response);
       }
     } catch (error) {
-      this.debugService.error('[EventService] Error handling PR data actions:', error);
-      sendResponse({ success: false, error: 'Failed to handle PR action' });
+      this.debugService.error('[EventService] Error handling assigned PR data actions:', error);
+      sendResponse({ success: false, error: 'Failed to handle assigned PR action' });
     }
   }
 
@@ -303,24 +301,21 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      const storageService = this.serviceContainer.getService<IStorageService>('storageService');
-      const gitHubService = this.serviceContainer.getService<IGitHubService>('gitHubService');
+      const prService = this.serviceContainer.getService<IPRService>('prService');
 
       if (this.isMessageAction(message, 'getMergedPRs')) {
         this.debugService.log('[EventService] Getting stored merged PRs and fetching fresh data');
 
-        const stored = await storageService.getStoredMergedPRs();
-        const storedPRs = stored?.prs || [];
+        const storedPRs = await prService.getStoredMergedPRs();
         sendResponse({ success: true, data: storedPRs });
 
         // Background refresh
-        this.fetchFreshMergedDataInBackground(storageService, gitHubService);
+        this.fetchFreshMergedDataInBackground(prService, storedPRs);
       } else if (this.isMessageAction(message, 'fetchMergedPRs')) {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
         );
-        const merged = await gitHubService.fetchMergedPRs();
-        await storageService.setStoredMergedPRs(merged);
+        const merged = await prService.updateMergedPRs(true);
         sendResponse({ success: true, data: merged });
       }
     } catch (error) {
@@ -333,19 +328,16 @@ export class EventService implements IEventService {
    * Fetches fresh merged data in the background and notifies popup if data changed.
    */
   private async fetchFreshMergedDataInBackground(
-    storageService: IStorageService,
-    gitHubService: IGitHubService
+    prService: IPRService,
+    storedPRs: PullRequest[]
   ): Promise<void> {
     try {
-      const stored = await storageService.getStoredMergedPRs();
-      const storedPRs = stored?.prs || [];
-      const fresh = await gitHubService.fetchMergedPRs();
+      const fresh = await prService.updateMergedPRs();
 
       const summarize = (list: PullRequest[]) => list.map((pr) => ({ id: pr.id, title: pr.title }));
       const changed = JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(fresh));
 
       if (changed) {
-        await storageService.setStoredMergedPRs(fresh);
         try {
           await chrome.runtime.sendMessage({ action: 'mergedPrDataUpdated', data: fresh });
         } catch (e) {
@@ -367,24 +359,21 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      const storageService = this.serviceContainer.getService<IStorageService>('storageService');
-      const gitHubService = this.serviceContainer.getService<IGitHubService>('gitHubService');
+      const prService = this.serviceContainer.getService<IPRService>('prService');
 
       if (this.isMessageAction(message, 'getAuthoredPRs')) {
         this.debugService.log('[EventService] Getting stored authored PRs and fetching fresh data');
 
-        const stored = await storageService.getStoredAuthoredPRs();
-        const storedPRs = stored?.prs || [];
+        const storedPRs = await prService.getStoredAuthoredPRs();
         sendResponse({ success: true, data: storedPRs });
 
         // Background refresh
-        this.fetchFreshAuthoredDataInBackground(storageService, gitHubService);
+        this.fetchFreshAuthoredDataInBackground(prService, storedPRs);
       } else if (this.isMessageAction(message, 'fetchAuthoredPRs')) {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
         );
-        const authored = await gitHubService.fetchAuthoredPRs();
-        await storageService.setStoredAuthoredPRs(authored);
+        const authored = await prService.updateAuthoredPRs(true);
         sendResponse({ success: true, data: authored });
       }
     } catch (error) {
@@ -397,19 +386,16 @@ export class EventService implements IEventService {
    * Fetches fresh authored data in the background and notifies popup if data changed.
    */
   private async fetchFreshAuthoredDataInBackground(
-    storageService: IStorageService,
-    gitHubService: IGitHubService
+    prService: IPRService,
+    storedPRs: PullRequest[]
   ): Promise<void> {
     try {
-      const stored = await storageService.getStoredAuthoredPRs();
-      const storedPRs = stored?.prs || [];
-      const fresh = await gitHubService.fetchAuthoredPRs();
+      const fresh = await prService.updateAuthoredPRs();
 
       const summarize = (list: PullRequest[]) => list.map((pr) => ({ id: pr.id, title: pr.title }));
       const changed = JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(fresh));
 
       if (changed) {
-        await storageService.setStoredAuthoredPRs(fresh);
         try {
           await chrome.runtime.sendMessage({ action: 'authoredPrDataUpdated', data: fresh });
         } catch (e) {
@@ -424,113 +410,36 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Fetches fresh data in the background and notifies popup if data changed.
+   * Fetches fresh assigned PR data in the background and notifies popup if data changed.
+   * Delegates all business logic to PRService.
    */
   private async fetchFreshDataInBackground(prService: IPRService): Promise<void> {
     try {
-      this.debugService.log('[EventService] Background fetch started');
+      this.debugService.log('[EventService] Background assigned PR fetch started');
 
-      // Get current stored PRs for comparison
-      const storedPRs = await prService.getStoredPRs();
-      const storedPendingPRs = storedPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
-      const storedReviewedPRs = storedPRs.filter((pr) => pr.reviewStatus === 'reviewed');
+      // Get current stored PRs for comparison before fetching
+      const storedPRs = await prService.getStoredAssignedPRs();
 
-      // Fetch fresh PRs from GitHub (without updating storage yet)
-      const gitHubService = this.serviceContainer.getService<IGitHubService>('gitHubService');
-      const [freshPendingPRsRaw, freshReviewedPRsRaw] = await Promise.all([
-        gitHubService.fetchAssignedPRs(),
-        gitHubService.fetchReviewedPRs(),
-      ]);
+      // Delegate fetching + storage + badge + notifications to PRService
+      const freshPRs = await prService.fetchAndUpdateAssignedPRs();
 
-      const freshPendingPRs = freshPendingPRsRaw.map((pr) => ({
-        ...pr,
-        reviewStatus: 'pending' as const,
-      }));
-
-      const { newPRs, allPRsWithStatus: pendingPRsWithStatus } = prService.comparePRs(
-        storedPendingPRs,
-        freshPendingPRs
-      );
-
-      const pendingIds = new Set(
-        pendingPRsWithStatus.map((pr) => {
-          const key = pr.id || pr.url;
-          return key;
-        })
-      );
-
-      const reviewedPRMap = new Map<string, PullRequest>();
-
-      const freshReviewedPRs = freshReviewedPRsRaw
-        .filter((pr) => {
-          const key = pr.id || pr.url;
-          return !pendingIds.has(key);
-        })
-        .map((pr) => {
-          const key = pr.id || pr.url;
-          const reviewedPR: PullRequest = {
-            ...pr,
-            reviewStatus: 'reviewed' as const,
-            isNew: false,
-          };
-          reviewedPRMap.set(key, reviewedPR);
-          return reviewedPR;
-        });
-
-      const preservedReviewedPRs = storedReviewedPRs
-        .filter((pr) => {
-          const key = pr.id || pr.url;
-          if (pendingIds.has(key)) {
-            return false;
-          }
-          if (reviewedPRMap.has(key)) {
-            return false;
-          }
-          return true;
-        })
-        .map((pr) => ({
-          ...pr,
-          reviewStatus: 'reviewed' as const,
-          isNew: false,
-        }));
-
-      const reviewedPRs = [...freshReviewedPRs, ...preservedReviewedPRs];
-
-      const allPRsWithStatus = [...pendingPRsWithStatus, ...reviewedPRs];
-
-      // Check if there are any changes (new PRs or different data)
+      // Check if there are any changes
       const summarize = (list: PullRequest[]) =>
         list.map((pr) => ({ id: pr.id, title: pr.title, reviewStatus: pr.reviewStatus }));
 
       const hasChanges =
-        newPRs.length > 0 ||
-        JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(allPRsWithStatus));
+        JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(freshPRs));
 
       if (hasChanges) {
         this.debugService.log(
-          `[EventService] Background fetch detected changes: ${newPRs.length} new PRs, updating storage and notifying popup`
+          '[EventService] Background assigned PR fetch detected changes, notifying popup'
         );
-
-        // Update storage with the new data
-        const storageService = this.serviceContainer.getService<IStorageService>('storageService');
-        const badgeService = this.serviceContainer.getService<IBadgeService>('badgeService');
-        const notificationService =
-          this.serviceContainer.getService<INotificationService>('notificationService');
-
-        await storageService.setStoredPRs(allPRsWithStatus);
-        await storageService.setLastFetchTime(Date.now());
-        await badgeService.setPRCountBadge(pendingPRsWithStatus.length);
-
-        // Show notifications for new PRs
-        if (newPRs.length > 0) {
-          await notificationService.showNewPRNotifications(newPRs);
-        }
 
         // Send message to popup to update its display
         try {
           await chrome.runtime.sendMessage({
-            action: 'prDataUpdated',
-            data: allPRsWithStatus,
+            action: 'assignedPrDataUpdated',
+            data: freshPRs,
           });
         } catch (messageError) {
           // Popup might be closed - that's ok, just log it
@@ -540,18 +449,12 @@ export class EventService implements IEventService {
           );
         }
       } else {
-        this.debugService.log('[EventService] Background fetch completed - no changes detected');
+        this.debugService.log(
+          '[EventService] Background assigned PR fetch completed - no changes detected'
+        );
       }
     } catch (error) {
-      this.debugService.error('[EventService] Error in background fetch:', error);
-
-      // Set error badge if background fetch fails
-      try {
-        const badgeService = this.serviceContainer.getService<IBadgeService>('badgeService');
-        await badgeService.setErrorBadge();
-      } catch (badgeError) {
-        this.debugService.error('[EventService] Failed to set error badge:', badgeError);
-      }
+      this.debugService.error('[EventService] Error in background assigned PR fetch:', error);
     }
   }
 
@@ -644,6 +547,7 @@ export class EventService implements IEventService {
         author: { login: 'test-author' },
         createdAt: new Date().toISOString(),
         isNew: true,
+        type: 'open',
       };
 
       if (

@@ -12,12 +12,12 @@ export function usePRUpdates() {
   return {
     setupListener: () => {
       return chromeExtensionService.onMessage((message) => {
-        if (message.action === 'prDataUpdated') {
+        if (message.action === 'assignedPrDataUpdated') {
           const updatedPRs = message.data as PullRequest[];
-          console.log('Received PR data update from background, updating cache');
+          console.log('Received assigned PR data update from background, updating cache');
 
           // Update the cache with fresh data
-          queryClient.setQueryData(queryKeys.prs, updatedPRs);
+          queryClient.setQueryData(queryKeys.assignedPrs, updatedPRs);
         } else if (message.action === 'mergedPrDataUpdated') {
           const updatedMerged = message.data as PullRequest[];
           console.log('Received merged PR data update from background, updating cache');

@@ -15,6 +15,16 @@ export interface IStorageService {
   getStoredMergedPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null>;
 
   /**
+   * Gets stored authored pull requests.
+   */
+  getStoredAuthoredPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null>;
+
+  /**
+   * Sets stored authored pull requests.
+   */
+  setStoredAuthoredPRs(prs: PullRequest[]): Promise<void>;
+
+  /**
    * Sets stored pull requests.
    */
   setStoredPRs(prs: PullRequest[]): Promise<void>;
