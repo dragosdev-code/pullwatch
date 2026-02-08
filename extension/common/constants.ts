@@ -45,7 +45,7 @@ export const GITHUB_MERGED_PRS_URL_TEMPLATE = (baseUrl: string) =>
   `${baseUrl}/pulls?q=is%3Apr+is%3Amerged+author%3A%40me`;
 
 export const GITHUB_REVIEWED_PRS_URL_TEMPLATE = (baseUrl: string) =>
-  `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+reviewed-by%3A%40me+-user-review-requested%3A%40me`;
+  `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+reviewed-by%3A%40me+-user-review-requested%3A%40me+-author%3A%40me`;
 
 // Authored PRs URLs - for PRs created by the user
 export const GITHUB_AUTHORED_APPROVED_URL_TEMPLATE = (baseUrl: string) =>
