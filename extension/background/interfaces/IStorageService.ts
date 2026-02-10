@@ -5,9 +5,9 @@ import type { PullRequest } from '../../common/types';
  */
 export interface IStorageService {
   /**
-   * Gets stored pull requests.
+   * Gets stored assigned pull requests.
    */
-  getStoredPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null>;
+  getStoredAssignedPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null>;
 
   /**
    * Gets stored merged pull requests.
@@ -25,9 +25,9 @@ export interface IStorageService {
   setStoredAuthoredPRs(prs: PullRequest[]): Promise<void>;
 
   /**
-   * Sets stored pull requests.
+   * Sets stored assigned pull requests.
    */
-  setStoredPRs(prs: PullRequest[]): Promise<void>;
+  setStoredAssignedPRs(prs: PullRequest[]): Promise<void>;
 
   /**
    * Sets stored merged pull requests.

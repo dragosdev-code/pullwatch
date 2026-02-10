@@ -44,7 +44,7 @@ export class PRService implements IPRService {
 
     try {
       // Get current stored PRs for comparison and cache check
-      const storedData = await this.storageService.getStoredPRs();
+      const storedData = await this.storageService.getStoredAssignedPRs();
 
       // Check cache before fetching from GitHub
       const isCacheValid = storedData && storedData.timestamp && (Date.now() - storedData.timestamp < CACHE_TTL_MS);
@@ -58,7 +58,6 @@ export class PRService implements IPRService {
       this.debugService.log(`[PRService] Current stored PRs count: ${oldPRs.length}`);
 
       const oldPendingPRs = oldPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
-      const oldReviewedPRs = oldPRs.filter((pr) => pr.reviewStatus === 'reviewed');
       this.debugService.log(
         `[PRService] Current stored pending PRs count: ${oldPendingPRs.length}`
       );
@@ -83,60 +82,28 @@ export class PRService implements IPRService {
       );
       this.debugService.log(`[PRService] New pending PRs detected: ${newPRs.length}`);
 
+      // Deduplicate: exclude reviewed PRs that are already in the pending list
       const pendingIds = new Set(
-        pendingPRsWithStatus.map((pr) => {
-          const key = pr.id || pr.url;
-          return key;
-        })
+        pendingPRsWithStatus.map((pr) => pr.id || pr.url)
       );
 
-      const reviewedPRMap = new Map<string, PullRequest>();
-
       const freshReviewedPRs = freshReviewedPRsRaw
-        .filter((pr) => {
-          const key = pr.id || pr.url;
-          return !pendingIds.has(key);
-        })
-        .map((pr) => {
-          const key = pr.id || pr.url;
-          const reviewedPR: PullRequest = {
-            ...pr,
-            reviewStatus: 'reviewed' as const,
-            isNew: false,
-          };
-          reviewedPRMap.set(key, reviewedPR);
-          return reviewedPR;
-        });
-
-      const preservedReviewedPRs = oldReviewedPRs
-        .filter((pr) => {
-          const key = pr.id || pr.url;
-          if (pendingIds.has(key)) {
-            return false;
-          }
-          if (reviewedPRMap.has(key)) {
-            return false;
-          }
-          return true;
-        })
-        .map((pr) => ({
+        .filter((pr) => !pendingIds.has(pr.id || pr.url))
+        .filter((pr) => pr.type !== 'merged')
+        .map((pr): PullRequest => ({
           ...pr,
           reviewStatus: 'reviewed' as const,
           isNew: false,
         }));
 
-      // Filter out reviewed PRs that are merged - they don't need to be shown in "To Review" tab
-      const reviewedPRs = [...freshReviewedPRs, ...preservedReviewedPRs].filter(
-        (pr) => pr.type !== 'merged'
-      );
-
-      const allPRsWithStatus = [...pendingPRsWithStatus, ...reviewedPRs];
+      // Only use fresh API data — no merging with stale stored reviewed PRs
+      const allPRsWithStatus = [...pendingPRsWithStatus, ...freshReviewedPRs];
       this.debugService.log(
         `[PRService] Total PRs to store (pending + reviewed): ${allPRsWithStatus.length}`
       );
 
       // Update storage with fresh data and last fetch time
-      await this.storageService.setStoredPRs(allPRsWithStatus);
+      await this.storageService.setStoredAssignedPRs(allPRsWithStatus);
       await this.storageService.setLastFetchTime(Date.now());
 
       // Update badge with current count
@@ -228,7 +195,7 @@ export class PRService implements IPRService {
   }
 
   async getStoredAssignedPRs(): Promise<PullRequest[]> {
-    const stored = await this.storageService.getStoredPRs();
+    const stored = await this.storageService.getStoredAssignedPRs();
     return stored?.prs || [];
   }
 
@@ -322,7 +289,7 @@ export class PRService implements IPRService {
       // If no specific IDs provided, mark all as read
       if (prIds.length === 0) {
         const updatedPRs = currentPRs.map((pr) => ({ ...pr, isNew: false }));
-        await this.storageService.setStoredPRs(updatedPRs);
+        await this.storageService.setStoredAssignedPRs(updatedPRs);
         this.debugService.log(`[PRService] Marked all ${updatedPRs.length} PRs as read`);
         return;
       }
@@ -337,7 +304,7 @@ export class PRService implements IPRService {
       });
 
       // Update storage
-      await this.storageService.setStoredPRs(updatedPRs);
+      await this.storageService.setStoredAssignedPRs(updatedPRs);
 
       this.debugService.log(`[PRService] Marked ${prIds.length} specific PRs as read`);
     } catch (error) {

@@ -1,7 +1,7 @@
 // extension/common/constants.ts
 
 // Storage Keys
-export const STORAGE_KEY_PRS = 'github_prs';
+export const STORAGE_KEY_ASSIGNED_PRS = 'github_assigned_prs';
 export const STORAGE_KEY_MERGED_PRS = 'github_merged_prs';
 export const STORAGE_KEY_AUTHORED_PRS = 'github_authored_prs';
 export const STORAGE_KEY_LAST_FETCH = 'last_fetch_time';

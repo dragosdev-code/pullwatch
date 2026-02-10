@@ -1,6 +1,6 @@
 // extension/common/types.ts
 import type {
-  STORAGE_KEY_PRS,
+  STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_LAST_FETCH,
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
@@ -37,7 +37,7 @@ export interface StoredPRs {
 
 // For browser.storage.local.get/set operations
 export interface StorageItems {
-  [STORAGE_KEY_PRS]?: StoredPRs;
+  [STORAGE_KEY_ASSIGNED_PRS]?: StoredPRs;
   [STORAGE_KEY_MERGED_PRS]?: StoredPRs;
   [STORAGE_KEY_AUTHORED_PRS]?: StoredPRs;
   [STORAGE_KEY_LAST_FETCH]?: number; // Timestamp

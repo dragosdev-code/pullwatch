@@ -2,7 +2,7 @@ import type { IStorageService } from '../interfaces/IStorageService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type { PullRequest, StorageItems, StoredPRs, UserData } from '../../common/types';
 import {
-  STORAGE_KEY_PRS,
+  STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_LAST_FETCH,
@@ -108,26 +108,25 @@ export class StorageService implements IStorageService {
   // --- IStorageService Implementation ---
 
   /**
-   * Gets stored pull requests.
+   * Gets stored assigned pull requests.
    */
-  async getStoredPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null> {
+  async getStoredAssignedPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null> {
     try {
-      const data = await this.getStorageData(STORAGE_KEY_PRS);
-      const storedPRs = data[STORAGE_KEY_PRS] || null;
+      const data = await this.getStorageData(STORAGE_KEY_ASSIGNED_PRS);
+      const storedPRs = data[STORAGE_KEY_ASSIGNED_PRS] || null;
 
       if (storedPRs) {
-        // Convert legacy format if needed
         const result = {
           prs: storedPRs.prs || [],
           timestamp: storedPRs.lastUpdated ? new Date(storedPRs.lastUpdated).getTime() : Date.now(),
         };
-        this.debugService.log('[StorageService] Retrieved stored PRs:', result.prs.length, 'items');
+        this.debugService.log('[StorageService] Retrieved stored assigned PRs:', result.prs.length, 'items');
         return result;
       }
 
       return null;
     } catch (error) {
-      this.debugService.error('[StorageService] Error getting stored PRs:', error);
+      this.debugService.error('[StorageService] Error getting stored assigned PRs:', error);
       return null;
     }
   }
@@ -161,18 +160,20 @@ export class StorageService implements IStorageService {
   }
 
   /**
-   * Sets stored pull requests.
+   * Sets stored assigned pull requests.
+   * Filters out merged PRs as a safety measure — only open/draft PRs are persisted.
    */
-  async setStoredPRs(prs: PullRequest[]): Promise<void> {
+  async setStoredAssignedPRs(prs: PullRequest[]): Promise<void> {
     try {
+      const openPRs = prs.filter(pr => pr.type === 'open' || pr.type === 'draft');
       const storedPRs: StoredPRs = {
-        prs,
+        prs: openPRs,
         lastUpdated: new Date().toISOString(),
       };
-      await this.setStorageData({ [STORAGE_KEY_PRS]: storedPRs });
-      this.debugService.log('[StorageService] Stored PRs updated:', prs.length, 'items');
+      await this.setStorageData({ [STORAGE_KEY_ASSIGNED_PRS]: storedPRs });
+      this.debugService.log('[StorageService] Stored assigned PRs updated:', openPRs.length, 'items');
     } catch (error) {
-      this.debugService.error('[StorageService] Error setting stored PRs:', error);
+      this.debugService.error('[StorageService] Error setting stored assigned PRs:', error);
       throw error;
     }
   }
