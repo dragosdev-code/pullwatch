@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Header, Tabs, TabPanel, type Tab } from './components';
-import { AssignedList, AuthoredList, MergedList } from './components/lists';
-import { TestArea } from './components/TestArea';
-import { useAssignedPRs, useMergedPRs, useAuthoredPRs, usePRUpdates } from './hooks';
-import { useStorageSync } from './hooks/useStorageSync';
-import { useGlobalError, useClearGlobalError, useDebugMode } from './stores';
+import { Header } from './components/header';
+import { Tabs } from './components/ui/tabs/tabs';
+import { TabPanel } from './components/ui/tabs/tab-panel';
+import type { Tab } from './components/ui/tabs/hook/use-tabs';
+import { AssignedList } from './components/lists/assigned-list';
+import { AuthoredList } from './components/lists/authored-list';
+import { MergedList } from './components/lists/merged-list';
+import { TestArea } from './components/test-area';
+import { useAssignedPRs } from './hooks/use-assigned-prs';
+import { useMergedPRs } from './hooks/use-merged-prs';
+import { useAuthoredPRs } from './hooks/use-authored-prs';
+import { usePRUpdates } from './hooks/use-pr-updates';
+import { useStorageSync } from './hooks/use-storage-sync';
+import { useGlobalError, useClearGlobalError } from './stores/global-error';
+import { useDebugMode } from './stores/debug';
 
 function App() {
   const error = useGlobalError();

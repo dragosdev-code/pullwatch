@@ -1,18 +1,12 @@
-import { RefreshButton } from './RefreshButton';
-import {
-  useHandleGithubClick,
-  useDebugPending,
-  useSetGlobalError,
-  useClearGlobalError,
-} from '../stores';
-import {
-  useMergedPRs,
-  useAssignedPRs,
-  useAuthoredPRs,
-  useRefreshMergedPRs,
-  useRefreshAssignedPRs,
-  useRefreshAuthoredPRs,
-} from '../hooks';
+import { RefreshButton } from './refresh-button';
+import { useSetGlobalError, useClearGlobalError } from '../stores/global-error';
+import { useHandleGithubClick, useDebugPending } from '../stores/debug';
+import { useMergedPRs } from '../hooks/use-merged-prs';
+import { useAssignedPRs } from '../hooks/use-assigned-prs';
+import { useAuthoredPRs } from '../hooks/use-authored-prs';
+import { useRefreshMergedPRs } from '../hooks/use-refresh-merged-prs';
+import { useRefreshAssignedPRs } from '../hooks/use-refresh-assigned-prs';
+import { useRefreshAuthoredPRs } from '../hooks/use-refresh-authored-prs';
 import { useEffect } from 'react';
 
 interface HeaderProps {

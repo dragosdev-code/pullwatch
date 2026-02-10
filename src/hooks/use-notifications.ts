@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { chromeExtensionService } from '../services/chromeExtensionService';
+import { chromeExtensionService } from '../services/chrome-extension-service';
 
 /**
  * Hook to send test notification.

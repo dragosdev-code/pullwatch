@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { chromeExtensionService } from '../services/chromeExtensionService';
+import { chromeExtensionService } from '../services/chrome-extension-service';
 import type { PullRequest } from '../../extension/common/types';
-import { queryKeys } from '../constants/queryKeys';
+import { queryKeys } from '../constants/query-keys';
 
 /**
  * Hook to listen for background script messages and update cache accordingly.

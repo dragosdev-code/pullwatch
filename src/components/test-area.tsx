@@ -1,5 +1,5 @@
-import { useTestNotification } from '../hooks';
-import { useSetGlobalError } from '../stores';
+import { useTestNotification } from '../hooks/use-notifications';
+import { useSetGlobalError } from '../stores/global-error';
 
 export const TestArea = () => {
   const setGlobalError = useSetGlobalError();

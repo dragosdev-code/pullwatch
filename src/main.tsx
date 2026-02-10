@@ -1,8 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import './App.css';
-import App from './App.tsx';
+import './app.css';
+import App from './app';
 
 // Create a client with extension-optimized settings
 const queryClient = new QueryClient({

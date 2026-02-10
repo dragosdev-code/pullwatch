@@ -1,6 +1,6 @@
 import React from 'react';
-import { useTabs, type Tab, type UseTabsOptions } from './hook/useTabs';
-import { TabsContext } from './TabPanel';
+import { useTabs, type Tab, type UseTabsOptions } from './hook/use-tabs';
+import { TabsContext } from './tab-panel';
 
 interface TabsProps extends Omit<UseTabsOptions, 'tabs'> {
   tabs: Tab[];

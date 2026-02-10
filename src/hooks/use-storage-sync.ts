@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useDebugMode, useSetGlobalError } from '../stores';
-import { useDebugStore } from '../stores/debug';
+import { useSetGlobalError } from '../stores/global-error';
+import { useDebugMode, useDebugStore } from '../stores/debug';
 
 /**
  * Hook to synchronize Zustand store with Chrome storage

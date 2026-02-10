@@ -1,15 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { chromeExtensionService } from '../services/chromeExtensionService';
-import { queryKeys } from '../constants/queryKeys';
+import { chromeExtensionService } from '../services/chrome-extension-service';
+import { queryKeys } from '../constants/query-keys';
 
 /**
- * Hook to get stored assigned/review PRs with automatic background refresh.
+ * Hook to get stored authored PRs with automatic background refresh.
  * Returns stored PRs immediately and fetches fresh data in background.
  */
-export function useAssignedPRs() {
+export function useAuthoredPRs() {
   return useQuery({
-    queryKey: queryKeys.assignedPrs,
-    queryFn: () => chromeExtensionService.getStoredAssignedPRs(),
+    queryKey: queryKeys.authoredPrs,
+    queryFn: () => chromeExtensionService.getStoredAuthoredPRs(),
     staleTime: 1000 * 30, // 30 seconds - data is fresh for this long
     gcTime: 1000 * 60 * 5, // 5 minutes - cache for this long when unused
     refetchOnMount: false, // Don't refetch when component mounts

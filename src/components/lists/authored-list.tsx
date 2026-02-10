@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { PullRequest } from '../../../extension/common/types';
-import { PRItem } from '../PRItem';
-import { PRListEmptyState } from './PRListEmptyState';
+import { PRItem } from '../pr-item';
+import { PRListEmptyState } from './pr-list-empty-state';
 
 interface AuthoredListProps {
   prs: PullRequest[];

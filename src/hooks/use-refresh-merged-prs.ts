@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { chromeExtensionService } from '../services/chromeExtensionService';
-import { queryKeys } from '../constants/queryKeys';
+import { chromeExtensionService } from '../services/chrome-extension-service';
+import { queryKeys } from '../constants/query-keys';
 
 /**
  * Hook to manually refresh merged PRs (force fetch from GitHub).
