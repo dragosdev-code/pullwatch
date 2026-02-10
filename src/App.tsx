@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react';
-import { Header, PRList, Tabs, TabPanel, type Tab } from './components';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Header, Tabs, TabPanel, type Tab } from './components';
+import { AssignedList, AuthoredList, MergedList } from './components/lists';
 import { TestArea } from './components/TestArea';
 import { useAssignedPRs, useMergedPRs, useAuthoredPRs, usePRUpdates } from './hooks';
 import { useStorageSync } from './hooks/useStorageSync';
@@ -13,7 +14,7 @@ function App() {
   // Sync with Chrome storage
   useStorageSync();
 
-  const { data: prs = [], isSuccess } = useAssignedPRs();
+  const { data: assignedPRs = [], isSuccess } = useAssignedPRs();
   const { data: mergedPRs = [] } = useMergedPRs();
   const { data: authoredPRs = [] } = useAuthoredPRs();
   const prUpdates = usePRUpdates();
@@ -23,20 +24,42 @@ function App() {
     return cleanup;
   }, [prUpdates]);
 
-  const pendingPRs = useMemo(() => prs.filter((pr) => pr.reviewStatus !== 'reviewed'), [prs]);
-  const reviewedPRs = useMemo(() => prs.filter((pr) => pr.reviewStatus === 'reviewed'), [prs]);
+  const hasEverLoaded = isSuccess || assignedPRs.length > 0;
 
-  const orderedPRs = useMemo(() => [...pendingPRs, ...reviewedPRs], [pendingPRs, reviewedPRs]);
+  // Track which "new" PR IDs the user has already seen this session
+  const [viewedIds, setViewedIds] = useState<Set<string>>(new Set());
 
-  const hasEverLoaded = isSuccess || prs.length > 0;
+  const handleMarkAsViewed = useCallback((ids: string[]) => {
+    setViewedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+  }, []);
+
+  // Per-tab newPrIds: only PRs that are isNew AND not yet viewed
+  const assignedNewPrIds = useMemo(
+    () => new Set(assignedPRs.filter((pr) => pr.isNew && !viewedIds.has(pr.id)).map((pr) => pr.id)),
+    [assignedPRs, viewedIds]
+  );
+
+  const authoredNewPrIds = useMemo(
+    () => new Set(authoredPRs.filter((pr) => pr.isNew && !viewedIds.has(pr.id)).map((pr) => pr.id)),
+    [authoredPRs, viewedIds]
+  );
+
+  const mergedNewPrIds = useMemo(
+    () => new Set(mergedPRs.filter((pr) => pr.isNew && !viewedIds.has(pr.id)).map((pr) => pr.id)),
+    [mergedPRs, viewedIds]
+  );
 
   const tabs: Tab[] = useMemo(
     () => [
-      { id: 'reviews', label: 'To Review', count: pendingPRs.length },
+      { id: 'assigned', label: 'To Review', count: assignedPRs.length },
       { id: 'authored', label: 'Authored', count: authoredPRs.length },
       { id: 'merged', label: 'Merged', count: mergedPRs.length },
     ],
-    [pendingPRs.length, authoredPRs.length, mergedPRs.length]
+    [assignedPRs.length, authoredPRs.length, mergedPRs.length]
   );
 
   const handleTabChange = (tabId: string) => {
@@ -46,7 +69,7 @@ function App() {
 
   return (
     <div className="w-[380px] h-[400px] bg-white rounded-2xl relative overflow-hidden border-0 shadow-none flex flex-col">
-      <Header prCount={pendingPRs.length} />
+      <Header prCount={assignedPRs.length} />
 
       {error && (
         <div className="px-5 py-3 bg-red-50 border-b border-red-200">
@@ -66,31 +89,33 @@ function App() {
       <Tabs
         tabs={tabs}
         className="flex-1 flex flex-col"
-        defaultTab="reviews"
+        defaultTab="assigned"
         onChange={handleTabChange}
       >
-        <TabPanel tabId="reviews" className="flex-1 h-0">
-          <PRList
-            prs={orderedPRs}
-            newPrIds={new Set(orderedPRs.filter((pr) => pr.isNew).map((pr) => pr.id))}
+        <TabPanel tabId="assigned" className="flex-1 h-0">
+          <AssignedList
+            prs={assignedPRs}
+            newPrIds={assignedNewPrIds}
             hasEverLoaded={hasEverLoaded}
+            onViewIds={handleMarkAsViewed}
           />
         </TabPanel>
 
         <TabPanel tabId="authored" className="flex-1 h-0">
-          <PRList
+          <AuthoredList
             prs={authoredPRs}
-            newPrIds={new Set(authoredPRs.filter((pr) => pr.isNew).map((pr) => pr.id))}
+            newPrIds={authoredNewPrIds}
             hasEverLoaded={hasEverLoaded}
-            isAuthoredTab
+            onViewIds={handleMarkAsViewed}
           />
         </TabPanel>
 
         <TabPanel tabId="merged" className="flex-1 h-0">
-          <PRList
+          <MergedList
             prs={mergedPRs}
-            newPrIds={new Set(mergedPRs.filter((pr) => pr.isNew).map((pr) => pr.id))}
+            newPrIds={mergedNewPrIds}
             hasEverLoaded={hasEverLoaded}
+            onViewIds={handleMarkAsViewed}
           />
         </TabPanel>
       </Tabs>

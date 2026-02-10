@@ -1,7 +1,7 @@
 export { Header } from './Header';
 export { Footer } from './Footer';
-export { PRList } from './PRList';
 export { PRItem } from './PRItem';
+export { PRListEmptyState, AssignedList, MergedList, AuthoredList } from './lists';
 export { RefreshButton } from './RefreshButton';
 export { TestArea } from './TestArea';
 export { TitleParticleCanvas } from './TitleParticleCanvas';

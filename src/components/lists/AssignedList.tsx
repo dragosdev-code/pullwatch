@@ -1,0 +1,63 @@
+import { useEffect } from 'react';
+import type { PullRequest } from '../../../extension/common/types';
+import { PRItem } from '../PRItem';
+import { PRListEmptyState } from './PRListEmptyState';
+
+interface AssignedListProps {
+  prs: PullRequest[];
+  newPrIds: Set<string>;
+  hasEverLoaded: boolean;
+  onViewIds: (ids: string[]) => void;
+}
+
+export const AssignedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: AssignedListProps) => {
+  // Mark new PRs as viewed when this component unmounts (user switches tabs)
+  useEffect(() => {
+    return () => {
+      const idsToMark = prs.filter((pr) => newPrIds.has(pr.id)).map((pr) => pr.id);
+      if (idsToMark.length > 0) onViewIds(idsToMark);
+    };
+  }, [prs, newPrIds, onViewIds]);
+
+  const pendingPRs = prs.filter((pr) => pr.reviewStatus === 'pending');
+  const reviewedPRs = prs.filter((pr) => pr.reviewStatus === 'reviewed');
+
+  if (prs.length === 0) {
+    return (
+      <PRListEmptyState
+        message="No PRs assigned to you for review"
+        subMessage="PRs requesting your review will appear here"
+        hasEverLoaded={hasEverLoaded}
+      />
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto">
+      {pendingPRs.length > 0 && (
+        <>
+          {pendingPRs.map((pr) => (
+            <PRItem
+              key={pr.id}
+              pr={pr}
+              isNew={newPrIds.has(pr.id)}
+              isReviewed={pr.reviewStatus === 'reviewed'}
+            />
+          ))}
+        </>
+      )}
+      {reviewedPRs.length > 0 && (
+        <>
+          {reviewedPRs.map((pr) => (
+            <PRItem
+              key={pr.id}
+              pr={pr}
+              isNew={newPrIds.has(pr.id)}
+              isReviewed={pr.reviewStatus === 'reviewed'}
+            />
+          ))}
+        </>
+      )}
+    </div>
+  );
+};
