@@ -25,3 +25,12 @@
 .scrollbar-thumb-gray-300:hover::-webkit-scrollbar-thumb {
   background-color: #a0aec0;
 }
+
+@keyframes settings-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

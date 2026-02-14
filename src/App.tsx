@@ -14,7 +14,7 @@ import { usePRUpdates } from './hooks/use-pr-updates';
 import { useStorageSync } from './hooks/use-storage-sync';
 import { useGlobalError, useClearGlobalError } from './stores/global-error';
 import { useDebugMode } from './stores/debug';
-import { OpenSettingsButton } from './components/settings/open-settings-button';
+import { SettingsOverlay } from './components/settings/settings-overlay';
 
 function App() {
   const error = useGlobalError();
@@ -130,7 +130,7 @@ function App() {
         </TabPanel>
       </Tabs>
 
-      <OpenSettingsButton />
+      <SettingsOverlay />
       {/* <Footer /> */}
     </div>
   );
