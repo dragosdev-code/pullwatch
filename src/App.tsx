@@ -14,6 +14,7 @@ import { usePRUpdates } from './hooks/use-pr-updates';
 import { useStorageSync } from './hooks/use-storage-sync';
 import { useGlobalError, useClearGlobalError } from './stores/global-error';
 import { useDebugMode } from './stores/debug';
+import { OpenSettingsButton } from './components/settings/open-settings-button';
 
 function App() {
   const error = useGlobalError();
@@ -77,7 +78,7 @@ function App() {
   };
 
   return (
-    <div className="w-[380px] h-[400px] bg-white rounded-2xl relative overflow-hidden border-0 shadow-none flex flex-col">
+    <div className="w-[380px] h-[400px] bg-white relative overflow-hidden border-0 shadow-none flex flex-col">
       <Header prCount={assignedPRs.length} />
 
       {error && (
@@ -129,6 +130,7 @@ function App() {
         </TabPanel>
       </Tabs>
 
+      <OpenSettingsButton />
       {/* <Footer /> */}
     </div>
   );

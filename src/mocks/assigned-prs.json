@@ -1,0 +1,152 @@
+[
+  {
+    "id": "straw-hat-pirates/navigation-room-42",
+    "url": "https://github.com/straw-hat-pirates/navigation-room/pull/42",
+    "title": "Add dark mode support for Nami's night sailing charts",
+    "number": 42,
+    "repoName": "straw-hat-pirates/navigation-room",
+    "author": {
+      "login": "nami-swan",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/12345?v=4"
+    },
+    "createdAt": "2025-02-12T14:30:00.000Z",
+    "updatedAt": "2025-02-14T09:15:00.000Z",
+    "labels": ["enhancement", "ui"],
+    "isNew": true,
+    "html_url": "https://github.com/straw-hat-pirates/navigation-room/pull/42",
+    "type": "open",
+    "reviewStatus": "pending",
+    "authorReviewStatus": "pending"
+  },
+  {
+    "id": "devil-fruit-engine/gum-gum-28456",
+    "url": "https://github.com/devil-fruit-engine/gum-gum/pull/28456",
+    "title": "Fix hydration mismatch when Luffy uses Gear 4",
+    "number": 28456,
+    "repoName": "devil-fruit-engine/gum-gum",
+    "author": {
+      "login": "monkey-d-luffy",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/67890?v=4"
+    },
+    "createdAt": "2025-02-10T08:00:00.000Z",
+    "updatedAt": "2025-02-13T16:45:00.000Z",
+    "labels": ["bug", "priority: high"],
+    "isNew": false,
+    "html_url": "https://github.com/devil-fruit-engine/gum-gum/pull/28456",
+    "type": "open",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
+  },
+  {
+    "id": "grand-line/vivre-cards-67890",
+    "url": "https://github.com/grand-line/vivre-cards/pull/67890",
+    "title": "Improve image optimization for Vivre Card thumbnails",
+    "number": 67890,
+    "repoName": "grand-line/vivre-cards",
+    "author": {
+      "login": "nico-robin"
+    },
+    "createdAt": "2025-02-14T11:20:00.000Z",
+    "updatedAt": "2025-02-14T11:20:00.000Z",
+    "labels": ["performance"],
+    "isNew": true,
+    "html_url": "https://github.com/grand-line/vivre-cards/pull/67890",
+    "type": "open",
+    "reviewStatus": "pending",
+    "authorReviewStatus": "pending"
+  },
+  {
+    "id": "poneglyph-decoder/ancient-text-234567",
+    "url": "https://github.com/poneglyph-decoder/ancient-text/pull/234567",
+    "title": "Add syntax highlighting for Poneglyph inscriptions",
+    "number": 234567,
+    "repoName": "poneglyph-decoder/ancient-text",
+    "author": {
+      "login": "nico-robin",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/22222?v=4"
+    },
+    "createdAt": "2025-02-13T09:00:00.000Z",
+    "updatedAt": "2025-02-14T12:00:00.000Z",
+    "labels": ["editor", "extension-api"],
+    "isNew": false,
+    "html_url": "https://github.com/poneglyph-decoder/ancient-text/pull/234567",
+    "type": "open",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "changes_requested"
+  },
+  {
+    "id": "roronoa-zoro/santoryu-layout-9876",
+    "url": "https://github.com/roronoa-zoro/santoryu-layout/pull/9876",
+    "title": "Support for container queries in Santoryu three-sword layout",
+    "number": 9876,
+    "repoName": "roronoa-zoro/santoryu-layout",
+    "author": {
+      "login": "roronoa-zoro",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/33333?v=4"
+    },
+    "createdAt": "2025-02-11T16:30:00.000Z",
+    "updatedAt": "2025-02-14T08:45:00.000Z",
+    "labels": ["feature", "css"],
+    "isNew": true,
+    "html_url": "https://github.com/roronoa-zoro/santoryu-layout/pull/9876",
+    "type": "open",
+    "reviewStatus": "pending",
+    "authorReviewStatus": "pending"
+  },
+  {
+    "id": "devil-fruit-engine/awakening-state-2345",
+    "url": "https://github.com/devil-fruit-engine/awakening-state/pull/2345",
+    "title": "Improve createSlice type inference for Devil Fruit awakening",
+    "number": 2345,
+    "repoName": "devil-fruit-engine/awakening-state",
+    "author": {
+      "login": "trafalgar-law"
+    },
+    "createdAt": "2025-02-09T11:15:00.000Z",
+    "updatedAt": "2025-02-13T14:20:00.000Z",
+    "labels": ["typescript", "enhancement"],
+    "isNew": false,
+    "html_url": "https://github.com/devil-fruit-engine/awakening-state/pull/2345",
+    "type": "open",
+    "reviewStatus": "pending",
+    "authorReviewStatus": "commented"
+  },
+  {
+    "id": "den-den-mushi/transceiver-5678",
+    "url": "https://github.com/den-den-mushi/transceiver/pull/5678",
+    "title": "Add prefetchQueryOnServer for Den Den Mushi long-range calls",
+    "number": 5678,
+    "repoName": "den-den-mushi/transceiver",
+    "author": {
+      "login": "usopp-sogeking",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/44444?v=4"
+    },
+    "createdAt": "2025-02-12T07:00:00.000Z",
+    "updatedAt": "2025-02-14T10:30:00.000Z",
+    "labels": ["ssr", "feature", "react"],
+    "isNew": true,
+    "html_url": "https://github.com/den-den-mushi/transceiver/pull/5678",
+    "type": "open",
+    "reviewStatus": "pending",
+    "authorReviewStatus": "pending"
+  },
+  {
+    "id": "chopper-doctor/rumble-ball-51234",
+    "url": "https://github.com/chopper-doctor/rumble-ball/pull/51234",
+    "title": "Optimize Buffer allocation for Chopper's form transformations",
+    "number": 51234,
+    "repoName": "chopper-doctor/rumble-ball",
+    "author": {
+      "login": "chopper-doctor",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/55555?v=4"
+    },
+    "createdAt": "2025-02-08T13:45:00.000Z",
+    "updatedAt": "2025-02-12T17:00:00.000Z",
+    "labels": ["performance", "buffer"],
+    "isNew": false,
+    "html_url": "https://github.com/chopper-doctor/rumble-ball/pull/51234",
+    "type": "open",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
+  }
+]

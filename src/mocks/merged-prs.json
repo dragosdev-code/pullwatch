@@ -1,0 +1,153 @@
+[
+  {
+    "id": "going-merry/ship-manual-38",
+    "url": "https://github.com/going-merry/ship-manual/pull/38",
+    "title": "Update README with new installation steps for Going Merry",
+    "number": 38,
+    "repoName": "going-merry/ship-manual",
+    "author": {
+      "login": "franky-shogun",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/12345?v=4"
+    },
+    "createdAt": "2025-02-08T10:00:00.000Z",
+    "updatedAt": "2025-02-11T14:30:00.000Z",
+    "labels": ["documentation"],
+    "isNew": false,
+    "html_url": "https://github.com/going-merry/ship-manual/pull/38",
+    "type": "merged",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
+  },
+  {
+    "id": "devil-fruit-engine/gum-gum-28400",
+    "url": "https://github.com/devil-fruit-engine/gum-gum/pull/28400",
+    "title": "Add useTransition hook for Gear 2/3/4 mode switching",
+    "number": 28400,
+    "repoName": "devil-fruit-engine/gum-gum",
+    "author": {
+      "login": "monkey-d-luffy",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/67890?v=4"
+    },
+    "createdAt": "2025-02-05T09:15:00.000Z",
+    "updatedAt": "2025-02-12T11:00:00.000Z",
+    "labels": ["feature", "react-19"],
+    "isNew": false,
+    "html_url": "https://github.com/devil-fruit-engine/gum-gum/pull/28400",
+    "type": "merged",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
+  },
+  {
+    "id": "thousand-sunny/new-world-67750",
+    "url": "https://github.com/thousand-sunny/new-world/pull/67750",
+    "title": "Fix middleware edge case when Thousand Sunny enters the New World",
+    "number": 67750,
+    "repoName": "thousand-sunny/new-world",
+    "author": {
+      "login": "jinbe-first-son",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/11111?v=4"
+    },
+    "createdAt": "2025-02-01T16:45:00.000Z",
+    "updatedAt": "2025-02-10T09:30:00.000Z",
+    "labels": ["bug", "middleware"],
+    "isNew": false,
+    "html_url": "https://github.com/thousand-sunny/new-world/pull/67750",
+    "type": "merged",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
+  },
+  {
+    "id": "brook-soul-king/soul-parlor-234500",
+    "url": "https://github.com/brook-soul-king/soul-parlor/pull/234500",
+    "title": "Fix extension host memory leak when Brook eats too much soul",
+    "number": 234500,
+    "repoName": "brook-soul-king/soul-parlor",
+    "author": {
+      "login": "brook-soul-king",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/22222?v=4"
+    },
+    "createdAt": "2025-02-06T14:00:00.000Z",
+    "updatedAt": "2025-02-11T09:15:00.000Z",
+    "labels": ["bug", "memory"],
+    "isNew": false,
+    "html_url": "https://github.com/brook-soul-king/soul-parlor/pull/234500",
+    "type": "merged",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
+  },
+  {
+    "id": "roronoa-zoro/santoryu-layout-9800",
+    "url": "https://github.com/roronoa-zoro/santoryu-layout/pull/9800",
+    "title": "Add @layer support for Santoryu style stacking",
+    "number": 9800,
+    "repoName": "roronoa-zoro/santoryu-layout",
+    "author": {
+      "login": "roronoa-zoro",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/33333?v=4"
+    },
+    "createdAt": "2025-02-04T11:30:00.000Z",
+    "updatedAt": "2025-02-09T16:45:00.000Z",
+    "labels": ["feature", "css"],
+    "isNew": false,
+    "html_url": "https://github.com/roronoa-zoro/santoryu-layout/pull/9800",
+    "type": "merged",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
+  },
+  {
+    "id": "going-merry/legacy-ship-2300",
+    "url": "https://github.com/going-merry/legacy-ship/pull/2300",
+    "title": "Deprecate createAsyncThunk legacy options (retiring old ship models)",
+    "number": 2300,
+    "repoName": "going-merry/legacy-ship",
+    "author": {
+      "login": "franky-shogun"
+    },
+    "createdAt": "2025-02-03T08:20:00.000Z",
+    "updatedAt": "2025-02-08T14:00:00.000Z",
+    "labels": ["breaking-change", "createAsyncThunk"],
+    "isNew": false,
+    "html_url": "https://github.com/going-merry/legacy-ship/pull/2300",
+    "type": "merged",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
+  },
+  {
+    "id": "eternal-pose/waypoint-5600",
+    "url": "https://github.com/eternal-pose/waypoint/pull/5600",
+    "title": "Stabilize queryClient.ensureQueryData for Eternal Pose waypoints",
+    "number": 5600,
+    "repoName": "eternal-pose/waypoint",
+    "author": {
+      "login": "nami-swan",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/44444?v=4"
+    },
+    "createdAt": "2025-02-02T10:00:00.000Z",
+    "updatedAt": "2025-02-07T11:30:00.000Z",
+    "labels": ["feature", "stable-api"],
+    "isNew": false,
+    "html_url": "https://github.com/eternal-pose/waypoint/pull/5600",
+    "type": "merged",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
+  },
+  {
+    "id": "straw-hat-pirates/fleet-51100",
+    "url": "https://github.com/straw-hat-pirates/fleet/pull/51100",
+    "title": "Upgrade V8 to 12.4 (Grand Fleet engine optimization)",
+    "number": 51100,
+    "repoName": "straw-hat-pirates/fleet",
+    "author": {
+      "login": "monkey-d-luffy",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/55555?v=4"
+    },
+    "createdAt": "2025-01-30T09:00:00.000Z",
+    "updatedAt": "2025-02-06T15:20:00.000Z",
+    "labels": ["deps", "v8"],
+    "isNew": false,
+    "html_url": "https://github.com/straw-hat-pirates/fleet/pull/51100",
+    "type": "merged",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
+  }
+]
