@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useRef, useLayoutEffect } from 'react';
+import { useSpring, animated } from '@react-spring/web';
 import { useTabs, type Tab, type UseTabsOptions } from './hook/use-tabs';
 import { TabsContext } from './tab-panel';
+import { AnimatedTabButton } from './animated-tab-button';
 
 interface TabsProps extends Omit<UseTabsOptions, 'tabs'> {
   tabs: Tab[];
   children: React.ReactNode;
   className?: string;
 }
+
+const INDICATOR_CONFIG = { tension: 300, friction: 30 };
 
 export const Tabs: React.FC<TabsProps> = ({
   tabs,
@@ -16,7 +20,29 @@ export const Tabs: React.FC<TabsProps> = ({
   onChange,
 }) => {
   const tabsState = useTabs({ tabs, defaultTab, onChange });
-  const { setActiveTab, isActive } = tabsState;
+  const { setActiveTab, isActive, activeTab } = tabsState;
+
+  const tablistRef = useRef<HTMLDivElement>(null);
+  const tabRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+  const [indicatorSpring, indicatorApi] = useSpring(() => ({
+    left: 0,
+    width: 0,
+    config: INDICATOR_CONFIG,
+  }));
+
+  useLayoutEffect(() => {
+    const tabEl = tabRefsMap.current.get(activeTab);
+    const tablistEl = tablistRef.current;
+    if (!tabEl || !tablistEl) return;
+
+    const tabRect = tabEl.getBoundingClientRect();
+    const tablistRect = tablistEl.getBoundingClientRect();
+    const left = tabRect.left - tablistRect.left;
+    const width = tabRect.width;
+
+    indicatorApi.start({ left, width, config: INDICATOR_CONFIG });
+  }, [activeTab, tabs, indicatorApi]);
 
   const handleTabClick = (tabId: string, disabled?: boolean) => {
     if (!disabled) {
@@ -24,40 +50,44 @@ export const Tabs: React.FC<TabsProps> = ({
     }
   };
 
+  const setTabRef = (id: string) => (el: HTMLButtonElement | null) => {
+    if (el) {
+      tabRefsMap.current.set(id, el);
+    } else {
+      tabRefsMap.current.delete(id);
+    }
+  };
+
   return (
     <TabsContext.Provider value={{ activeTab: tabsState.activeTab }}>
       <div className={`w-full overflow-hidden ${className}`}>
         {/* Tab Navigation */}
-        <div role="tablist" className="tabs tabs-border w-full">
+        <div
+          ref={tablistRef}
+          role="tablist"
+          className="tabs w-full relative border-b border-gray-200 justify-between flex"
+        >
           {tabs.map((tab) => (
-            <button
+            <AnimatedTabButton
               key={tab.id}
-              role="tab"
-              className={`tab flex-1 text-xs font-medium transition-all duration-200 ${
-                isActive(tab.id)
-                  ? 'tab-active text-gray-900! hover:text-gray-900!'
-                  : 'text-gray-500! hover:text-gray-900!'
-              } ${tab.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              tab={tab}
+              isActive={isActive(tab.id)}
               onClick={() => handleTabClick(tab.id, tab.disabled)}
               disabled={tab.disabled}
-              aria-selected={isActive(tab.id)}
-              aria-controls={`tabpanel-${tab.id}`}
-              id={`tab-${tab.id}`}
-            >
-              <span className="flex items-center gap-1.5">
-                {tab.label}
-                {tab.count !== undefined && (
-                  <span
-                    className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full min-w-[18px] text-center ${
-                      isActive(tab.id) ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                )}
-              </span>
-            </button>
+              buttonRef={setTabRef(tab.id)}
+            />
           ))}
+          <animated.div
+            style={{
+              ...indicatorSpring,
+              position: 'absolute',
+              bottom: -1,
+              height: 4,
+              backgroundColor: 'oklch(62.3% 0.214 259.815)',
+              borderRadius: 9999,
+            }}
+            aria-hidden
+          />
         </div>
 
         {/* Tab Content */}

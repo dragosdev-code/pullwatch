@@ -64,7 +64,7 @@ export const Header = ({ prCount }: HeaderProps) => {
           </button>
           {!isDebugPending && ' Live Review'}
         </h1>
-        <span className="ml-2 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded-full">
+        <span className="ml-2 px-2 py-1 bg-blue-500 text-white text-xs font-bold rounded-full">
           {prCount}
         </span>
       </div>
