@@ -7,6 +7,7 @@ import { useAuthoredPRs } from '../hooks/use-authored-prs';
 import { useRefreshMergedPRs } from '../hooks/use-refresh-merged-prs';
 import { useRefreshAssignedPRs } from '../hooks/use-refresh-assigned-prs';
 import { useRefreshAuthoredPRs } from '../hooks/use-refresh-authored-prs';
+import { CountBadge } from './ui/count-badge';
 import { useEffect } from 'react';
 
 interface HeaderProps {
@@ -64,9 +65,7 @@ export const Header = ({ prCount }: HeaderProps) => {
           </button>
           {!isDebugPending && ' Live Review'}
         </h1>
-        <span className="ml-2 px-2 py-1 bg-blue-500 text-white text-xs font-bold rounded-full">
-          {prCount}
-        </span>
+        <CountBadge value={prCount} size="md" tone="primary" className="ml-2" />
       </div>
 
       <RefreshButton
