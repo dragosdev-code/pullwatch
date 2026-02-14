@@ -2,9 +2,38 @@ import { useState, useCallback } from 'react';
 import { useSpring, animated } from '@react-spring/web';
 import { SettingsPage } from './settings-page';
 
-export const SettingsOverlay = () => {
+type SettingsPosition = 'left' | 'center' | 'right';
+
+const positionConfig = {
+  left: {
+    clipPathOrigin: '2px calc(100% - 2px)',
+    iconClassName: 'absolute bottom-1.5 left-1.5 text-indigo-400',
+    idleTransform: 'translate(-25%, 25%)',
+    hoverTransform: 'translate(-7%, 7%)',
+  },
+  center: {
+    clipPathOrigin: '50% calc(100% - 2px)',
+    iconClassName: 'absolute bottom-1.5 left-1/2 text-indigo-400',
+    idleTransform: 'translate(-50%, 25%)',
+    hoverTransform: 'translate(-50%, 7%)',
+  },
+  right: {
+    clipPathOrigin: 'calc(100% - 2px) calc(100% - 2px)',
+    iconClassName: 'absolute bottom-1.5 right-1.5 text-indigo-400',
+    idleTransform: 'translate(25%, 25%)',
+    hoverTransform: 'translate(7%, 7%)',
+  },
+} as const;
+
+interface SettingsOverlayProps {
+  position?: SettingsPosition;
+}
+
+export const SettingsOverlay = ({ position = 'left' }: SettingsOverlayProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+
+  const config = positionConfig[position];
 
   const handleOpen = useCallback(() => {
     setIsOpen(true);
@@ -15,7 +44,7 @@ export const SettingsOverlay = () => {
     setIsOpen(false);
   }, []);
 
-  // Circle radius: controls the clip-path reveal from bottom-right corner
+  // Circle radius: controls the clip-path reveal from the chosen position
   const { radius } = useSpring({
     radius: isOpen ? 600 : isHovered ? 40 : 30,
     config: isOpen
@@ -34,7 +63,7 @@ export const SettingsOverlay = () => {
     <animated.div
       className="absolute inset-0 z-50 bg-indigo-50"
       style={{
-        clipPath: radius.to((r: number) => `circle(${r}px at calc(100% - 2px) calc(100% - 2px))`),
+        clipPath: radius.to((r: number) => `circle(${r}px at ${config.clipPathOrigin})`),
         cursor: isOpen ? 'default' : 'pointer',
       }}
       onMouseEnter={() => {
@@ -63,9 +92,9 @@ export const SettingsOverlay = () => {
 
       {/* Gear icon — half-visible in idle, fully visible on hover, hidden when open */}
       <div
-        className="absolute bottom-1.5 right-1.5 text-indigo-400"
+        className={config.iconClassName}
         style={{
-          transform: isHovered && !isOpen ? 'translate(7%, 7%)' : 'translate(25%, 25%)',
+          transform: isHovered && !isOpen ? config.hoverTransform : config.idleTransform,
           opacity: isOpen ? 0 : 1,
           // Opening: hide gear immediately. Closing: reveal gear with delay
           transition: isOpen
