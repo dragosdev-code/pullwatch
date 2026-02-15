@@ -1,7 +1,8 @@
-import React, { useRef, useLayoutEffect } from 'react';
+import React, { useRef, useState, useLayoutEffect } from 'react';
 import { useSpring, animated } from '@react-spring/web';
 import { useTabs, type Tab, type UseTabsOptions } from './hook/use-tabs';
-import { TabsContext } from './tab-panel';
+import { TabsContext } from './tabs-context';
+import { TAB_SPRING_CONFIG } from './tabs-config';
 import { AnimatedTabButton } from './animated-tab-button';
 
 interface TabsProps extends Omit<UseTabsOptions, 'tabs'> {
@@ -9,8 +10,6 @@ interface TabsProps extends Omit<UseTabsOptions, 'tabs'> {
   children: React.ReactNode;
   className?: string;
 }
-
-const INDICATOR_CONFIG = { tension: 300, friction: 30 };
 
 export const Tabs: React.FC<TabsProps> = ({
   tabs,
@@ -22,13 +21,14 @@ export const Tabs: React.FC<TabsProps> = ({
   const tabsState = useTabs({ tabs, defaultTab, onChange });
   const { setActiveTab, isActive, activeTab } = tabsState;
 
+  const [direction, setDirection] = useState<1 | -1>(1);
   const tablistRef = useRef<HTMLDivElement>(null);
   const tabRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const [indicatorSpring, indicatorApi] = useSpring(() => ({
     left: 0,
     width: 0,
-    config: INDICATOR_CONFIG,
+    config: TAB_SPRING_CONFIG,
   }));
 
   useLayoutEffect(() => {
@@ -41,11 +41,16 @@ export const Tabs: React.FC<TabsProps> = ({
     const left = tabRect.left - tablistRect.left;
     const width = tabRect.width;
 
-    indicatorApi.start({ left, width, config: INDICATOR_CONFIG });
+    indicatorApi.start({ left, width, config: TAB_SPRING_CONFIG });
   }, [activeTab, tabs, indicatorApi]);
 
   const handleTabClick = (tabId: string, disabled?: boolean) => {
     if (!disabled) {
+      const currentIndex = tabs.findIndex((t) => t.id === activeTab);
+      const targetIndex = tabs.findIndex((t) => t.id === tabId);
+      if (targetIndex !== currentIndex) {
+        setDirection(targetIndex > currentIndex ? 1 : -1);
+      }
       setActiveTab(tabId);
     }
   };
@@ -59,7 +64,7 @@ export const Tabs: React.FC<TabsProps> = ({
   };
 
   return (
-    <TabsContext.Provider value={{ activeTab: tabsState.activeTab }}>
+    <TabsContext.Provider value={{ activeTab: tabsState.activeTab, direction }}>
       <div className={`w-full overflow-hidden ${className}`}>
         {/* Tab Navigation */}
         <div
@@ -91,7 +96,9 @@ export const Tabs: React.FC<TabsProps> = ({
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+        <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">
+          {children}
+        </div>
       </div>
     </TabsContext.Provider>
   );

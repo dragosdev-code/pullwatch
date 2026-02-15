@@ -1,11 +1,7 @@
-import React, { useContext, createContext } from 'react';
-
-// Context to share the active tab between Tabs and TabPanel
-interface TabsContextValue {
-  activeTab: string;
-}
-
-export const TabsContext = createContext<TabsContextValue | null>(null);
+import React, { useContext } from 'react';
+import { useTransition, animated } from '@react-spring/web';
+import { TabsContext } from './tabs-context';
+import { TAB_SPRING_CONFIG } from './tabs-config';
 
 interface TabPanelProps {
   tabId: string;
@@ -15,23 +11,36 @@ interface TabPanelProps {
 
 export const TabPanel: React.FC<TabPanelProps> = ({ tabId, children, className = '' }) => {
   const context = useContext(TabsContext);
-
-  // If no context, assume we're checking against a direct prop or fallback
   const isActive = context ? context.activeTab === tabId : false;
+  const direction = context ? context.direction : 1;
 
-  if (!isActive) {
-    return null;
-  }
+  const transitions = useTransition(isActive, {
+    initial: { opacity: 1, transform: 'translateX(0px)' },
+    from: { opacity: 0.5, transform: `translateX(${-direction * 100}px)` },
+    enter: { opacity: 1, transform: 'translateX(0px)' },
+    leave: { opacity: 0.5, transform: `translateX(${direction * 100}px)` },
+    config: TAB_SPRING_CONFIG,
+    exitBeforeEnter: false,
+  });
 
-  return (
-    <div
-      role="tabpanel"
-      id={`tabpanel-${tabId}`}
-      aria-labelledby={`tab-${tabId}`}
-      className={`outline-none flex flex-col ${className}`}
-      tabIndex={0}
-    >
-      {children}
-    </div>
+  return transitions((style, show) =>
+    show ? (
+      <animated.div
+        role="tabpanel"
+        id={`tabpanel-${tabId}`}
+        aria-labelledby={`tab-${tabId}`}
+        className={`outline-none flex flex-col w-full ${className}`}
+        tabIndex={0}
+        style={{
+          ...style,
+          position: isActive ? 'relative' : 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+        }}
+      >
+        {children}
+      </animated.div>
+    ) : null
   );
 };

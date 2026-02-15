@@ -130,7 +130,7 @@ function App() {
         </TabPanel>
       </Tabs>
 
-      <SettingsOverlay position="center" />
+      <SettingsOverlay position="right" />
       {/* <Footer /> */}
     </div>
   );
