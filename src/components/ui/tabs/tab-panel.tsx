@@ -16,9 +16,9 @@ export const TabPanel: React.FC<TabPanelProps> = ({ tabId, children, className =
 
   const transitions = useTransition(isActive, {
     initial: { opacity: 1, transform: 'translateX(0px)' },
-    from: { opacity: 0.5, transform: `translateX(${-direction * 100}px)` },
+    from: { opacity: 0, transform: `translateX(${-direction * 100}px)` },
     enter: { opacity: 1, transform: 'translateX(0px)' },
-    leave: { opacity: 0.5, transform: `translateX(${direction * 100}px)` },
+    leave: { opacity: 0, transform: `translateX(${direction * 100}px)` },
     config: TAB_SPRING_CONFIG,
     exitBeforeEnter: false,
   });
@@ -37,6 +37,9 @@ export const TabPanel: React.FC<TabPanelProps> = ({ tabId, children, className =
           top: 0,
           left: 0,
           right: 0,
+          height: isActive ? 'auto' : '100%',
+          pointerEvents: isActive ? 'auto' : 'none',
+          visibility: style.opacity.to((o) => (o < 0.01 ? 'hidden' : 'visible')),
         }}
       >
         {children}
