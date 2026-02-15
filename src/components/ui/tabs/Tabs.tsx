@@ -1,8 +1,6 @@
 import React, { useRef, useState, useLayoutEffect } from 'react';
-import { useSpring, animated } from '@react-spring/web';
 import { useTabs, type Tab, type UseTabsOptions } from './hook/use-tabs';
 import { TabsContext } from './tabs-context';
-import { TAB_SPRING_CONFIG } from './tabs-config';
 import { AnimatedTabButton } from './animated-tab-button';
 
 interface TabsProps extends Omit<UseTabsOptions, 'tabs'> {
@@ -10,6 +8,9 @@ interface TabsProps extends Omit<UseTabsOptions, 'tabs'> {
   children: React.ReactNode;
   className?: string;
 }
+
+const INDICATOR_TRANSITION =
+  'left 300ms cubic-bezier(0.22, 0.61, 0.36, 1), width 300ms cubic-bezier(0.22, 0.61, 0.36, 1)';
 
 export const Tabs: React.FC<TabsProps> = ({
   tabs,
@@ -24,25 +25,41 @@ export const Tabs: React.FC<TabsProps> = ({
   const [direction, setDirection] = useState<1 | -1>(1);
   const tablistRef = useRef<HTMLDivElement>(null);
   const tabRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const indicatorRef = useRef<HTMLDivElement>(null);
+  const hasInitialized = useRef(false);
 
-  const [indicatorSpring, indicatorApi] = useSpring(() => ({
-    left: 0,
-    width: 0,
-    config: TAB_SPRING_CONFIG,
-  }));
+  // Reset on unmount so StrictMode re-mount snaps instead of animating
+  useLayoutEffect(() => {
+    return () => {
+      hasInitialized.current = false;
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const tabEl = tabRefsMap.current.get(activeTab);
     const tablistEl = tablistRef.current;
-    if (!tabEl || !tablistEl) return;
+    const indicatorEl = indicatorRef.current;
+    if (!tabEl || !tablistEl || !indicatorEl) return;
 
-    const tabRect = tabEl.getBoundingClientRect();
-    const tablistRect = tablistEl.getBoundingClientRect();
-    const left = tabRect.left - tablistRect.left;
-    const width = tabRect.width;
+    const left = tabEl.offsetLeft;
+    const width = tabEl.offsetWidth;
 
-    indicatorApi.start({ left, width, config: TAB_SPRING_CONFIG });
-  }, [activeTab, tabs, indicatorApi]);
+    if (width === 0) return;
+
+    if (!hasInitialized.current) {
+      // First paint: set position synchronously without transition
+      indicatorEl.style.transition = 'none';
+      indicatorEl.style.left = `${left}px`;
+      indicatorEl.style.width = `${width}px`;
+      // Force reflow so the browser commits the no-transition styles
+      void indicatorEl.offsetWidth;
+      indicatorEl.style.transition = INDICATOR_TRANSITION;
+      hasInitialized.current = true;
+    } else {
+      indicatorEl.style.left = `${left}px`;
+      indicatorEl.style.width = `${width}px`;
+    }
+  }, [activeTab, tabs]);
 
   const handleTabClick = (tabId: string, disabled?: boolean) => {
     if (!disabled) {
@@ -82,14 +99,17 @@ export const Tabs: React.FC<TabsProps> = ({
               buttonRef={setTabRef(tab.id)}
             />
           ))}
-          <animated.div
+          <div
+            ref={indicatorRef}
             style={{
-              ...indicatorSpring,
               position: 'absolute',
               bottom: -1,
               height: 4,
+              left: 0,
+              width: 0,
               backgroundColor: 'oklch(62.3% 0.214 259.815)',
               borderRadius: 9999,
+              transition: INDICATOR_TRANSITION,
             }}
             aria-hidden
           />
