@@ -107,22 +107,9 @@ export class BadgeService implements IBadgeService {
   }
 
   /**
-   * Clears the badge text.
-   */
-  async clearBadge(): Promise<void> {
-    try {
-      await chrome.action.setBadgeText({ text: '' });
-      this.debugService.log('[BadgeService] Badge text cleared');
-    } catch (error) {
-      this.debugService.error('[BadgeService] Error clearing badge:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Gets the current badge text.
    */
-  async getBadgeText(): Promise<string> {
+  private async getBadgeText(): Promise<string> {
     try {
       const result = await chrome.action.getBadgeText({});
       this.debugService.log('[BadgeService] Current badge text:', result);
@@ -130,19 +117,6 @@ export class BadgeService implements IBadgeService {
     } catch (error) {
       this.debugService.error('[BadgeService] Error getting badge text:', error);
       return '';
-    }
-  }
-
-  /**
-   * Sets the badge background color.
-   */
-  async setBadgeColor(color: string): Promise<void> {
-    try {
-      await chrome.action.setBadgeBackgroundColor({ color });
-      this.debugService.log(`[BadgeService] Badge color set to: ${color}`);
-    } catch (error) {
-      this.debugService.error('[BadgeService] Error setting badge color:', error);
-      throw error;
     }
   }
 

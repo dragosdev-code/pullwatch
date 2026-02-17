@@ -54,25 +54,6 @@ export class AlarmService implements IAlarmService {
   }
 
   /**
-   * Handles alarm events when they trigger.
-   */
-  async handleAlarm(alarm: chrome.alarms.Alarm): Promise<void> {
-    try {
-      this.debugService.log('[AlarmService] Handling alarm:', alarm.name);
-
-      if (alarm.name === EVENT_FETCH_PRS) {
-        this.debugService.log('[AlarmService] Fetch alarm triggered');
-        // The actual PR fetching will be handled by PRService
-        // This service just manages the alarm itself
-      } else {
-        this.debugService.warn('[AlarmService] Unknown alarm triggered:', alarm.name);
-      }
-    } catch (error) {
-      this.debugService.error('[AlarmService] Error handling alarm:', error);
-    }
-  }
-
-  /**
    * Creates a new alarm with the given name and configuration.
    */
   async createAlarm(name: string, alarmInfo: chrome.alarms.AlarmCreateInfo): Promise<void> {
@@ -110,42 +91,9 @@ export class AlarmService implements IAlarmService {
   }
 
   /**
-   * Clears an alarm by name.
-   */
-  async clearAlarm(name: string): Promise<boolean> {
-    try {
-      return new Promise((resolve) => {
-        chrome.alarms.clear(name, (wasCleared) => {
-          if (chrome.runtime.lastError) {
-            this.debugService.error(
-              `[AlarmService] Error clearing alarm '${name}':`,
-              chrome.runtime.lastError
-            );
-            resolve(false);
-            return;
-          }
-
-          if (wasCleared) {
-            this.debugService.log(`[AlarmService] Alarm '${name}' cleared`);
-          } else {
-            this.debugService.warn(
-              `[AlarmService] Alarm '${name}' was not found or already cleared`
-            );
-          }
-
-          resolve(wasCleared || false);
-        });
-      });
-    } catch (error) {
-      this.debugService.error(`[AlarmService] Error clearing alarm '${name}':`, error);
-      return false;
-    }
-  }
-
-  /**
    * Gets all active alarms.
    */
-  async getAllAlarms(): Promise<chrome.alarms.Alarm[]> {
+  private async getAllAlarms(): Promise<chrome.alarms.Alarm[]> {
     try {
       return new Promise((resolve) => {
         chrome.alarms.getAll((alarms) => {

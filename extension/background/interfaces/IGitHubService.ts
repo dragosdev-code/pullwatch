@@ -25,36 +25,6 @@ export interface IGitHubService {
   fetchAuthoredPRs(): Promise<PullRequest[]>;
 
   /**
-   * Fetches pull requests by query.
-   */
-  fetchPRsByQuery(query: string): Promise<PullRequest[]>;
-
-  /**
-   * Gets user information from GitHub.
-   */
-  getUserInfo(): Promise<{ login: string; name: string; avatar_url: string } | null>;
-
-  /**
-   * Validates the GitHub token.
-   */
-  validateToken(): Promise<boolean>;
-
-  /**
-   * Sets the GitHub token.
-   */
-  setToken(token: string): Promise<void>;
-
-  /**
-   * Gets the current GitHub token.
-   */
-  getToken(): Promise<string | null>;
-
-  /**
-   * Clears the GitHub token.
-   */
-  clearToken(): Promise<void>;
-
-  /**
    * Initializes the GitHub service.
    */
   initialize(): Promise<void>;

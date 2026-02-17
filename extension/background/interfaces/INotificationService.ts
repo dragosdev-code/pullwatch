@@ -35,16 +35,6 @@ export interface INotificationService {
   getAllNotifications(): Promise<string[]>;
 
   /**
-   * Checks if notifications are enabled.
-   */
-  areNotificationsEnabled(): Promise<boolean>;
-
-  /**
-   * Enables or disables notifications.
-   */
-  setNotificationsEnabled(enabled: boolean): Promise<void>;
-
-  /**
    * Initializes the notification service.
    */
   initialize(): Promise<void>;

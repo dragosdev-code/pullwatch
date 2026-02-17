@@ -78,11 +78,6 @@ export interface IStorageService {
   remove(key: string): Promise<void>;
 
   /**
-   * Clears all storage data.
-   */
-  clear(): Promise<void>;
-
-  /**
    * Initializes the storage service.
    */
   initialize(): Promise<void>;

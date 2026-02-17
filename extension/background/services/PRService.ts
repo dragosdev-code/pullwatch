@@ -40,14 +40,17 @@ export class PRService implements IPRService {
   }
 
   async fetchAndUpdateAssignedPRs(forceRefresh = false): Promise<PullRequest[]> {
-    this.debugService.log(`[PRService] Fetching and updating assigned PRs (force: ${forceRefresh})`);
+    this.debugService.log(
+      `[PRService] Fetching and updating assigned PRs (force: ${forceRefresh})`
+    );
 
     try {
       // Get current stored PRs for comparison and cache check
       const storedData = await this.storageService.getStoredAssignedPRs();
 
       // Check cache before fetching from GitHub
-      const isCacheValid = storedData && storedData.timestamp && (Date.now() - storedData.timestamp < CACHE_TTL_MS);
+      const isCacheValid =
+        storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
 
       if (isCacheValid && !forceRefresh) {
         this.debugService.log('[PRService] Returning cached Assigned PRs');
@@ -83,18 +86,18 @@ export class PRService implements IPRService {
       this.debugService.log(`[PRService] New pending PRs detected: ${newPRs.length}`);
 
       // Deduplicate: exclude reviewed PRs that are already in the pending list
-      const pendingIds = new Set(
-        pendingPRsWithStatus.map((pr) => pr.id || pr.url)
-      );
+      const pendingIds = new Set(pendingPRsWithStatus.map((pr) => pr.id || pr.url));
 
       const freshReviewedPRs = freshReviewedPRsRaw
         .filter((pr) => !pendingIds.has(pr.id || pr.url))
         .filter((pr) => pr.type !== 'merged')
-        .map((pr): PullRequest => ({
-          ...pr,
-          reviewStatus: 'reviewed' as const,
-          isNew: false,
-        }));
+        .map(
+          (pr): PullRequest => ({
+            ...pr,
+            reviewStatus: 'reviewed' as const,
+            isNew: false,
+          })
+        );
 
       // Only use fresh API data — no merging with stale stored reviewed PRs
       const allPRsWithStatus = [...pendingPRsWithStatus, ...freshReviewedPRs];
@@ -201,29 +204,24 @@ export class PRService implements IPRService {
 
   async getStoredAuthoredPRs(): Promise<PullRequest[]> {
     const stored = await this.storageService.getStoredAuthoredPRs();
-    this.debugService.log(
-      `[PRService] Retrieved stored authored PRs: ${stored?.prs?.length ?? 0}`
-    );
+    this.debugService.log(`[PRService] Retrieved stored authored PRs: ${stored?.prs?.length ?? 0}`);
     return stored?.prs || [];
   }
 
   async getStoredMergedPRs(): Promise<PullRequest[]> {
     const stored = await this.storageService.getStoredMergedPRs();
-    this.debugService.log(
-      `[PRService] Retrieved stored merged PRs: ${stored?.prs?.length ?? 0}`
-    );
+    this.debugService.log(`[PRService] Retrieved stored merged PRs: ${stored?.prs?.length ?? 0}`);
     return stored?.prs || [];
   }
 
   async updateAuthoredPRs(forceRefresh = false): Promise<PullRequest[]> {
-    this.debugService.log(
-      `[PRService] Updating authored PRs (force: ${forceRefresh})`
-    );
+    this.debugService.log(`[PRService] Updating authored PRs (force: ${forceRefresh})`);
 
     try {
       // Check cache before fetching from GitHub
       const stored = await this.storageService.getStoredAuthoredPRs();
-      const isCacheValid = stored && stored.timestamp && (Date.now() - stored.timestamp < CACHE_TTL_MS);
+      const isCacheValid =
+        stored && stored.timestamp && Date.now() - stored.timestamp < CACHE_TTL_MS;
 
       if (isCacheValid && !forceRefresh) {
         this.debugService.log('[PRService] Returning cached Authored PRs');
@@ -248,14 +246,13 @@ export class PRService implements IPRService {
   }
 
   async updateMergedPRs(forceRefresh = false): Promise<PullRequest[]> {
-    this.debugService.log(
-      `[PRService] Updating merged PRs (force: ${forceRefresh})`
-    );
+    this.debugService.log(`[PRService] Updating merged PRs (force: ${forceRefresh})`);
 
     try {
       // Check cache before fetching from GitHub
       const stored = await this.storageService.getStoredMergedPRs();
-      const isCacheValid = stored && stored.timestamp && (Date.now() - stored.timestamp < CACHE_TTL_MS);
+      const isCacheValid =
+        stored && stored.timestamp && Date.now() - stored.timestamp < CACHE_TTL_MS;
 
       if (isCacheValid && !forceRefresh) {
         this.debugService.log('[PRService] Returning cached Merged PRs');
@@ -263,80 +260,16 @@ export class PRService implements IPRService {
       }
 
       const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
-      this.debugService.log(
-        `[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`
-      );
+      this.debugService.log(`[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`);
 
       await this.storageService.setStoredMergedPRs(freshMergedPRs);
 
-      this.debugService.log(
-        `[PRService] Successfully updated ${freshMergedPRs.length} merged PRs`
-      );
+      this.debugService.log(`[PRService] Successfully updated ${freshMergedPRs.length} merged PRs`);
       return freshMergedPRs;
     } catch (error) {
       this.debugService.error('[PRService] Error updating merged PRs:', error);
       throw error;
     }
-  }
-
-  async markPRsAsRead(prIds: string[]): Promise<void> {
-    try {
-      this.debugService.log(`[PRService] Marking ${prIds.length} PRs as read:`, prIds);
-
-      // Get current PRs
-      const currentPRs = await this.getStoredAssignedPRs();
-
-      // If no specific IDs provided, mark all as read
-      if (prIds.length === 0) {
-        const updatedPRs = currentPRs.map((pr) => ({ ...pr, isNew: false }));
-        await this.storageService.setStoredAssignedPRs(updatedPRs);
-        this.debugService.log(`[PRService] Marked all ${updatedPRs.length} PRs as read`);
-        return;
-      }
-
-      // Mark only specified PRs as read
-      const prIdSet = new Set(prIds);
-      const updatedPRs = currentPRs.map((pr) => {
-        if (prIdSet.has(pr.id)) {
-          return { ...pr, isNew: false };
-        }
-        return pr;
-      });
-
-      // Update storage
-      await this.storageService.setStoredAssignedPRs(updatedPRs);
-
-      this.debugService.log(`[PRService] Marked ${prIds.length} specific PRs as read`);
-    } catch (error) {
-      this.debugService.error('[PRService] Error marking PRs as read:', error);
-      throw error;
-    }
-  }
-
-  async getNewPRs(): Promise<PullRequest[]> {
-    const prs = await this.getStoredAssignedPRs();
-    return prs.filter((pr) => pr.isNew);
-  }
-
-  async refreshPRs(): Promise<PullRequest[]> {
-    return await this.fetchAndUpdateAssignedPRs(true);
-  }
-
-  async getPRStats(): Promise<{ total: number; new: number; lastUpdate: number | null }> {
-    const prs = await this.getStoredAssignedPRs();
-    const newPRs = prs.filter((pr) => pr.isNew);
-    const lastUpdate = await this.storageService.getLastFetchTime();
-
-    return {
-      total: prs.length,
-      new: newPRs.length,
-      lastUpdate,
-    };
-  }
-
-  async filterPRs(): Promise<PullRequest[]> {
-    // Stub implementation - could be extended for filtering by repo, author, etc.
-    return await this.getStoredAssignedPRs();
   }
 
   async dispose(): Promise<void> {

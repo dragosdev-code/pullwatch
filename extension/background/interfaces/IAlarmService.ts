@@ -8,11 +8,6 @@ export interface IAlarmService {
   setupFetchAlarm(): Promise<void>;
 
   /**
-   * Handles alarm events when they trigger.
-   */
-  handleAlarm(alarm: chrome.alarms.Alarm): Promise<void>;
-
-  /**
    * Creates a new alarm with the given name and configuration.
    */
   createAlarm(name: string, alarmInfo: chrome.alarms.AlarmCreateInfo): Promise<void>;
@@ -21,16 +16,6 @@ export interface IAlarmService {
    * Gets an existing alarm by name.
    */
   getAlarm(name: string): Promise<chrome.alarms.Alarm | undefined>;
-
-  /**
-   * Clears an alarm by name.
-   */
-  clearAlarm(name: string): Promise<boolean>;
-
-  /**
-   * Gets all active alarms.
-   */
-  getAllAlarms(): Promise<chrome.alarms.Alarm[]>;
 
   /**
    * Initializes the alarm service.

@@ -120,7 +120,11 @@ export class StorageService implements IStorageService {
           prs: storedPRs.prs || [],
           timestamp: storedPRs.lastUpdated ? new Date(storedPRs.lastUpdated).getTime() : Date.now(),
         };
-        this.debugService.log('[StorageService] Retrieved stored assigned PRs:', result.prs.length, 'items');
+        this.debugService.log(
+          '[StorageService] Retrieved stored assigned PRs:',
+          result.prs.length,
+          'items'
+        );
         return result;
       }
 
@@ -165,13 +169,17 @@ export class StorageService implements IStorageService {
    */
   async setStoredAssignedPRs(prs: PullRequest[]): Promise<void> {
     try {
-      const openPRs = prs.filter(pr => pr.type === 'open' || pr.type === 'draft');
+      const openPRs = prs.filter((pr) => pr.type === 'open' || pr.type === 'draft');
       const storedPRs: StoredPRs = {
         prs: openPRs,
         lastUpdated: new Date().toISOString(),
       };
       await this.setStorageData({ [STORAGE_KEY_ASSIGNED_PRS]: storedPRs });
-      this.debugService.log('[StorageService] Stored assigned PRs updated:', openPRs.length, 'items');
+      this.debugService.log(
+        '[StorageService] Stored assigned PRs updated:',
+        openPRs.length,
+        'items'
+      );
     } catch (error) {
       this.debugService.error('[StorageService] Error setting stored assigned PRs:', error);
       throw error;
@@ -388,18 +396,6 @@ export class StorageService implements IStorageService {
       this.debugService.log(`[StorageService] Removed key '${key}'`);
     } catch (error) {
       this.debugService.error(`[StorageService] Error removing key '${key}':`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Clears all storage data.
-   */
-  async clear(): Promise<void> {
-    try {
-      await this.clearAllStorageData();
-    } catch (error) {
-      this.debugService.error('[StorageService] Error clearing storage:', error);
       throw error;
     }
   }

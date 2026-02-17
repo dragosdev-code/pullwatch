@@ -30,6 +30,7 @@ export const useStorageSync = () => {
     };
 
     loadDebugState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount
 
   // Save debug mode to Chrome storage when it changes

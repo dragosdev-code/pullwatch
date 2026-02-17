@@ -147,18 +147,6 @@ export class NotificationService implements INotificationService {
     }
   }
 
-  async areNotificationsEnabled(): Promise<boolean> {
-    const settings = await this.storageService.getExtensionSettings();
-    return settings.notificationsEnabled;
-  }
-
-  async setNotificationsEnabled(enabled: boolean): Promise<void> {
-    await this.storageService.setExtensionSettings({ notificationsEnabled: enabled });
-    this.debugService.log(
-      `[NotificationService] Notifications ${enabled ? 'enabled' : 'disabled'}`
-    );
-  }
-
   async dispose(): Promise<void> {
     try {
       await this.clearAllNotifications();

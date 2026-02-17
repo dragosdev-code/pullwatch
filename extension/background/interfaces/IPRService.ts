@@ -35,39 +35,6 @@ export interface IPRService {
   updateMergedPRs(forceRefresh?: boolean): Promise<PullRequest[]>;
 
   /**
-   * Marks pull requests as read/seen.
-   */
-  markPRsAsRead(prIds: string[]): Promise<void>;
-
-  /**
-   * Gets new pull requests since last check.
-   */
-  getNewPRs(): Promise<PullRequest[]>;
-
-  /**
-   * Refreshes pull request data from GitHub.
-   */
-  refreshPRs(): Promise<PullRequest[]>;
-
-  /**
-   * Gets pull request statistics.
-   */
-  getPRStats(): Promise<{
-    total: number;
-    new: number;
-    lastUpdate: number | null;
-  }>;
-
-  /**
-   * Filters pull requests by criteria.
-   */
-  filterPRs(criteria: {
-    repoName?: string;
-    status?: string;
-    isNew?: boolean;
-  }): Promise<PullRequest[]>;
-
-  /**
    * Compares old and new PR lists to identify new PRs.
    */
   comparePRs(
