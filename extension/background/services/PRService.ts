@@ -111,9 +111,7 @@ export class PRService implements IPRService {
       );
 
       // Update storage with fresh data and last fetch time
-      await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRsWithStatus, {
-        filterOpenDraft: true,
-      });
+      await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRsWithStatus);
       await this.storageService.setLastFetchTime(Date.now());
 
       // Update badge with current count

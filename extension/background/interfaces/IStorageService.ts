@@ -12,11 +12,7 @@ export interface IStorageService {
   /**
    * Sets stored pull requests by storage key.
    */
-  setStoredPRs(
-    key: StorageKeyPRs,
-    prs: PullRequest[],
-    options?: { filterOpenDraft?: boolean }
-  ): Promise<void>;
+  setStoredPRs(key: StorageKeyPRs, prs: PullRequest[]): Promise<void>;
 
   /**
    * Gets the last fetch timestamp.

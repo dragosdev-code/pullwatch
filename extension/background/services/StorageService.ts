@@ -90,24 +90,16 @@ export class StorageService implements IStorageService {
   /**
    * Sets stored pull requests by storage key.
    */
-  async setStoredPRs(
-    key: StorageKeyPRs,
-    prs: PullRequest[],
-    options?: { filterOpenDraft?: boolean }
-  ): Promise<void> {
+  async setStoredPRs(key: StorageKeyPRs, prs: PullRequest[]): Promise<void> {
     try {
-      const normalizedPRs = options?.filterOpenDraft
-        ? prs.filter((pr) => pr.type === 'open' || pr.type === 'draft')
-        : prs;
-
       const storedPRs: StoredPRs = {
-        prs: normalizedPRs,
+        prs,
         lastUpdated: new Date().toISOString(),
       };
       await this.set(key, storedPRs);
       this.debugService.log(
         `[StorageService] Stored PRs updated for key '${key}':`,
-        normalizedPRs.length,
+        prs.length,
         'items'
       );
     } catch (error) {
