@@ -1,38 +1,22 @@
-import type { PullRequest } from '../../common/types';
+import type { ExtensionSettings, PullRequest, StorageKeyMap, StorageKeyPRs } from '../../common/types';
 
 /**
  * Interface for the storage service that handles Chrome extension storage operations.
  */
 export interface IStorageService {
   /**
-   * Gets stored assigned pull requests.
+   * Gets stored pull requests by storage key.
    */
-  getStoredAssignedPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null>;
+  getStoredPRs(key: StorageKeyPRs): Promise<{ prs: PullRequest[]; timestamp?: number } | null>;
 
   /**
-   * Gets stored merged pull requests.
+   * Sets stored pull requests by storage key.
    */
-  getStoredMergedPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null>;
-
-  /**
-   * Gets stored authored pull requests.
-   */
-  getStoredAuthoredPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null>;
-
-  /**
-   * Sets stored authored pull requests.
-   */
-  setStoredAuthoredPRs(prs: PullRequest[]): Promise<void>;
-
-  /**
-   * Sets stored assigned pull requests.
-   */
-  setStoredAssignedPRs(prs: PullRequest[]): Promise<void>;
-
-  /**
-   * Sets stored merged pull requests.
-   */
-  setStoredMergedPRs(prs: PullRequest[]): Promise<void>;
+  setStoredPRs(
+    key: StorageKeyPRs,
+    prs: PullRequest[],
+    options?: { filterOpenDraft?: boolean }
+  ): Promise<void>;
 
   /**
    * Gets the last fetch timestamp.
@@ -47,29 +31,23 @@ export interface IStorageService {
   /**
    * Gets extension settings.
    */
-  getExtensionSettings(): Promise<{
-    notificationsEnabled: boolean;
-    soundEnabled: boolean;
-    fetchInterval: number;
-  }>;
+  getExtensionSettings(): Promise<ExtensionSettings>;
 
   /**
    * Sets extension settings.
    */
-  setExtensionSettings(settings: {
-    notificationsEnabled?: boolean;
-    soundEnabled?: boolean;
-    fetchInterval?: number;
-  }): Promise<void>;
+  setExtensionSettings(settings: Partial<ExtensionSettings>): Promise<void>;
 
   /**
    * Gets a value from storage by key.
    */
+  get<K extends keyof StorageKeyMap>(key: K): Promise<StorageKeyMap[K] | null>;
   get<T>(key: string): Promise<T | null>;
 
   /**
    * Sets a value in storage by key.
    */
+  set<K extends keyof StorageKeyMap>(key: K, value: StorageKeyMap[K]): Promise<void>;
   set<T>(key: string, value: T): Promise<void>;
 
   /**

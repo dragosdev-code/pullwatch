@@ -47,6 +47,19 @@ export interface StorageItems {
   [key: string]: unknown;
 }
 
+export type StorageKeyPRs =
+  | typeof STORAGE_KEY_ASSIGNED_PRS
+  | typeof STORAGE_KEY_MERGED_PRS
+  | typeof STORAGE_KEY_AUTHORED_PRS;
+
+export interface StorageKeyMap {
+  [STORAGE_KEY_ASSIGNED_PRS]: StoredPRs;
+  [STORAGE_KEY_MERGED_PRS]: StoredPRs;
+  [STORAGE_KEY_AUTHORED_PRS]: StoredPRs;
+  [STORAGE_KEY_LAST_FETCH]: number;
+  [STORAGE_KEY_SETTINGS]: ExtensionSettings;
+}
+
 // Settings for the extension
 export interface ExtensionSettings {
   notificationsEnabled: boolean;

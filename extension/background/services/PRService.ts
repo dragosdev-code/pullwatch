@@ -5,7 +5,12 @@ import type { IGitHubService } from '../interfaces/IGitHubService';
 import type { INotificationService } from '../interfaces/INotificationService';
 import type { IBadgeService } from '../interfaces/IBadgeService';
 import type { PullRequest } from '../../common/types';
-import { CACHE_TTL_MS } from '../../common/constants';
+import {
+  CACHE_TTL_MS,
+  STORAGE_KEY_ASSIGNED_PRS,
+  STORAGE_KEY_AUTHORED_PRS,
+  STORAGE_KEY_MERGED_PRS,
+} from '../../common/constants';
 
 /**
  * PRService handles pull request management and coordination between services.
@@ -19,18 +24,18 @@ export class PRService implements IPRService {
   private badgeService: IBadgeService;
   private initialized = false;
 
-  constructor(
-    debugService: IDebugService,
-    storageService: IStorageService,
-    gitHubService: IGitHubService,
-    notificationService: INotificationService,
-    badgeService: IBadgeService
-  ) {
-    this.debugService = debugService;
-    this.storageService = storageService;
-    this.gitHubService = gitHubService;
-    this.notificationService = notificationService;
-    this.badgeService = badgeService;
+  constructor(deps: {
+    debugService: IDebugService;
+    storageService: IStorageService;
+    gitHubService: IGitHubService;
+    notificationService: INotificationService;
+    badgeService: IBadgeService;
+  }) {
+    this.debugService = deps.debugService;
+    this.storageService = deps.storageService;
+    this.gitHubService = deps.gitHubService;
+    this.notificationService = deps.notificationService;
+    this.badgeService = deps.badgeService;
   }
 
   async initialize(): Promise<void> {
@@ -46,7 +51,7 @@ export class PRService implements IPRService {
 
     try {
       // Get current stored PRs for comparison and cache check
-      const storedData = await this.storageService.getStoredAssignedPRs();
+      const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_ASSIGNED_PRS);
 
       // Check cache before fetching from GitHub
       const isCacheValid =
@@ -106,7 +111,9 @@ export class PRService implements IPRService {
       );
 
       // Update storage with fresh data and last fetch time
-      await this.storageService.setStoredAssignedPRs(allPRsWithStatus);
+      await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRsWithStatus, {
+        filterOpenDraft: true,
+      });
       await this.storageService.setLastFetchTime(Date.now());
 
       // Update badge with current count
@@ -198,18 +205,18 @@ export class PRService implements IPRService {
   }
 
   async getStoredAssignedPRs(): Promise<PullRequest[]> {
-    const stored = await this.storageService.getStoredAssignedPRs();
+    const stored = await this.storageService.getStoredPRs(STORAGE_KEY_ASSIGNED_PRS);
     return stored?.prs || [];
   }
 
   async getStoredAuthoredPRs(): Promise<PullRequest[]> {
-    const stored = await this.storageService.getStoredAuthoredPRs();
+    const stored = await this.storageService.getStoredPRs(STORAGE_KEY_AUTHORED_PRS);
     this.debugService.log(`[PRService] Retrieved stored authored PRs: ${stored?.prs?.length ?? 0}`);
     return stored?.prs || [];
   }
 
   async getStoredMergedPRs(): Promise<PullRequest[]> {
-    const stored = await this.storageService.getStoredMergedPRs();
+    const stored = await this.storageService.getStoredPRs(STORAGE_KEY_MERGED_PRS);
     this.debugService.log(`[PRService] Retrieved stored merged PRs: ${stored?.prs?.length ?? 0}`);
     return stored?.prs || [];
   }
@@ -219,7 +226,7 @@ export class PRService implements IPRService {
 
     try {
       // Check cache before fetching from GitHub
-      const stored = await this.storageService.getStoredAuthoredPRs();
+      const stored = await this.storageService.getStoredPRs(STORAGE_KEY_AUTHORED_PRS);
       const isCacheValid =
         stored && stored.timestamp && Date.now() - stored.timestamp < CACHE_TTL_MS;
 
@@ -233,7 +240,7 @@ export class PRService implements IPRService {
         `[PRService] Fetched ${freshAuthoredPRs.length} authored PRs from GitHub`
       );
 
-      await this.storageService.setStoredAuthoredPRs(freshAuthoredPRs);
+      await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, freshAuthoredPRs);
 
       this.debugService.log(
         `[PRService] Successfully updated ${freshAuthoredPRs.length} authored PRs`
@@ -250,7 +257,7 @@ export class PRService implements IPRService {
 
     try {
       // Check cache before fetching from GitHub
-      const stored = await this.storageService.getStoredMergedPRs();
+      const stored = await this.storageService.getStoredPRs(STORAGE_KEY_MERGED_PRS);
       const isCacheValid =
         stored && stored.timestamp && Date.now() - stored.timestamp < CACHE_TTL_MS;
 
@@ -262,7 +269,7 @@ export class PRService implements IPRService {
       const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
       this.debugService.log(`[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`);
 
-      await this.storageService.setStoredMergedPRs(freshMergedPRs);
+      await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, freshMergedPRs);
 
       this.debugService.log(`[PRService] Successfully updated ${freshMergedPRs.length} merged PRs`);
       return freshMergedPRs;

@@ -38,29 +38,26 @@ export class ServiceContainer {
     this.registerService('eventService', new EventService(this.getService('debugService'), this));
 
     // Initialize business logic services
-    this.registerService(
-      'gitHubService',
-      new GitHubService(this.getService('debugService'), this.getService('storageService'))
-    );
+    this.registerService('gitHubService', new GitHubService(this.getService('debugService')));
 
     this.registerService(
       'notificationService',
-      new NotificationService(
-        this.getService('debugService'),
-        this.getService('storageService'),
-        this.getService('soundService')
-      )
+      new NotificationService({
+        debugService: this.getService('debugService'),
+        storageService: this.getService('storageService'),
+        soundService: this.getService('soundService'),
+      })
     );
 
     this.registerService(
       'prService',
-      new PRService(
-        this.getService('debugService'),
-        this.getService('storageService'),
-        this.getService('gitHubService'),
-        this.getService('notificationService'),
-        this.getService('badgeService')
-      )
+      new PRService({
+        debugService: this.getService('debugService'),
+        storageService: this.getService('storageService'),
+        gitHubService: this.getService('gitHubService'),
+        notificationService: this.getService('notificationService'),
+        badgeService: this.getService('badgeService'),
+      })
     );
 
     // Initialize all services

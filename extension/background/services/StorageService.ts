@@ -1,10 +1,14 @@
 import type { IStorageService } from '../interfaces/IStorageService';
 import type { IDebugService } from '../interfaces/IDebugService';
-import type { PullRequest, StorageItems, StoredPRs, UserData } from '../../common/types';
+import type {
+  ExtensionSettings,
+  PullRequest,
+  StorageKeyMap,
+  StorageKeyPRs,
+  StoredPRs,
+  UserData,
+} from '../../common/types';
 import {
-  STORAGE_KEY_ASSIGNED_PRS,
-  STORAGE_KEY_MERGED_PRS,
-  STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_LAST_FETCH,
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
@@ -22,6 +26,12 @@ export class StorageService implements IStorageService {
   constructor(debugService: IDebugService) {
     this.debugService = debugService;
   }
+
+  private readonly defaultSettings: ExtensionSettings = {
+    notificationsEnabled: true,
+    soundEnabled: true,
+    fetchInterval: 60000,
+  };
 
   /**
    * Initializes the storage service.
@@ -48,72 +58,14 @@ export class StorageService implements IStorageService {
     }
   }
 
-  // --- Generic Storage Operations ---
-
-  /**
-   * Retrieves specified items from chrome.storage.local.
-   */
-  async getStorageData<T extends keyof StorageItems>(
-    keys: T | T[] | null = null
-  ): Promise<Pick<StorageItems, T> | StorageItems> {
-    try {
-      const items = await this.storage.get(keys);
-      this.debugService.log('[StorageService] Storage data retrieved:', keys, items);
-      return items as Pick<StorageItems, T> | StorageItems;
-    } catch (error) {
-      this.debugService.error('[StorageService] Error getting storage data:', error, keys);
-      throw error;
-    }
-  }
-
-  /**
-   * Sets items in chrome.storage.local.
-   */
-  async setStorageData(items: Partial<StorageItems>): Promise<void> {
-    try {
-      await this.storage.set(items);
-      this.debugService.log('[StorageService] Storage data set:', items);
-    } catch (error) {
-      this.debugService.error('[StorageService] Error setting storage data:', error, items);
-      throw error;
-    }
-  }
-
-  /**
-   * Removes specified items from chrome.storage.local.
-   */
-  async removeStorageData(keys: string | string[]): Promise<void> {
-    try {
-      await this.storage.remove(keys);
-      this.debugService.log('[StorageService] Storage data removed:', keys);
-    } catch (error) {
-      this.debugService.error('[StorageService] Error removing storage data:', error, keys);
-      throw error;
-    }
-  }
-
-  /**
-   * Clears all items from chrome.storage.local.
-   */
-  async clearAllStorageData(): Promise<void> {
-    try {
-      await this.storage.clear();
-      this.debugService.log('[StorageService] All storage data cleared.');
-    } catch (error) {
-      this.debugService.error('[StorageService] Error clearing all storage data:', error);
-      throw error;
-    }
-  }
-
   // --- IStorageService Implementation ---
 
   /**
-   * Gets stored assigned pull requests.
+   * Gets stored pull requests by storage key.
    */
-  async getStoredAssignedPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null> {
+  async getStoredPRs(key: StorageKeyPRs): Promise<{ prs: PullRequest[]; timestamp?: number } | null> {
     try {
-      const data = await this.getStorageData(STORAGE_KEY_ASSIGNED_PRS);
-      const storedPRs = data[STORAGE_KEY_ASSIGNED_PRS] || null;
+      const storedPRs = await this.get<StoredPRs>(key);
 
       if (storedPRs) {
         const result = {
@@ -121,7 +73,7 @@ export class StorageService implements IStorageService {
           timestamp: storedPRs.lastUpdated ? new Date(storedPRs.lastUpdated).getTime() : Date.now(),
         };
         this.debugService.log(
-          '[StorageService] Retrieved stored assigned PRs:',
+          `[StorageService] Retrieved stored PRs for key '${key}':`,
           result.prs.length,
           'items'
         );
@@ -130,120 +82,36 @@ export class StorageService implements IStorageService {
 
       return null;
     } catch (error) {
-      this.debugService.error('[StorageService] Error getting stored assigned PRs:', error);
+      this.debugService.error(`[StorageService] Error getting stored PRs for key '${key}':`, error);
       return null;
     }
   }
 
   /**
-   * Gets stored merged pull requests.
+   * Sets stored pull requests by storage key.
    */
-  async getStoredMergedPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null> {
+  async setStoredPRs(
+    key: StorageKeyPRs,
+    prs: PullRequest[],
+    options?: { filterOpenDraft?: boolean }
+  ): Promise<void> {
     try {
-      const data = await this.getStorageData(STORAGE_KEY_MERGED_PRS);
-      const storedPRs = (data as StorageItems)[STORAGE_KEY_MERGED_PRS] || null;
+      const normalizedPRs = options?.filterOpenDraft
+        ? prs.filter((pr) => pr.type === 'open' || pr.type === 'draft')
+        : prs;
 
-      if (storedPRs) {
-        const result = {
-          prs: storedPRs.prs || [],
-          timestamp: storedPRs.lastUpdated ? new Date(storedPRs.lastUpdated).getTime() : Date.now(),
-        };
-        this.debugService.log(
-          '[StorageService] Retrieved stored merged PRs:',
-          result.prs.length,
-          'items'
-        );
-        return result;
-      }
-
-      return null;
-    } catch (error) {
-      this.debugService.error('[StorageService] Error getting stored merged PRs:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Sets stored assigned pull requests.
-   * Filters out merged PRs as a safety measure — only open/draft PRs are persisted.
-   */
-  async setStoredAssignedPRs(prs: PullRequest[]): Promise<void> {
-    try {
-      const openPRs = prs.filter((pr) => pr.type === 'open' || pr.type === 'draft');
       const storedPRs: StoredPRs = {
-        prs: openPRs,
+        prs: normalizedPRs,
         lastUpdated: new Date().toISOString(),
       };
-      await this.setStorageData({ [STORAGE_KEY_ASSIGNED_PRS]: storedPRs });
+      await this.set(key, storedPRs);
       this.debugService.log(
-        '[StorageService] Stored assigned PRs updated:',
-        openPRs.length,
+        `[StorageService] Stored PRs updated for key '${key}':`,
+        normalizedPRs.length,
         'items'
       );
     } catch (error) {
-      this.debugService.error('[StorageService] Error setting stored assigned PRs:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Sets stored merged pull requests.
-   */
-  async setStoredMergedPRs(prs: PullRequest[]): Promise<void> {
-    try {
-      const storedPRs: StoredPRs = {
-        prs,
-        lastUpdated: new Date().toISOString(),
-      };
-      await this.setStorageData({ [STORAGE_KEY_MERGED_PRS]: storedPRs });
-      this.debugService.log('[StorageService] Stored merged PRs updated:', prs.length, 'items');
-    } catch (error) {
-      this.debugService.error('[StorageService] Error setting stored merged PRs:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Gets stored authored pull requests.
-   */
-  async getStoredAuthoredPRs(): Promise<{ prs: PullRequest[]; timestamp?: number } | null> {
-    try {
-      const data = await this.getStorageData(STORAGE_KEY_AUTHORED_PRS);
-      const storedPRs = (data as StorageItems)[STORAGE_KEY_AUTHORED_PRS] || null;
-
-      if (storedPRs) {
-        const result = {
-          prs: storedPRs.prs || [],
-          timestamp: storedPRs.lastUpdated ? new Date(storedPRs.lastUpdated).getTime() : Date.now(),
-        };
-        this.debugService.log(
-          '[StorageService] Retrieved stored authored PRs:',
-          result.prs.length,
-          'items'
-        );
-        return result;
-      }
-
-      return null;
-    } catch (error) {
-      this.debugService.error('[StorageService] Error getting stored authored PRs:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Sets stored authored pull requests.
-   */
-  async setStoredAuthoredPRs(prs: PullRequest[]): Promise<void> {
-    try {
-      const storedPRs: StoredPRs = {
-        prs,
-        lastUpdated: new Date().toISOString(),
-      };
-      await this.setStorageData({ [STORAGE_KEY_AUTHORED_PRS]: storedPRs });
-      this.debugService.log('[StorageService] Stored authored PRs updated:', prs.length, 'items');
-    } catch (error) {
-      this.debugService.error('[StorageService] Error setting stored authored PRs:', error);
+      this.debugService.error(`[StorageService] Error setting stored PRs for key '${key}':`, error);
       throw error;
     }
   }
@@ -253,8 +121,7 @@ export class StorageService implements IStorageService {
    */
   async getLastFetchTime(): Promise<number | null> {
     try {
-      const data = await this.getStorageData(STORAGE_KEY_LAST_FETCH);
-      const timestamp = data[STORAGE_KEY_LAST_FETCH] || null;
+      const timestamp = await this.get<number>(STORAGE_KEY_LAST_FETCH);
       this.debugService.log(
         '[StorageService] Last fetch time:',
         timestamp ? new Date(timestamp).toISOString() : 'never'
@@ -271,7 +138,7 @@ export class StorageService implements IStorageService {
    */
   async setLastFetchTime(timestamp: number): Promise<void> {
     try {
-      await this.setStorageData({ [STORAGE_KEY_LAST_FETCH]: timestamp });
+      await this.set(STORAGE_KEY_LAST_FETCH, timestamp);
       this.debugService.log(
         '[StorageService] Last fetch time updated:',
         new Date(timestamp).toISOString()
@@ -285,48 +152,27 @@ export class StorageService implements IStorageService {
   /**
    * Gets extension settings.
    */
-  async getExtensionSettings(): Promise<{
-    notificationsEnabled: boolean;
-    soundEnabled: boolean;
-    fetchInterval: number;
-  }> {
+  async getExtensionSettings(): Promise<ExtensionSettings> {
     try {
-      const defaultSettings = {
-        notificationsEnabled: true,
-        soundEnabled: true,
-        fetchInterval: 60000, // 1 minute
-      };
-
-      const data = await this.getStorageData(STORAGE_KEY_SETTINGS);
-      const stored = data[STORAGE_KEY_SETTINGS] || defaultSettings;
-
-      const result = { ...defaultSettings, ...stored };
+      const stored = await this.get<ExtensionSettings>(STORAGE_KEY_SETTINGS);
+      const result = { ...this.defaultSettings, ...(stored || {}) };
       this.debugService.log('[StorageService] Retrieved settings:', result);
       return result;
     } catch (error) {
       this.debugService.error('[StorageService] Error getting settings:', error);
-      // Return default settings on error
-      return {
-        notificationsEnabled: true,
-        soundEnabled: true,
-        fetchInterval: 60000,
-      };
+      return this.defaultSettings;
     }
   }
 
   /**
    * Sets extension settings.
    */
-  async setExtensionSettings(settings: {
-    notificationsEnabled?: boolean;
-    soundEnabled?: boolean;
-    fetchInterval?: number;
-  }): Promise<void> {
+  async setExtensionSettings(settings: Partial<ExtensionSettings>): Promise<void> {
     try {
       const currentSettings = await this.getExtensionSettings();
       const updatedSettings = { ...currentSettings, ...settings };
 
-      await this.setStorageData({ [STORAGE_KEY_SETTINGS]: updatedSettings });
+      await this.set(STORAGE_KEY_SETTINGS, updatedSettings);
       this.debugService.log('[StorageService] Settings updated:', updatedSettings);
     } catch (error) {
       this.debugService.error('[StorageService] Error setting settings:', error);
@@ -341,8 +187,7 @@ export class StorageService implements IStorageService {
    */
   async getUserData(): Promise<UserData | null> {
     try {
-      const data = await this.getStorageData(STORAGE_KEY_USER_DATA);
-      return data[STORAGE_KEY_USER_DATA] || null;
+      return await this.get<UserData>(STORAGE_KEY_USER_DATA);
     } catch (error) {
       this.debugService.error('[StorageService] Error getting user data:', error);
       return null;
@@ -354,7 +199,7 @@ export class StorageService implements IStorageService {
    */
   async setUserData(userData: UserData): Promise<void> {
     try {
-      await this.setStorageData({ [STORAGE_KEY_USER_DATA]: userData });
+      await this.set(STORAGE_KEY_USER_DATA, userData);
       this.debugService.log('[StorageService] User data updated');
     } catch (error) {
       this.debugService.error('[StorageService] Error setting user data:', error);
@@ -365,10 +210,13 @@ export class StorageService implements IStorageService {
   /**
    * Gets a value from storage by key.
    */
+  async get<K extends keyof StorageKeyMap>(key: K): Promise<StorageKeyMap[K] | null>;
+  async get<T>(key: string): Promise<T | null>;
   async get<T>(key: string): Promise<T | null> {
     try {
       const result = await this.storage.get([key]);
-      return result[key] || null;
+      this.debugService.log(`[StorageService] Storage key retrieved: '${key}'`);
+      return (result[key] as T | undefined) ?? null;
     } catch (error) {
       this.debugService.error(`[StorageService] Error getting key '${key}':`, error);
       return null;
@@ -378,9 +226,12 @@ export class StorageService implements IStorageService {
   /**
    * Sets a value in storage by key.
    */
+  async set<K extends keyof StorageKeyMap>(key: K, value: StorageKeyMap[K]): Promise<void>;
+  async set<T>(key: string, value: T): Promise<void>;
   async set<T>(key: string, value: T): Promise<void> {
     try {
       await this.storage.set({ [key]: value });
+      this.debugService.log(`[StorageService] Storage key set: '${key}'`);
     } catch (error) {
       this.debugService.error(`[StorageService] Error setting key '${key}':`, error);
       throw error;

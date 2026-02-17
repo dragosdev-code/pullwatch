@@ -14,14 +14,14 @@ export class NotificationService implements INotificationService {
   private soundService: ISoundService;
   private initialized = false;
 
-  constructor(
-    debugService: IDebugService,
-    storageService: IStorageService,
-    soundService: ISoundService
-  ) {
-    this.debugService = debugService;
-    this.storageService = storageService;
-    this.soundService = soundService;
+  constructor(deps: {
+    debugService: IDebugService;
+    storageService: IStorageService;
+    soundService: ISoundService;
+  }) {
+    this.debugService = deps.debugService;
+    this.storageService = deps.storageService;
+    this.soundService = deps.soundService;
   }
 
   async initialize(): Promise<void> {

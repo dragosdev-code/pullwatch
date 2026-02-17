@@ -1,6 +1,5 @@
 import type { IGitHubService } from '../interfaces/IGitHubService';
 import type { IDebugService } from '../interfaces/IDebugService';
-import type { IStorageService } from '../interfaces/IStorageService';
 import type { PullRequest } from '../../common/types';
 import {
   GITHUB_BASE_URL,
@@ -21,7 +20,6 @@ import {
  */
 export class GitHubService implements IGitHubService {
   private debugService: IDebugService;
-  private storageService: IStorageService;
   private initialized = false;
   private baseURL: string;
   private reviewRequestsURL: string;
@@ -33,9 +31,8 @@ export class GitHubService implements IGitHubService {
   private authoredCommentedURL: string;
   private authoredDraftURL: string;
 
-  constructor(debugService: IDebugService, storageService: IStorageService) {
+  constructor(debugService: IDebugService) {
     this.debugService = debugService;
-    this.storageService = storageService;
     this.baseURL = GITHUB_BASE_URL;
     this.reviewRequestsURL = GITHUB_REVIEW_REQUESTS_URL_TEMPLATE(this.baseURL);
     this.mergedPRsURL = GITHUB_MERGED_PRS_URL_TEMPLATE(this.baseURL);
@@ -46,6 +43,14 @@ export class GitHubService implements IGitHubService {
     this.authoredCommentedURL = GITHUB_AUTHORED_COMMENTED_URL_TEMPLATE(this.baseURL);
     this.authoredDraftURL = GITHUB_AUTHORED_DRAFT_URL_TEMPLATE(this.baseURL);
   }
+
+  private readonly githubFetchHeaders = {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'User-Agent': USER_AGENT,
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
+  };
 
   /**
    * Initializes the GitHub service.
@@ -63,6 +68,49 @@ export class GitHubService implements IGitHubService {
   }
 
   /**
+   * Shared GitHub fetch pipeline that retrieves and transforms HTML responses.
+   */
+  private async fetchGitHubData<T>(
+    url: string,
+    context: string,
+    transform: (html: string) => T
+  ): Promise<T> {
+    const response = await fetch(url, {
+      credentials: 'include',
+      headers: this.githubFetchHeaders,
+    });
+
+    this.debugService.log(
+      `[GitHubService] ${context} response status:`,
+      response.status,
+      response.statusText
+    );
+    this.debugService.log(`[GitHubService] ${context} response URL:`, response.url);
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('AuthenticationError: Not logged in or insufficient permissions on GitHub.');
+      }
+      throw new Error(`GitHub ${context} request failed: ${response.status}`);
+    }
+
+    const html = await response.text();
+    const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
+    const isLoginPage =
+      pageTitle.includes('Sign in to GitHub') ||
+      html.includes('name="login"') ||
+      response.url.includes('/login') ||
+      html.includes('action="/session"') ||
+      html.includes('class="auth-form"');
+
+    if (isLoginPage) {
+      throw new Error('NotLoggedIn: User is not logged in to GitHub.');
+    }
+
+    return transform(html);
+  }
+
+  /**
    * Fetches user's merged pull requests from GitHub.
    */
   async fetchMergedPRs(): Promise<PullRequest[]> {
@@ -71,38 +119,10 @@ export class GitHubService implements IGitHubService {
       this.mergedPRsURL
     );
     try {
-      const response = await fetch(this.mergedPRsURL, {
-        credentials: 'include',
-        headers: {
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'User-Agent': USER_AGENT,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          Pragma: 'no-cache',
-          Expires: '0',
-        },
+      return await this.fetchGitHubData(this.mergedPRsURL, 'merged PR fetch', (html) => {
+        this.debugService.log('[GitHubService] Merged HTML received. Length:', html.length);
+        return this.parseAssignedPRsFromHTML(html);
       });
-
-      this.debugService.log('[GitHubService] Fetch merged response status:', response.status);
-      if (!response.ok) {
-        const errorMsg = `GitHub merged request failed: ${response.status}`;
-        this.debugService.error(`[GitHubService] ${errorMsg}`);
-        throw new Error(errorMsg);
-      }
-
-      const html = await response.text();
-      this.debugService.log('[GitHubService] Merged HTML received. Length:', html.length);
-
-      const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
-      const isLoginPage =
-        pageTitle.includes('Sign in to GitHub') ||
-        html.includes('name="login"') ||
-        html.includes('action="/session"') ||
-        html.includes('class="auth-form"');
-      if (isLoginPage) {
-        throw new Error('NotLoggedIn: User is not logged in to GitHub.');
-      }
-
-      return this.parseAssignedPRsFromHTML(html);
     } catch (error: unknown) {
       this.debugService.error(
         '[GitHubService] Error in fetchMergedPRs:',
@@ -125,77 +145,24 @@ export class GitHubService implements IGitHubService {
       this.reviewRequestsURL
     );
     try {
-      const response = await fetch(this.reviewRequestsURL, {
-        credentials: 'include',
-        headers: {
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'User-Agent': USER_AGENT,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          Pragma: 'no-cache',
-          Expires: '0',
-        },
-      });
-
-      this.debugService.log(
-        '[GitHubService] Fetch response status:',
-        response.status,
-        response.statusText
-      );
-      this.debugService.log('[GitHubService] Fetch response URL:', response.url);
-      this.debugService.log(
-        '[GitHubService] Fetch response headers:',
-        Object.fromEntries(response.headers.entries())
-      );
-
-      if (!response.ok) {
-        this.debugService.error(
-          `[GitHubService] GitHub request failed: ${response.status} ${response.statusText}`
-        );
-        if (response.status === 401 || response.status === 403) {
-          const errorMsg =
-            'AuthenticationError: Not logged in or insufficient permissions on GitHub.';
-          this.debugService.error(`[GitHubService] ${errorMsg}`);
-          throw new Error(errorMsg);
+      return await this.fetchGitHubData(this.reviewRequestsURL, 'assigned PR fetch', (html) => {
+        this.debugService.log('[GitHubService] HTML received. Length:', html.length);
+        if (html.length < 500) {
+          this.debugService.log('[GitHubService] Short HTML response content:', html);
         }
-        const errorMsg = `GitHub request failed: ${response.status}`;
-        this.debugService.error(`[GitHubService] ${errorMsg}`);
-        throw new Error(errorMsg);
-      }
 
-      const html = await response.text();
-      this.debugService.log('[GitHubService] HTML received. Length:', html.length);
-      if (html.length < 500) {
-        this.debugService.log('[GitHubService] Short HTML response content:', html);
-      }
+        if (
+          !html.includes('js-issue-row') &&
+          !html.includes('pull request') &&
+          !html.includes("You don't have any pull requests to review")
+        ) {
+          this.debugService.warn(
+            "[GitHubService] The fetched HTML doesn't look like a PR listing page. Content might be unexpected."
+          );
+        }
 
-      const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
-      this.debugService.log('[GitHubService] Page title:', pageTitle);
-
-      const isLoginPage =
-        pageTitle.includes('Sign in to GitHub') ||
-        html.includes('name="login"') ||
-        response.url.includes('/login') ||
-        html.includes('action="/session"') ||
-        html.includes('class="auth-form"');
-
-      if (isLoginPage) {
-        this.debugService.warn(
-          '[GitHubService] Detected GitHub login page. User is likely not logged in.'
-        );
-        throw new Error('NotLoggedIn: User is not logged in to GitHub.');
-      }
-
-      if (
-        !html.includes('js-issue-row') &&
-        !html.includes('pull request') &&
-        !html.includes("You don't have any pull requests to review")
-      ) {
-        this.debugService.warn(
-          "[GitHubService] The fetched HTML doesn't look like a PR listing page. Content might be unexpected."
-        );
-      }
-
-      return this.parseAssignedPRsFromHTML(html);
+        return this.parseAssignedPRsFromHTML(html);
+      });
     } catch (error: unknown) {
       this.debugService.error(
         '[GitHubService] Error in fetchAssignedPRs:',
@@ -225,48 +192,10 @@ export class GitHubService implements IGitHubService {
     );
 
     try {
-      const response = await fetch(this.reviewedPRsURL, {
-        credentials: 'include',
-        headers: {
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'User-Agent': USER_AGENT,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          Pragma: 'no-cache',
-          Expires: '0',
-        },
+      return await this.fetchGitHubData(this.reviewedPRsURL, 'reviewed PR fetch', (html) => {
+        this.debugService.log('[GitHubService] Reviewed HTML received. Length:', html.length);
+        return this.parseAssignedPRsFromHTML(html);
       });
-
-      this.debugService.log(
-        '[GitHubService] Fetch reviewed response status:',
-        response.status,
-        response.statusText
-      );
-
-      if (!response.ok) {
-        const errorMsg = `GitHub reviewed request failed: ${response.status}`;
-        this.debugService.error(`[GitHubService] ${errorMsg}`);
-        throw new Error(errorMsg);
-      }
-
-      const html = await response.text();
-      this.debugService.log('[GitHubService] Reviewed HTML received. Length:', html.length);
-
-      const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
-      const isLoginPage =
-        pageTitle.includes('Sign in to GitHub') ||
-        html.includes('name="login"') ||
-        response.url.includes('/login') ||
-        html.includes('action="/session"') ||
-        html.includes('class="auth-form"');
-
-      if (isLoginPage) {
-        this.debugService.warn(
-          '[GitHubService] Detected GitHub login page when fetching reviewed PRs.'
-        );
-        throw new Error('NotLoggedIn: User is not logged in to GitHub.');
-      }
-
-      return this.parseAssignedPRsFromHTML(html);
     } catch (error: unknown) {
       this.debugService.error(
         '[GitHubService] Error in fetchReviewedPRs:',
@@ -348,42 +277,13 @@ export class GitHubService implements IGitHubService {
     this.debugService.log(`[GitHubService] Fetching ${authorReviewStatus} PRs from: ${url}`);
 
     try {
-      const response = await fetch(url, {
-        credentials: 'include',
-        headers: {
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'User-Agent': USER_AGENT,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          Pragma: 'no-cache',
-          Expires: '0',
-        },
+      return await this.fetchGitHubData(url, `${authorReviewStatus} authored PR fetch`, (html) => {
+        const prs = this.parseAssignedPRsFromHTML(html);
+        return prs.map((pr) => ({
+          ...pr,
+          authorReviewStatus,
+        }));
       });
-
-      if (!response.ok) {
-        const errorMsg = `GitHub request failed for ${authorReviewStatus}: ${response.status}`;
-        this.debugService.error(`[GitHubService] ${errorMsg}`);
-        throw new Error(errorMsg);
-      }
-
-      const html = await response.text();
-      const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
-      const isLoginPage =
-        pageTitle.includes('Sign in to GitHub') ||
-        html.includes('name="login"') ||
-        html.includes('action="/session"') ||
-        html.includes('class="auth-form"');
-
-      if (isLoginPage) {
-        throw new Error('NotLoggedIn: User is not logged in to GitHub.');
-      }
-
-      const prs = this.parseAssignedPRsFromHTML(html);
-
-      // Tag each PR with its authorReviewStatus
-      return prs.map((pr) => ({
-        ...pr,
-        authorReviewStatus,
-      }));
     } catch (error: unknown) {
       // Log but don't fail the entire fetch if one URL fails
       this.debugService.error(
