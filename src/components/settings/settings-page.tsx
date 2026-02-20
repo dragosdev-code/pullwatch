@@ -86,7 +86,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 px-4 pb-4 flex flex-col gap-5">
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 flex flex-col gap-5">
           {/* Assigned PRs */}
           <SettingsSection title="Assigned PRs">
             <ToggleField

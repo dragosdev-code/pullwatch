@@ -30,7 +30,7 @@ export const MergedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: MergedLi
   }
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto custom-scrollbar">
       {prs.length > 0 && (
         <>
           {prs.map((pr) => (

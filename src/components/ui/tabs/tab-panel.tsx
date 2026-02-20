@@ -37,7 +37,7 @@ export const TabPanel: React.FC<TabPanelProps> = ({ tabId, children, className =
           top: 0,
           left: 0,
           right: 0,
-          height: isActive ? 'auto' : '100%',
+          height: isActive ? undefined : '100%',
           pointerEvents: isActive ? 'auto' : 'none',
           visibility: style.opacity.to((o) => (o < 0.01 ? 'hidden' : 'visible')),
         }}

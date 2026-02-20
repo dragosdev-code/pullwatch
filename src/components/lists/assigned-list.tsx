@@ -33,7 +33,7 @@ export const AssignedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Assign
   }
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto custom-scrollbar">
       {pendingPRs.length > 0 && (
         <>
           {pendingPRs.map((pr) => (

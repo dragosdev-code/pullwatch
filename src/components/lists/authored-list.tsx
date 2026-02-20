@@ -36,7 +36,7 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
   }
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto custom-scrollbar">
       {changesRequestedPRs.length > 0 && (
         <>
           {changesRequestedPRs.map((pr) => (

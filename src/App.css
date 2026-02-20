@@ -12,25 +12,12 @@
   background-color: #171f2e;
 }
 
-.scrollbar-thin {
-  scrollbar-width: thin;
+.custom-scrollbar {
+  scrollbar-width: none;
 }
 
-.scrollbar-thumb-gray-300::-webkit-scrollbar {
-  width: 4px;
-}
-
-.scrollbar-thumb-gray-300::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
-  background-color: #cbd5e0;
-  border-radius: 2px;
-}
-
-.scrollbar-thumb-gray-300:hover::-webkit-scrollbar-thumb {
-  background-color: #a0aec0;
+.custom-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes settings-spin {
