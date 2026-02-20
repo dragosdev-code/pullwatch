@@ -78,15 +78,15 @@ function App() {
   };
 
   return (
-    <div className="w-[380px] h-[400px] bg-white relative overflow-hidden border-0 shadow-none flex flex-col">
+    <div className="w-[380px] h-[400px] bg-base-100 relative overflow-hidden border-0 shadow-none flex flex-col">
       <Header prCount={assignedPRs.length} />
 
       {error && (
-        <div className="px-5 py-3 bg-red-50 border-b border-red-200">
-          <p className="text-xs text-red-600">{error}</p>
+        <div className="px-5 py-3 bg-error/10 border-b border-error/30">
+          <p className="text-xs text-error">{error}</p>
           <button
             onClick={clearGlobalError}
-            className="text-xs text-red-700 hover:text-red-800 underline mt-1"
+            className="text-xs text-error/80 hover:text-error underline mt-1"
           >
             Dismiss
           </button>

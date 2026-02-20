@@ -16,8 +16,8 @@ const SIZE_CLASSES: Record<CountBadgeSize, string> = {
 };
 
 const TONE_CLASSES: Record<CountBadgeTone, string> = {
-  primary: 'bg-blue-500 text-white',
-  neutral: 'bg-gray-200 text-gray-700',
+  primary: 'bg-primary text-primary-content',
+  neutral: 'bg-base-300 text-base-content',
 };
 
 export const CountBadge = ({

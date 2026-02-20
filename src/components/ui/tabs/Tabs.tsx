@@ -48,7 +48,7 @@ export const Tabs: React.FC<TabsProps> = ({
         {/* Tab Navigation */}
         <div
           role="tablist"
-          className="tabs w-full relative border-b border-gray-200 justify-between flex"
+          className="tabs w-full relative border-b border-base-300 justify-between flex"
         >
           {tabs.map((tab) => (
             <AnimatedTabButton

@@ -16,12 +16,12 @@ export const SoundSelectField = ({ name, label, disabled = false }: SoundSelectF
         disabled ? 'opacity-40 pointer-events-none' : ''
       }`}
     >
-      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <span className="text-sm font-medium text-base-content">{label}</span>
       <select
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         {...register(name as any)}
         disabled={disabled}
-        className="text-xs bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer shrink-0 transition-colors duration-150 hover:border-slate-300"
+        className="select select-sm text-xs cursor-pointer shrink-0 w-auto"
       >
         <option value="ping">Ping</option>
         <option value="bell">Bell</option>

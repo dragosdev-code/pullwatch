@@ -48,7 +48,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
               e.stopPropagation();
               onClose();
             }}
-            className="p-1.5 rounded-lg hover:bg-indigo-100 text-slate-400 hover:text-slate-600 transition-colors duration-200 cursor-pointer shrink-0"
+            className="p-1.5 rounded-lg hover:bg-base-300 text-base-content/50 hover:text-base-content transition-colors duration-200 cursor-pointer shrink-0"
             aria-label="Close settings"
           >
             <svg
@@ -63,7 +63,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
             </svg>
           </button>
 
-          <h1 className="text-base font-bold text-slate-800 leading-none">Settings</h1>
+          <h1 className="text-base font-bold text-base-content leading-none">Settings</h1>
 
           {/* Saved indicator */}
           <div
@@ -77,11 +77,11 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
               viewBox="0 0 24 24"
               strokeWidth="2.5"
               stroke="currentColor"
-              className="size-3 text-indigo-400"
+              className="size-3 text-primary"
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
             </svg>
-            <span className="text-[11px] text-slate-400">Saved</span>
+            <span className="text-[11px] text-base-content/50">Saved</span>
           </div>
         </div>
 
@@ -97,7 +97,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
 
             {/* Sub-group: only active when notifications are enabled */}
             <div
-              className={`border-l-2 border-indigo-100 pl-3 ml-1 flex flex-col gap-3 transition-opacity duration-200 ${
+              className={`border-l-2 border-primary/20 pl-3 ml-1 flex flex-col gap-3 transition-opacity duration-200 ${
                 assignedEnabled ? '' : 'opacity-40 pointer-events-none'
               }`}
             >
@@ -105,7 +105,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
               <SoundSelectField name="assigned.sound" label="Notification sound" />
             </div>
 
-            <div className="border-t border-slate-100 pt-3">
+            <div className="border-t border-base-300 pt-3">
               <ToggleField
                 name="assigned.showDraftsInList"
                 label="Show drafts in list"
@@ -124,7 +124,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
 
             {/* Sub-group: only active when notifications are enabled */}
             <div
-              className={`border-l-2 border-indigo-100 pl-3 ml-1 flex flex-col gap-3 transition-opacity duration-200 ${
+              className={`border-l-2 border-primary/20 pl-3 ml-1 flex flex-col gap-3 transition-opacity duration-200 ${
                 mergedEnabled ? '' : 'opacity-40 pointer-events-none'
               }`}
             >

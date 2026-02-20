@@ -49,9 +49,9 @@ export const Header = ({ prCount }: HeaderProps) => {
   };
 
   return (
-    <div className="flex justify-between items-center px-5 py-3 border-b border-gray-100 relative">
+    <div className="flex justify-between items-center px-5 py-3 border-b border-base-300 relative">
       <div className="flex items-center">
-        <h1 className="text-base font-semibold text-gray-900">
+        <h1 className="text-base font-semibold text-base-content">
           <button
             onClick={handleGithubClick}
             className={`transition-all duration-200 ${

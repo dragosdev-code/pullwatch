@@ -7,19 +7,19 @@ type SettingsPosition = 'left' | 'center' | 'right';
 const positionConfig = {
   left: {
     clipPathOrigin: '2px calc(100% - 2px)',
-    iconClassName: 'absolute bottom-1.5 left-1.5 text-indigo-400',
+    iconClassName: 'absolute bottom-1.5 left-1.5 text-primary',
     idleTransform: 'translate(-25%, 25%)',
     hoverTransform: 'translate(-7%, 7%)',
   },
   center: {
     clipPathOrigin: '50% calc(100% - 2px)',
-    iconClassName: 'absolute bottom-1.5 left-1/2 text-indigo-400',
+    iconClassName: 'absolute bottom-1.5 left-1/2 text-primary',
     idleTransform: 'translate(-50%, 25%)',
     hoverTransform: 'translate(-50%, 7%)',
   },
   right: {
     clipPathOrigin: 'calc(100% - 2px) calc(100% - 2px)',
-    iconClassName: 'absolute bottom-1.5 right-1.5 text-indigo-400',
+    iconClassName: 'absolute bottom-1.5 right-1.5 text-primary',
     idleTransform: 'translate(25%, 25%)',
     hoverTransform: 'translate(7%, 7%)',
   },
@@ -61,7 +61,7 @@ export const SettingsOverlay = ({ position = 'left' }: SettingsOverlayProps) => 
 
   return (
     <animated.div
-      className="absolute inset-0 z-50 bg-indigo-50"
+      className="absolute inset-0 z-50 bg-base-200"
       style={{
         clipPath: radius.to((r: number) => `circle(${r}px at ${config.clipPathOrigin})`),
         cursor: isOpen ? 'default' : 'pointer',

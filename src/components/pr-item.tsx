@@ -19,7 +19,7 @@ export const PRItem = ({
   // Determine the hover background color based on authorReviewStatus
   const getHoverBg = () => {
     if (!showAuthorStatus || !pr.authorReviewStatus) {
-      return isReviewed ? 'hover:bg-gray-100' : 'hover:bg-blue-50';
+      return isReviewed ? 'hover:bg-base-200' : 'hover:bg-primary/8';
     }
 
     switch (pr.authorReviewStatus) {
@@ -28,13 +28,13 @@ export const PRItem = ({
       case 'approved':
         return 'hover:bg-green-50';
       case 'pending':
-        return 'hover:bg-gray-50';
+        return 'hover:bg-base-200';
       case 'commented':
         return 'hover:bg-blue-50';
       case 'draft':
-        return 'hover:bg-slate-50';
+        return 'hover:bg-base-200';
       default:
-        return 'hover:bg-blue-50';
+        return 'hover:bg-primary/8';
     }
   };
   const slideSpring = useSpring({
@@ -83,10 +83,10 @@ export const PRItem = ({
       style={isNew && !isReviewed ? slideSpring : {}}
       data-pr-id={pr.id}
       className={clsx(
-        'group block px-5 py-3 transition-all duration-200 cursor-pointer relative border-b border-gray-100',
+        'group block px-5 py-3 transition-all duration-200 cursor-pointer relative border-b border-base-200',
         isReviewed
-          ? 'bg-gray-50 text-gray-700 opacity-90 border-l-2 hover:opacity-100'
-          : `bg-white text-gray-900 border-l-2 ${getHoverBg()}`,
+          ? 'bg-base-200 text-base-content/70 opacity-90 border-l-2 hover:opacity-100'
+          : `bg-base-100 text-base-content border-l-2 ${getHoverBg()}`,
         isNew && !isReviewed && 'shadow-sm'
       )}
     >
@@ -140,13 +140,13 @@ export const PRItem = ({
             <h3
               className={clsx(
                 'text-sm font-medium truncate',
-                isReviewed ? 'text-gray-600' : 'text-gray-900'
+                isReviewed ? 'text-base-content/60' : 'text-base-content'
               )}
             >
               {pr.title}
             </h3>
             {isReviewed && (
-              <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 text-[11px] font-medium">
+              <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-base-300 text-base-content/70 text-[11px] font-medium">
                 <svg
                   width="10"
                   height="10"
@@ -240,7 +240,12 @@ export const PRItem = ({
               </>
             )}
           </div>
-          <p className={clsx('text-xs truncate', isReviewed ? 'text-gray-400' : 'text-gray-500')}>
+          <p
+            className={clsx(
+              'text-xs truncate',
+              isReviewed ? 'text-base-content/40' : 'text-base-content/50'
+            )}
+          >
             {pr.repoName} • {pr.author.login} • {formatTimeAgo(pr.createdAt || '')}
           </p>
         </div>

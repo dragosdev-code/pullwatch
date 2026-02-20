@@ -7,11 +7,7 @@ interface TabIndicatorProps {
   tabRefsMap: React.RefObject<Map<string, HTMLButtonElement>>;
 }
 
-export const TabIndicator: React.FC<TabIndicatorProps> = ({
-  activeTab,
-  tabs,
-  tabRefsMap,
-}) => {
+export const TabIndicator: React.FC<TabIndicatorProps> = ({ activeTab, tabs, tabRefsMap }) => {
   const indicatorRef = useRef<HTMLDivElement>(null);
   const hasInitialized = useRef(false);
 
@@ -46,13 +42,13 @@ export const TabIndicator: React.FC<TabIndicatorProps> = ({
   return (
     <div
       ref={indicatorRef}
+      className="bg-primary"
       style={{
         position: 'absolute',
         bottom: -1,
         height: 4,
         left: 0,
         width: 0,
-        backgroundColor: 'oklch(62.3% 0.214 259.815)',
         borderRadius: 9999,
         transition: TAB_INDICATOR_TRANSITION,
       }}

@@ -105,14 +105,14 @@ export const AnimatedTabButton: React.FC<AnimatedTabButtonProps> = ({
       <span
         aria-hidden
         style={FEEDBACK_LAYER_STYLES[phase]}
-        className={clsx('pointer-events-none absolute inset-0 rounded-md bg-blue-600/8')}
+        className={clsx('pointer-events-none absolute inset-0 rounded-md bg-primary/8')}
         onTransitionEnd={handleTransitionEnd}
       />
       <span
         className={clsx(
           'relative z-10 flex items-center gap-1.5 transition-colors duration-300',
-          isActive ? 'text-gray-900!' : 'text-gray-500!',
-          !disabled && !isActive && 'group-hover:text-gray-900!'
+          isActive ? 'text-base-content!' : 'text-base-content/50!',
+          !disabled && !isActive && 'group-hover:text-base-content!'
         )}
       >
         {tab.label}

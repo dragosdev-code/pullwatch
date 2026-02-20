@@ -18,9 +18,9 @@ export const ToggleField = ({ name, label, description, disabled = false }: Togg
       }`}
     >
       <div className="flex flex-col min-w-0">
-        <span className="text-sm font-medium text-slate-700 leading-snug">{label}</span>
+        <span className="text-sm font-medium text-base-content leading-snug">{label}</span>
         {description && (
-          <span className="text-xs text-slate-400 mt-0.5 leading-snug">{description}</span>
+          <span className="text-xs text-base-content/50 mt-0.5 leading-snug">{description}</span>
         )}
       </div>
       <input
