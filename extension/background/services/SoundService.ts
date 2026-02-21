@@ -1,5 +1,6 @@
 import type { ISoundService } from '../interfaces/ISoundService';
 import type { IDebugService } from '../interfaces/IDebugService';
+import type { NotificationSound } from '../../common/types';
 import {
   OFFSCREEN_DOCUMENT_PATH,
   OFFSCREEN_REASON_AUDIO_PLAYBACK,
@@ -9,6 +10,7 @@ import {
 /**
  * SoundService handles audio playback through offscreen documents.
  * Manages offscreen document lifecycle and audio playback for notifications.
+ * Supports multiple sound types: 'ping', 'bell', and 'off'.
  */
 export class SoundService implements ISoundService {
   private debugService: IDebugService;
@@ -113,16 +115,24 @@ export class SoundService implements ISoundService {
   }
 
   /**
-   * Plays a notification sound.
+   * Plays a notification sound based on the sound type.
+   * @param sound - The sound type to play ('ping', 'bell', or 'off')
    */
-  async playNotificationSound(soundFile = 'notification.mp3'): Promise<void> {
+  async playNotificationSound(sound: NotificationSound = 'ping'): Promise<void> {
     try {
-      this.debugService.log(`[SoundService] Playing notification sound: ${soundFile}`);
+      // Early return if sound is disabled
+      if (sound === 'off') {
+        this.debugService.log('[SoundService] Sound is disabled (off), skipping playback');
+        return;
+      }
+
+      this.debugService.log(`[SoundService] Playing notification sound: ${sound}`);
+
       await this.ensureOffscreenDocument();
 
-      // Send message to the offscreen document for audio playback
+      // Send message to the offscreen document with sound type directly
       chrome.runtime.sendMessage(
-        { action: EVENT_PLAY_SOUND, payload: { sound: soundFile } },
+        { action: EVENT_PLAY_SOUND, payload: { soundType: sound } },
         (response) => {
           if (chrome.runtime.lastError) {
             this.debugService.error(

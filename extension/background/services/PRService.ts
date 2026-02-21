@@ -104,8 +104,20 @@ export class PRService implements IPRService {
           })
         );
 
-      // Only use fresh API data — no merging with stale stored reviewed PRs
-      const allPRsWithStatus = [...pendingPRsWithStatus, ...freshReviewedPRs];
+      // Get settings to check showDraftsInList
+      const settings = await this.storageService.getExtensionSettings();
+
+      // Filter drafts if showDraftsInList is disabled
+      const filteredPendingPRs = settings.assigned.showDraftsInList
+        ? pendingPRsWithStatus
+        : pendingPRsWithStatus.filter((pr) => pr.type !== 'draft');
+
+      const filteredReviewedPRs = settings.assigned.showDraftsInList
+        ? freshReviewedPRs
+        : freshReviewedPRs.filter((pr) => pr.type !== 'draft');
+
+      // Only use fresh API data — no merging with stale reviewed PRs
+      const allPRsWithStatus = [...filteredPendingPRs, ...filteredReviewedPRs];
       this.debugService.log(
         `[PRService] Total PRs to store (pending + reviewed): ${allPRsWithStatus.length}`
       );
@@ -114,13 +126,15 @@ export class PRService implements IPRService {
       await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRsWithStatus);
       await this.storageService.setLastFetchTime(Date.now());
 
-      // Update badge with current count
-      await this.badgeService.setPRCountBadge(pendingPRsWithStatus.length);
+      // Update badge with filtered pending count
+      await this.badgeService.setPRCountBadge(filteredPendingPRs.length);
 
-      // Show notifications for new PRs (NotificationService handles sound)
+      // Show notifications for new PRs (NotificationService handles settings and sound)
       if (newPRs.length > 0 && !forceRefresh) {
         this.debugService.log(`[PRService] Showing notifications for ${newPRs.length} new PR(s)`);
-        await this.notificationService.showNewPRNotifications(newPRs);
+        await this.notificationService.showAssignedPRNotifications(newPRs, {
+          includeDrafts: settings.assigned.notifyOnDrafts,
+        });
       } else if (newPRs.length === 0) {
         this.debugService.log('[PRService] No new PRs detected, skipping notifications');
       } else if (forceRefresh) {
@@ -254,23 +268,49 @@ export class PRService implements IPRService {
     this.debugService.log(`[PRService] Updating merged PRs (force: ${forceRefresh})`);
 
     try {
+      // Get current stored merged PRs for comparison and cache check
+      const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_MERGED_PRS);
+
       // Check cache before fetching from GitHub
-      const stored = await this.storageService.getStoredPRs(STORAGE_KEY_MERGED_PRS);
       const isCacheValid =
-        stored && stored.timestamp && Date.now() - stored.timestamp < CACHE_TTL_MS;
+        storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
 
       if (isCacheValid && !forceRefresh) {
         this.debugService.log('[PRService] Returning cached Merged PRs');
-        return stored.prs;
+        return storedData.prs;
       }
 
+      const oldPRs = storedData?.prs || [];
+      this.debugService.log(`[PRService] Current stored merged PRs count: ${oldPRs.length}`);
+
+      // Fetch fresh merged PRs from GitHub
       const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
       this.debugService.log(`[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`);
 
-      await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, freshMergedPRs);
+      // Compare to find newly merged PRs
+      const { newPRs, allPRsWithStatus: mergedPRsWithStatus } = this.comparePRs(
+        oldPRs,
+        freshMergedPRs
+      );
+      this.debugService.log(`[PRService] Newly merged PRs detected: ${newPRs.length}`);
 
-      this.debugService.log(`[PRService] Successfully updated ${freshMergedPRs.length} merged PRs`);
-      return freshMergedPRs;
+      // Update storage with fresh data
+      await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, mergedPRsWithStatus);
+
+      // Show notifications for newly merged PRs (unless force refresh)
+      if (newPRs.length > 0 && !forceRefresh) {
+        this.debugService.log(
+          `[PRService] Triggering merged PR notifications for ${newPRs.length} PR(s)`
+        );
+        await this.notificationService.showMergedPRNotifications(newPRs);
+      } else if (newPRs.length === 0) {
+        this.debugService.log('[PRService] No new merged PRs detected, skipping notifications');
+      } else if (forceRefresh) {
+        this.debugService.log('[PRService] Force refresh detected, skipping merged notifications');
+      }
+
+      this.debugService.log(`[PRService] Successfully updated ${mergedPRsWithStatus.length} merged PRs`);
+      return mergedPRsWithStatus;
     } catch (error) {
       this.debugService.error('[PRService] Error updating merged PRs:', error);
       throw error;

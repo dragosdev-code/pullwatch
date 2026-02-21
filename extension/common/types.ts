@@ -8,6 +8,37 @@ import type {
   STORAGE_KEY_AUTHORED_PRS,
 } from './constants';
 
+/**
+ * Available notification sounds
+ */
+export type NotificationSound = 'ping' | 'bell' | 'off';
+
+/**
+ * Settings for assigned PR notifications and display
+ */
+export interface AssignedSettings {
+  notificationsEnabled: boolean;
+  notifyOnDrafts: boolean;
+  sound: NotificationSound;
+  showDraftsInList: boolean;
+}
+
+/**
+ * Settings for merged PR notifications
+ */
+export interface MergedSettings {
+  notificationsEnabled: boolean;
+  sound: NotificationSound;
+}
+
+/**
+ * Settings for authored PRs (reserved for future use)
+ */
+export interface AuthoredSettings {
+  notificationsEnabled: boolean;
+  sound: NotificationSound;
+}
+
 // Represents the structure of a Pull Request
 export interface PullRequest {
   id: string; // Unique identifier, could be the URL or a combination of repo and number
@@ -60,12 +91,24 @@ export interface StorageKeyMap {
   [STORAGE_KEY_SETTINGS]: ExtensionSettings;
 }
 
-// Settings for the extension
+/**
+ * Notification category for type-safe category-specific operations
+ */
+export type NotificationCategory = 'assigned' | 'merged' | 'authored';
+
+/**
+ * Settings for the extension
+ * Uses a category-based structure for notification settings
+ */
 export interface ExtensionSettings {
-  notificationsEnabled: boolean;
-  soundEnabled: boolean;
-  fetchInterval: number; // In milliseconds
-  // Add other settings as needed
+  /** Assigned PR notification and display settings */
+  assigned: AssignedSettings;
+  /** Merged PR notification settings */
+  merged: MergedSettings;
+  /** Authored PR notification settings (reserved for future use) */
+  authored: AuthoredSettings;
+  /** Fetch interval in milliseconds (applies to all PR types) */
+  fetchInterval: number;
 }
 
 // User-specific data (example)

@@ -1,6 +1,6 @@
 import { debugLog, debugError, debugWarn, initializeDebugTools } from '../debug/debugLogger';
 import { EVENT_PLAY_SOUND, EVENT_OFFSCREEN_READY } from '../common/constants';
-import type { RuntimeMessage, MessageResponse } from '../common/types';
+import type { RuntimeMessage, MessageResponse, NotificationSound } from '../common/types';
 
 // Initialize debug tools for this context
 initializeDebugTools();
@@ -13,42 +13,89 @@ interface WindowWithLegacyAudio extends Window {
 }
 
 /**
- * Plays a two-tone notification sound using the Web Audio API.
- * @param audioContext - The AudioContext to use for playback.
+ * Sound configuration for different notification types
  */
-function playBeepSound(audioContext: AudioContext): void {
-  const times = [0, 0.15]; // Start times for the two tones
-  const frequencies = [800, 1000]; // Frequencies of the two tones (Hz)
-  const duration = 0.1; // Duration of each tone (seconds)
-  const initialGain = 0.3; // Initial volume
+interface SoundConfig {
+  times: number[]; // Start times for tones
+  frequencies: number[]; // Frequencies of tones (Hz)
+  duration: number; // Duration of each tone (seconds)
+  initialGain: number; // Initial volume (0-1)
+  oscillatorType: OscillatorType; // Waveform type
+}
 
-  times.forEach((time, index) => {
+/**
+ * Sound presets for different notification types
+ */
+const SOUND_PRESETS: Record<Exclude<NotificationSound, 'off'>, SoundConfig> = {
+  ping: {
+    times: [0, 0.12],
+    frequencies: [880, 1100], // Higher, sharper tones (A5, C#6)
+    duration: 0.08,
+    initialGain: 0.25,
+    oscillatorType: 'sine',
+  },
+  bell: {
+    times: [0, 0.25, 0.5],
+    frequencies: [523, 659, 784], // Lower, bell-like tones (C5, E5, G5)
+    duration: 0.15,
+    initialGain: 0.35,
+    oscillatorType: 'triangle', // Triangle wave sounds more bell-like
+  },
+};
+
+/**
+ * Plays a notification sound using the Web Audio API.
+ * @param audioContext - The AudioContext to use for playback.
+ * @param soundType - The type of sound to play ('ping' or 'bell')
+ */
+function playNotificationSound(audioContext: AudioContext, soundType: NotificationSound): void {
+  const config = SOUND_PRESETS[soundType as Exclude<NotificationSound, 'off'>];
+
+  if (!config) {
+    debugError(`Unknown sound type: ${soundType}`);
+    return;
+  }
+
+  config.times.forEach((time, index) => {
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
 
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
 
-    oscillator.type = 'sine'; // A smoother sound than the default square wave
-    oscillator.frequency.setValueAtTime(frequencies[index], audioContext.currentTime + time);
-    gainNode.gain.setValueAtTime(initialGain, audioContext.currentTime + time);
+    oscillator.type = config.oscillatorType;
+    oscillator.frequency.setValueAtTime(
+      config.frequencies[index],
+      audioContext.currentTime + time
+    );
+    gainNode.gain.setValueAtTime(config.initialGain, audioContext.currentTime + time);
     // Fade out the sound
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + time + duration);
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.01,
+      audioContext.currentTime + time + config.duration
+    );
 
     oscillator.start(audioContext.currentTime + time);
-    oscillator.stop(audioContext.currentTime + time + duration);
+    oscillator.stop(audioContext.currentTime + time + config.duration);
   });
 
-  debugLog('Offscreen notification sound playback initiated.');
+  debugLog(`Offscreen notification sound playback initiated: ${soundType}`);
 }
 
 /**
  * Handles the request to play a notification sound.
  * Creates or resumes an AudioContext and then plays the sound.
+ * @param soundType - The type of sound to play ('ping' or 'bell')
  */
-async function handlePlayNotificationSound(): Promise<void> {
+async function handlePlayNotificationSound(soundType: NotificationSound = 'ping'): Promise<void> {
   try {
-    debugLog('Attempting to play notification sound in offscreen document...');
+    // Early return if sound is disabled
+    if (soundType === 'off') {
+      debugLog('Sound is disabled (off), skipping playback');
+      return;
+    }
+
+    debugLog(`Attempting to play notification sound in offscreen document: ${soundType}`);
 
     const globalWin = window as WindowWithLegacyAudio;
     const AudioContextConstructor = window.AudioContext || globalWin.webkitAudioContext;
@@ -67,7 +114,7 @@ async function handlePlayNotificationSound(): Promise<void> {
       debugLog('AudioContext resumed.');
     }
 
-    playBeepSound(audioContext);
+    playNotificationSound(audioContext, soundType);
   } catch (error) {
     debugError('Failed to play sound in offscreen document:', error);
   }
@@ -78,9 +125,16 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
   debugLog('Offscreen document received message:', message, 'from sender:', sender);
 
   if (message.action === EVENT_PLAY_SOUND) {
-    handlePlayNotificationSound()
+    // Get sound type from payload, default to 'ping' if not specified
+    const payload = message.payload as { soundType?: NotificationSound } | undefined;
+    const soundType = payload?.soundType ?? 'ping';
+
+    handlePlayNotificationSound(soundType)
       .then(() => {
-        sendResponse({ success: true, data: 'Sound playback initiated' } as MessageResponse);
+        sendResponse({
+          success: true,
+          data: `Sound playback initiated: ${soundType}`,
+        } as MessageResponse);
       })
       .catch((error) => {
         debugError('Error in handlePlayNotificationSound promise chain:', error);

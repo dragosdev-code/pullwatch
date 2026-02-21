@@ -1,4 +1,4 @@
-import type { PullRequest } from '../../extension/common/types';
+import type { PullRequest, ExtensionSettings } from '../../extension/common/types';
 
 /**
  * Service to handle Chrome extension communication.
@@ -89,6 +89,21 @@ export class ChromeExtensionService {
   }
 
   /**
+   * Gets extension settings from Chrome storage (sync).
+   */
+  async getSettings(): Promise<ExtensionSettings> {
+    return this.sendMessage<ExtensionSettings>('getSettings');
+  }
+
+  /**
+   * Saves extension settings to Chrome storage (sync).
+   * Returns the complete updated settings.
+   */
+  async saveSettings(settings: Partial<ExtensionSettings>): Promise<ExtensionSettings> {
+    return this.sendMessage<ExtensionSettings>('saveSettings', settings);
+  }
+
+  /**
    * Sends a test notification.
    */
   async sendTestNotification(): Promise<void> {
@@ -105,6 +120,29 @@ export class ChromeExtensionService {
 
     const messageListener = (message: { action: string; data?: unknown }) => {
       callback(message);
+    };
+
+    chrome.runtime.onMessage.addListener(messageListener);
+
+    // Return cleanup function
+    return () => {
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
+  }
+
+  /**
+   * Sets up a listener specifically for settings changes.
+   * This listens for updates from other contexts (background, other tabs).
+   */
+  onSettingsChange(callback: (settings: ExtensionSettings) => void): () => void {
+    if (!this.isExtensionContext()) {
+      return () => {}; // Return empty cleanup function
+    }
+
+    const messageListener = (message: { action: string; data?: unknown }) => {
+      if (message.action === 'settingsUpdated' && message.data) {
+        callback(message.data as ExtensionSettings);
+      }
     };
 
     chrome.runtime.onMessage.addListener(messageListener);

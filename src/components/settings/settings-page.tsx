@@ -4,6 +4,7 @@ import { SettingsSection } from './form/settings-section';
 import { ToggleField } from './form/toggle-field';
 import { SoundSelectField } from './form/sound-select-field';
 import { ThemePicker } from './form/theme-picker';
+import { useExtensionSettings } from '../../hooks/use-extension-settings';
 import { DEFAULT_SETTINGS } from './types';
 import type { ExtensionSettings } from './types';
 
@@ -12,20 +13,36 @@ interface SettingsPageProps {
 }
 
 export const SettingsPage = ({ onClose }: SettingsPageProps) => {
-  const methods = useForm<ExtensionSettings>({ defaultValues: DEFAULT_SETTINGS });
+  const { settings, isLoading, saveSettings } = useExtensionSettings();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSaved, setShowSaved] = useState(false);
   const savedFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Initialize form with default settings, will be updated when settings load
+  const methods = useForm<ExtensionSettings>({
+    defaultValues: DEFAULT_SETTINGS,
+  });
+
+  // Update form values when settings are loaded from storage
+  useEffect(() => {
+    if (settings) {
+      methods.reset(settings);
+    }
+  }, [settings, methods]);
+
   const assignedEnabled = methods.watch('assigned.notificationsEnabled');
   const mergedEnabled = methods.watch('merged.notificationsEnabled');
 
+  // Auto-save settings when form values change
   useEffect(() => {
     const subscription = methods.watch((values) => {
+      // Don't save while loading initial settings
+      if (isLoading || !settings) return;
+
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
-        // TODO: persist to chrome.storage.sync
-        console.log('[settings] auto-saving', values);
+        // Save to chrome.storage.sync via the hook
+        saveSettings(values as Partial<ExtensionSettings>);
 
         setShowSaved(true);
         if (savedFadeRef.current) clearTimeout(savedFadeRef.current);
@@ -37,7 +54,45 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       if (savedFadeRef.current) clearTimeout(savedFadeRef.current);
     };
-  }, [methods]);
+  }, [methods, isLoading, settings, saveSettings]);
+
+  // Show loading state while settings are loading
+  if (isLoading) {
+    return (
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 pt-3 pb-2 shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="p-1.5 rounded-lg hover:bg-base-300 text-base-content/50 hover:text-base-content transition-colors duration-200 cursor-pointer shrink-0"
+            aria-label="Close settings"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              stroke="currentColor"
+              className="size-4"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <h1 className="text-base font-bold text-base-content leading-none">Settings</h1>
+        </div>
+        {/* Loading state */}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin size-4 border-2 border-primary border-t-transparent rounded-full" />
+            <span className="text-sm text-base-content/60">Loading settings...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <FormProvider {...methods}>

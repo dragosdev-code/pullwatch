@@ -156,11 +156,21 @@ export class EventService implements IEventService {
       this.debugService.log('[EventService] Handling alarm:', alarm.name);
 
       if (alarm.name === EVENT_FETCH_PRS) {
-        this.debugService.log('[EventService] Fetch alarm triggered');
+        this.debugService.log('[EventService] Fetch alarm triggered - fetching all PR types');
 
-        // Get PR service and fetch PRs
         const prService = this.serviceContainer.getService<IPRService>('prService');
+
+        // Fetch assigned PRs (includes notifications for new assigned PRs)
         await prService.fetchAndUpdateAssignedPRs();
+
+        // Fetch merged PRs (includes notifications for newly merged PRs)
+        await prService.updateMergedPRs();
+
+        // Note: Authored PRs don't have notifications enabled by default, but we still fetch them
+        // to keep the data fresh for the UI
+        await prService.updateAuthoredPRs();
+
+        this.debugService.log('[EventService] Completed alarm fetch for all PR types');
       } else {
         this.debugService.warn('[EventService] Unknown alarm triggered:', alarm.name);
       }
@@ -306,16 +316,21 @@ export class EventService implements IEventService {
       if (this.isMessageAction(message, 'getMergedPRs')) {
         this.debugService.log('[EventService] Getting stored merged PRs and fetching fresh data');
 
+        // 1. Get stored merged PRs immediately for fast response
         const storedPRs = await prService.getStoredMergedPRs();
+        this.debugService.log(`[EventService] getStoredMergedPRs returned ${storedPRs.length} PRs`);
+
+        // 2. Send stored PRs immediately
         sendResponse({ success: true, data: storedPRs });
 
-        // Background refresh
+        // 3. Fetch fresh data in background (don't wait for response)
         this.fetchFreshMergedDataInBackground(prService, storedPRs);
       } else if (this.isMessageAction(message, 'fetchMergedPRs')) {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
         );
-        const merged = await prService.updateMergedPRs(true);
+        const merged = await prService.updateMergedPRs(true); // force refresh
+        this.debugService.log(`[EventService] updateMergedPRs returned ${merged.length} PRs`);
         sendResponse({ success: true, data: merged });
       }
     } catch (error) {
@@ -326,25 +341,47 @@ export class EventService implements IEventService {
 
   /**
    * Fetches fresh merged data in the background and notifies popup if data changed.
+   * Delegates business logic to PRService, including notification handling.
    */
   private async fetchFreshMergedDataInBackground(
     prService: IPRService,
     storedPRs: PullRequest[]
   ): Promise<void> {
     try {
-      const fresh = await prService.updateMergedPRs();
+      this.debugService.log('[EventService] Background merged PR fetch started');
 
-      const summarize = (list: PullRequest[]) => list.map((pr) => ({ id: pr.id, title: pr.title }));
-      const changed = JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(fresh));
+      // Delegate fetching + storage + notifications to PRService
+      const freshPRs = await prService.updateMergedPRs();
 
-      if (changed) {
+      // Check if there are any changes (excluding the isNew flag)
+      const summarize = (list: PullRequest[]) =>
+        list.map((pr) => ({ id: pr.id, title: pr.title }));
+
+      const hasChanges =
+        JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(freshPRs));
+
+      if (hasChanges) {
+        this.debugService.log(
+          '[EventService] Background merged PR fetch detected changes, notifying popup'
+        );
+
+        // Send message to popup to update its display
         try {
-          await chrome.runtime.sendMessage({ action: 'mergedPrDataUpdated', data: fresh });
-        } catch (e) {
-          this.debugService.log('[EventService] Could not notify popup for merged PRs:', e);
+          await chrome.runtime.sendMessage({
+            action: 'mergedPrDataUpdated',
+            data: freshPRs,
+          });
+        } catch (messageError) {
+          // Popup might be closed - that's ok, just log it
+          this.debugService.log(
+            '[EventService] Could not notify popup for merged PRs (likely closed):',
+            messageError
+          );
         }
       } else {
-        this.debugService.log('[EventService] Background merged fetch completed - no changes');
+        this.debugService.log(
+          '[EventService] Background merged PR fetch completed - no changes detected'
+        );
       }
     } catch (error) {
       this.debugService.error('[EventService] Error in background merged fetch:', error);
@@ -472,6 +509,10 @@ export class EventService implements IEventService {
         if (message.payload) {
           await storageService.setExtensionSettings(message.payload);
           const settings = await storageService.getExtensionSettings();
+
+          // Notify all open popups that settings have changed
+          this.broadcastSettingsUpdate(settings);
+
           sendResponse({ success: true, data: settings });
         } else {
           sendResponse({ success: false, error: 'No settings payload provided' });
@@ -483,6 +524,25 @@ export class EventService implements IEventService {
     } catch (error) {
       this.debugService.error('[EventService] Error handling settings:', error);
       sendResponse({ success: false, error: 'Failed to handle settings' });
+    }
+  }
+
+  /**
+   * Broadcasts settings update to all open popups/extension contexts.
+   */
+  private async broadcastSettingsUpdate(settings: ExtensionSettings): Promise<void> {
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'settingsUpdated',
+        data: settings,
+      });
+      this.debugService.log('[EventService] Broadcasted settings update to all contexts');
+    } catch (error) {
+      // Other contexts might be closed - that's ok, just log it
+      this.debugService.log(
+        '[EventService] Could not broadcast settings update (some contexts may be closed):',
+        error
+      );
     }
   }
 
@@ -558,7 +618,12 @@ export class EventService implements IEventService {
 
         const notificationService =
           this.serviceContainer.getService<INotificationService>('notificationService');
-        await notificationService.showNewPRNotifications(testPR);
+        const storageService = this.serviceContainer.getService<IStorageService>('storageService');
+        const settings = await storageService.getExtensionSettings();
+
+        await notificationService.showAssignedPRNotifications(testPR, {
+          includeDrafts: settings.assigned.notifyOnDrafts,
+        });
 
         sendResponse({ success: true, data: `Test notification (${message.action}) triggered` });
       }
