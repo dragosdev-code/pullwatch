@@ -3,6 +3,7 @@ import { useForm, FormProvider } from 'react-hook-form';
 import { SettingsSection } from './form/settings-section';
 import { ToggleField } from './form/toggle-field';
 import { SoundSelectField } from './form/sound-select-field';
+import { ThemePicker } from './form/theme-picker';
 import { DEFAULT_SETTINGS } from './types';
 import type { ExtensionSettings } from './types';
 
@@ -130,6 +131,11 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
             >
               <SoundSelectField name="merged.sound" label="Notification sound" />
             </div>
+          </SettingsSection>
+
+          {/* Appearance */}
+          <SettingsSection title="Appearance">
+            <ThemePicker />
           </SettingsSection>
         </div>
       </div>
