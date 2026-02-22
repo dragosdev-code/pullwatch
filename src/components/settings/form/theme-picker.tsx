@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useTheme } from '../../../hooks/use-theme';
 import { RandomThemeButton } from './random-theme-button';
+import { CheckIcon } from '../../ui/icons';
 
 const THEMES = [
   'light',
@@ -39,21 +40,6 @@ const THEMES = [
   'abyss',
   'silk',
 ] as const;
-
-function CheckIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={2.5}
-      stroke="currentColor"
-      className="size-3.5 shrink-0 text-primary"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-    </svg>
-  );
-}
 
 interface ThemeSwatchProps {
   name: string;
@@ -155,7 +141,7 @@ export const ThemePicker = () => {
                   {name}
                 </span>
 
-                {isActive && <CheckIcon />}
+                {isActive && <CheckIcon className="size-3.5 shrink-0 text-primary" />}
               </button>
             );
           })}

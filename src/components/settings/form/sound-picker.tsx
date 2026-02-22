@@ -6,6 +6,7 @@ import {
   type SoundDefinition,
 } from '../../../../extension/common/sound-config';
 import { SoundPreviewButton } from './sound-preview-button';
+import { CheckIcon, WaveIcon, BellIcon, MuteIcon } from '../../ui/icons';
 
 interface SoundPickerProps {
   /** Currently selected sound */
@@ -22,94 +23,6 @@ interface SoundOptionProps {
   definition: SoundDefinition;
   isSelected: boolean;
   onSelect: () => void;
-}
-
-/**
- * Check icon for selected state
- */
-function CheckIcon({ className = 'size-4' }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M4.5 12.75l6 6 9-13.5" />
-    </svg>
-  );
-}
-
-/**
- * Sound wave visualization icon
- */
-function WaveIcon({ className = 'size-5' }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M2 10v4" />
-      <path d="M6 8v8" />
-      <path d="M10 6v12" />
-      <path d="M14 8v8" />
-      <path d="M18 10v4" />
-      <path d="M22 12v0" />
-    </svg>
-  );
-}
-
-/**
- * Bell icon for bell sound type
- */
-function BellIcon({ className = 'size-5' }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-    </svg>
-  );
-}
-
-/**
- * Mute/off icon for disabled sound
- */
-function MuteIcon({ className = 'size-5' }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M11 5L6 9H2v6h4l5 4V5z" />
-      <path d="M22 9l-6 6" />
-      <path d="M16 9l6 6" />
-    </svg>
-  );
 }
 
 /**

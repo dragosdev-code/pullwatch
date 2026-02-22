@@ -5,97 +5,12 @@ import type { NotificationSound } from '../../../../extension/common/types';
 import { getSoundDefinition } from '../../../../extension/common/sound-config';
 import { SoundPicker } from './sound-picker';
 import { SoundPreviewButton } from './sound-preview-button';
+import { ChevronIcon, SoundIcon } from '../../ui/icons';
 
 interface SoundSelectFieldProps {
   name: string;
   label: string;
   disabled?: boolean;
-}
-
-/**
- * Chevron/arrow icon for the dropdown button
- */
-function ChevronIcon({ className = 'size-4' }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M6 9l6 6 6-6" />
-    </svg>
-  );
-}
-
-/**
- * Sound icon that changes based on the selected sound type
- */
-function SoundIcon({ sound, className = 'size-4' }: { sound: NotificationSound; className?: string }) {
-  const definition = getSoundDefinition(sound);
-
-  if (!definition || definition.icon === 'mute') {
-    // Mute/off icon
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={className}
-      >
-        <path d="M11 5L6 9H2v6h4l5 4V5z" />
-        <path d="M22 9l-6 6" />
-        <path d="M16 9l6 6" />
-      </svg>
-    );
-  }
-
-  if (definition.icon === 'bell') {
-    // Bell icon
-    return (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={className}
-      >
-        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-      </svg>
-    );
-  }
-
-  // Wave/sound icon (default for ping)
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M2 10v4" />
-      <path d="M6 8v8" />
-      <path d="M10 6v12" />
-      <path d="M14 8v8" />
-      <path d="M18 10v4" />
-    </svg>
-  );
 }
 
 /**
