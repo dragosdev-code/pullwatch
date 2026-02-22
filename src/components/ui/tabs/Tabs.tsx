@@ -4,7 +4,7 @@ import { AnimatedTabButton } from './animated-tab-button';
 import { useTabControlStore } from '../../../stores/tab-control/store';
 import type { Tab, UseTabsOptions } from './types';
 
-interface TabsProps extends Omit<UseTabsOptions, 'tabs'> {
+interface TabsProps extends Omit<UseTabsOptions, 'tabs' | 'defaultTab'> {
   tabs: Tab[];
   children: React.ReactNode;
   className?: string;
@@ -14,7 +14,6 @@ export const Tabs: React.FC<TabsProps> = ({
   tabs,
   children,
   className = '',
-  defaultTab,
   onChange,
 }) => {
   const activeTab = useTabControlStore((state) => state.activeTab);
@@ -28,13 +27,6 @@ export const Tabs: React.FC<TabsProps> = ({
   useEffect(() => {
     registerTabs(tabIds);
   }, [tabIds, registerTabs]);
-
-  useEffect(() => {
-    if (defaultTab && !activeTab) {
-      setActiveTab(defaultTab);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const tabRefsMap = useRef<Map<string, HTMLButtonElement>>(new Map());
 

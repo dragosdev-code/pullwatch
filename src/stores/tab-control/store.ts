@@ -1,8 +1,9 @@
 import { create } from 'zustand';
+import { DEFAULT_TAB_ID } from '../../constants/tabs';
 import type { TabControlState } from './types';
 
 export const useTabControlStore = create<TabControlState>((set, get) => ({
-  activeTab: '',
+  activeTab: DEFAULT_TAB_ID,
   direction: 1,
   tabOrder: [],
   registerTabs: (tabIds: string[]) => set({ tabOrder: tabIds }),

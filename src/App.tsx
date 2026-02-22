@@ -15,6 +15,7 @@ import { useStorageSync } from './hooks/use-storage-sync';
 import { useGlobalError, useClearGlobalError } from './stores/global-error';
 import { useDebugMode } from './stores/debug';
 import { SettingsOverlay } from './components/settings/settings-overlay';
+import { TAB_IDS } from './constants/tabs';
 
 function App() {
   const error = useGlobalError();
@@ -71,9 +72,9 @@ function App() {
 
   const tabs: Tab[] = useMemo(
     () => [
-      { id: 'assigned', label: 'To Review', count: pendingPRCount },
-      { id: 'authored', label: 'Authored', count: authoredPRs.length },
-      { id: 'merged', label: 'Merged', count: mergedPRs.length },
+      { id: TAB_IDS.ASSIGNED, label: 'To Review', count: pendingPRCount },
+      { id: TAB_IDS.AUTHORED, label: 'Authored', count: authoredPRs.length },
+      { id: TAB_IDS.MERGED, label: 'Merged', count: mergedPRs.length },
     ],
     [pendingPRCount, authoredPRs.length, mergedPRs.length]
   );
@@ -105,10 +106,9 @@ function App() {
       <Tabs
         tabs={tabs}
         className="flex-1 flex flex-col"
-        defaultTab="assigned"
         onChange={handleTabChange}
       >
-        <TabPanel tabId="assigned" className="flex-1 h-0">
+        <TabPanel tabId={TAB_IDS.ASSIGNED} className="flex-1 h-0">
           <AssignedList
             prs={assignedPRs}
             newPrIds={assignedNewPrIds}
@@ -117,7 +117,7 @@ function App() {
           />
         </TabPanel>
 
-        <TabPanel tabId="authored" className="flex-1 h-0">
+        <TabPanel tabId={TAB_IDS.AUTHORED} className="flex-1 h-0">
           <AuthoredList
             prs={authoredPRs}
             newPrIds={authoredNewPrIds}
@@ -126,7 +126,7 @@ function App() {
           />
         </TabPanel>
 
-        <TabPanel tabId="merged" className="flex-1 h-0">
+        <TabPanel tabId={TAB_IDS.MERGED} className="flex-1 h-0">
           <MergedList
             prs={mergedPRs}
             newPrIds={mergedNewPrIds}
