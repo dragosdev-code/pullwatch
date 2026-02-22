@@ -1,5 +1,6 @@
 import { useSpring, animated } from '@react-spring/web';
 import { formatDistanceToNow } from 'date-fns';
+import { useRef, useState, useEffect } from 'react';
 import clsx from 'clsx';
 import type { PullRequest } from '../../extension/common/types';
 import { PRStatusIcon } from './ui/pr-status-icon';
@@ -9,6 +10,7 @@ import { CheckIcon } from './ui/icons';
 interface PRItemProps {
   pr: PullRequest;
   isNew: boolean;
+  isFirst?: boolean;
   isReviewed?: boolean;
   showAuthorStatus?: boolean;
 }
@@ -16,9 +18,23 @@ interface PRItemProps {
 export const PRItem = ({
   pr,
   isNew,
+  isFirst = false,
   isReviewed = false,
   showAuthorStatus = false,
 }: PRItemProps) => {
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const check = () => setIsTruncated(el.scrollWidth > el.clientWidth);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [pr.title]);
+
   const slideSpring = useSpring({
     from: isNew
       ? {
@@ -65,7 +81,7 @@ export const PRItem = ({
       style={isNew && !isReviewed ? slideSpring : {}}
       data-pr-id={pr.id}
       className={clsx(
-        'group block px-5 py-3 transition-all duration-200 cursor-pointer relative border-b border-base-200',
+        'group block px-5 py-3 transition-all duration-200 cursor-pointer relative border-b border-base-200 hover:z-10',
         isReviewed
           ? 'bg-base-200 text-base-content/70 opacity-90 border-l-2 hover:opacity-100'
           : 'bg-base-100 text-base-content border-l-2 hover:bg-base-200',
@@ -77,14 +93,25 @@ export const PRItem = ({
           <div className="flex items-center mb-1">
             <PRStatusIcon type={pr.type} reviewed={isReviewed} />
 
-            <h3
-              className={clsx(
-                'text-sm font-medium truncate',
-                isReviewed ? 'text-base-content/60' : 'text-base-content'
+            <div className={clsx('min-w-0', isTruncated && ['tooltip', isFirst ? 'tooltip-bottom' : 'tooltip-top'])}>
+              {isTruncated && (
+                <div className="tooltip-content z-[9999]">
+                  <div className="bg-neutral text-neutral-content text-xs px-3 py-2 rounded-lg shadow-xl max-w-[300px] whitespace-normal leading-relaxed text-left">
+                    {pr.title}
+                  </div>
+                </div>
               )}
-            >
-              {pr.title}
-            </h3>
+              <h3
+                ref={titleRef}
+                className={clsx(
+                  'text-sm font-medium truncate transition-colors duration-150',
+                  isReviewed ? 'text-base-content/60' : 'text-base-content',
+                  isTruncated && 'hover:text-primary'
+                )}
+              >
+                {pr.title}
+              </h3>
+            </div>
             {isReviewed && (
               <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-base-300 text-base-content/70 text-[11px] font-medium">
                 <CheckIcon width={10} height={10} className="flex-shrink-0" />

@@ -33,8 +33,8 @@ export const MergedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: MergedLi
     <div className="h-full overflow-y-auto custom-scrollbar">
       {prs.length > 0 && (
         <>
-          {prs.map((pr) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} />
+          {prs.map((pr, i) => (
+            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={i === 0} />
           ))}
         </>
       )}

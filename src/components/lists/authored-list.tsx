@@ -35,44 +35,47 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
     );
   }
 
+  const orderedGroups = [changesRequestedPRs, approvedPRs, pendingPRs, commentedPRs, draftPRs];
+  const firstGroupIndex = orderedGroups.findIndex((g) => g.length > 0);
+
   return (
     <div className="h-full overflow-y-auto custom-scrollbar">
       {changesRequestedPRs.length > 0 && (
         <>
-          {changesRequestedPRs.map((pr) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} showAuthorStatus />
+          {changesRequestedPRs.map((pr, i) => (
+            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={firstGroupIndex === 0 && i === 0} showAuthorStatus />
           ))}
         </>
       )}
 
       {approvedPRs.length > 0 && (
         <>
-          {approvedPRs.map((pr) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} showAuthorStatus />
+          {approvedPRs.map((pr, i) => (
+            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={firstGroupIndex === 1 && i === 0} showAuthorStatus />
           ))}
         </>
       )}
 
       {pendingPRs.length > 0 && (
         <>
-          {pendingPRs.map((pr) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} showAuthorStatus />
+          {pendingPRs.map((pr, i) => (
+            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={firstGroupIndex === 2 && i === 0} showAuthorStatus />
           ))}
         </>
       )}
 
       {commentedPRs.length > 0 && (
         <div className="space-y-0">
-          {commentedPRs.map((pr) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} showAuthorStatus />
+          {commentedPRs.map((pr, i) => (
+            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={firstGroupIndex === 3 && i === 0} showAuthorStatus />
           ))}
         </div>
       )}
 
       {draftPRs.length > 0 && (
         <div className="space-y-0">
-          {draftPRs.map((pr) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} showAuthorStatus />
+          {draftPRs.map((pr, i) => (
+            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={firstGroupIndex === 4 && i === 0} showAuthorStatus />
           ))}
         </div>
       )}

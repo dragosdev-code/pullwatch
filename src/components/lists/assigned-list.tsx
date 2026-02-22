@@ -36,11 +36,12 @@ export const AssignedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Assign
     <div className="h-full overflow-y-auto custom-scrollbar">
       {pendingPRs.length > 0 && (
         <>
-          {pendingPRs.map((pr) => (
+          {pendingPRs.map((pr, i) => (
             <PRItem
               key={pr.id}
               pr={pr}
               isNew={newPrIds.has(pr.id)}
+              isFirst={i === 0}
               isReviewed={pr.reviewStatus === 'reviewed'}
             />
           ))}
@@ -48,11 +49,12 @@ export const AssignedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Assign
       )}
       {reviewedPRs.length > 0 && (
         <>
-          {reviewedPRs.map((pr) => (
+          {reviewedPRs.map((pr, i) => (
             <PRItem
               key={pr.id}
               pr={pr}
               isNew={newPrIds.has(pr.id)}
+              isFirst={pendingPRs.length === 0 && i === 0}
               isReviewed={pr.reviewStatus === 'reviewed'}
             />
           ))}
