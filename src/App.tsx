@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Header } from './components/header';
 import { Tabs } from './components/ui/tabs/tabs';
 import { TabPanel } from './components/ui/tabs/tab-panel';
-import type { Tab } from './components/ui/tabs/hook/use-tabs';
+import type { Tab } from './components/ui/tabs/types';
 import { AssignedList } from './components/lists/assigned-list';
 import { AuthoredList } from './components/lists/authored-list';
 import { MergedList } from './components/lists/merged-list';

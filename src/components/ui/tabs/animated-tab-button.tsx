@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import clsx from 'clsx';
-import type { Tab } from './hook/use-tabs';
+import type { Tab } from './types';
 import { CountBadge } from '../count-badge';
 
 type AnimPhase = 'idle' | 'pressed' | 'releasing';

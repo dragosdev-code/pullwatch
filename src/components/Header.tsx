@@ -9,6 +9,7 @@ import { useRefreshAssignedPRs } from '../hooks/use-refresh-assigned-prs';
 import { useRefreshAuthoredPRs } from '../hooks/use-refresh-authored-prs';
 import { useRateLimitedRefresh } from '../hooks/use-rate-limited-refresh';
 import { CountBadge } from './ui/count-badge';
+import { useActiveTab, useSetActiveTab } from '../stores/tab-control';
 import { useEffect } from 'react';
 
 interface HeaderProps {
@@ -26,6 +27,16 @@ export const Header = ({ prCount }: HeaderProps) => {
   const refreshMergedPRsMutation = useRefreshMergedPRs();
   const { isLoading: isLoadingAuthoredPRs, error: queryErrorAuthored } = useAuthoredPRs();
   const refreshAuthoredPRsMutation = useRefreshAuthoredPRs();
+
+  // Tab navigation from count badge
+  const activeTab = useActiveTab();
+  const setActiveTab = useSetActiveTab();
+  const isAssignedTabActive = activeTab === 'assigned';
+  const handleCountClick = () => {
+    if (!isAssignedTabActive) {
+      setActiveTab('assigned');
+    }
+  };
 
   const { isAnyLoading, handleRefresh } = useRateLimitedRefresh({
     refreshPRsMutation,
@@ -63,7 +74,14 @@ export const Header = ({ prCount }: HeaderProps) => {
           </button>
           {!isDebugPending && ' Live Review'}
         </h1>
-        <CountBadge value={prCount} size="md" tone="primary" className="ml-2" />
+        <CountBadge
+          value={prCount}
+          size="md"
+          tone="primary"
+          className="ml-2"
+          onClick={handleCountClick}
+          clickable={!isAssignedTabActive}
+        />
       </div>
 
       <RefreshButton isLoading={isAnyLoading} onRefresh={handleRefresh} />
