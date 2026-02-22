@@ -29,7 +29,7 @@ export const PRStatusIcon = ({ type, reviewed = false, className }: PRStatusIcon
       <PullRequestMergedIcon
         className={clsx(
           baseClasses,
-          reviewed ? 'text-secondary opacity-60' : 'text-accent',
+          reviewed ? 'text-purple-400 opacity-60' : 'text-purple-600',
           className
         )}
       />
