@@ -36,6 +36,12 @@ function App() {
 
   const hasEverLoaded = isSuccess || assignedPRs.length > 0;
 
+  // Calculate pending PR count to match badge count (only PRs needing review)
+  const pendingPRCount = useMemo(
+    () => assignedPRs.filter((pr) => pr.reviewStatus === 'pending').length,
+    [assignedPRs]
+  );
+
   // Track which "new" PR IDs the user has already seen this session
   const [viewedIds, setViewedIds] = useState<Set<string>>(new Set());
 
@@ -65,11 +71,11 @@ function App() {
 
   const tabs: Tab[] = useMemo(
     () => [
-      { id: 'assigned', label: 'To Review', count: assignedPRs.length },
+      { id: 'assigned', label: 'To Review', count: pendingPRCount },
       { id: 'authored', label: 'Authored', count: authoredPRs.length },
       { id: 'merged', label: 'Merged', count: mergedPRs.length },
     ],
-    [assignedPRs.length, authoredPRs.length, mergedPRs.length]
+    [pendingPRCount, authoredPRs.length, mergedPRs.length]
   );
 
   const handleTabChange = (tabId: string) => {
@@ -79,7 +85,7 @@ function App() {
 
   return (
     <div className="w-[380px] h-[400px] bg-base-100 relative overflow-hidden border-0 shadow-none flex flex-col">
-      <Header prCount={assignedPRs.length} />
+      <Header prCount={pendingPRCount} />
 
       {error && (
         <div className="px-5 py-3 bg-error/10 border-b border-error/30">
