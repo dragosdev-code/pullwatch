@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTheme } from '../../../hooks/use-theme';
 import { RandomThemeButton } from './random-theme-button';
 
@@ -48,19 +48,52 @@ function CheckIcon() {
       viewBox="0 0 24 24"
       strokeWidth={2.5}
       stroke="currentColor"
-      className="size-3 shrink-0 text-primary"
+      className="size-3.5 shrink-0 text-primary"
     >
       <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
     </svg>
   );
 }
 
+interface ThemeSwatchProps {
+  name: string;
+  isActive: boolean;
+}
+
+const ThemeSwatch = ({ name, isActive }: ThemeSwatchProps) => {
+  return (
+    <div
+      data-theme={name}
+      className={`
+        relative overflow-hidden rounded shrink-0
+        w-8 h-6
+        shadow-sm
+        transition-all duration-200
+        ${isActive ? 'ring-2 ring-primary shadow-sm' : 'ring-1 ring-black/5'}
+      `}
+    >
+      {/* Base background */}
+      <div className="absolute inset-0 bg-base-100" />
+
+      {/* Left accent border - like PR items */}
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />
+
+      {/* Color dots representing the theme */}
+      <div className="absolute inset-0 flex items-center justify-center gap-0.5 pl-1">
+        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+        <div className="w-1.5 h-1.5 rounded-full bg-secondary" />
+        <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+      </div>
+    </div>
+  );
+};
+
 export const ThemePicker = () => {
   const { theme, setTheme } = useTheme();
   const scrollRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
-  const scrollToTheme = (name: string) => {
+  const scrollToTheme = useCallback((name: string) => {
     const container = scrollRef.current;
     const item = itemRefs.current.get(name);
     if (!container || !item) return;
@@ -71,7 +104,16 @@ export const ThemePicker = () => {
     if (itemTop < containerTop || itemBottom > containerBottom) {
       item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
-  };
+  }, []);
+
+  // Scroll to the selected theme when the component mounts (settings overlay opens)
+  useEffect(() => {
+    // Use a small timeout to ensure refs are populated after initial render
+    const timer = setTimeout(() => {
+      scrollToTheme(theme);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [theme, scrollToTheme]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -86,9 +128,9 @@ export const ThemePicker = () => {
         />
       </div>
 
-      {/* Scrollable theme list */}
-      <div className="bg-base-100 rounded-xl shadow-sm overflow-hidden">
-        <div ref={scrollRef} className="overflow-y-auto custom-scrollbar max-h-33">
+      {/* Scrollable theme list - styled like extension popup list */}
+      <div className="bg-base-100 border border-base-300 overflow-hidden">
+        <div ref={scrollRef} className="overflow-y-auto custom-scrollbar max-h-48">
           {THEMES.map((name) => {
             const isActive = theme === name;
             return (
@@ -100,20 +142,14 @@ export const ThemePicker = () => {
                 }}
                 type="button"
                 onClick={() => setTheme(name)}
-                className={`flex items-center gap-3 px-3 py-2 w-full transition-colors duration-150 cursor-pointer ${
-                  isActive ? 'bg-base-200' : 'hover:bg-base-200'
+                className={`flex items-center gap-3 px-4 py-2.5 w-full transition-all duration-150 cursor-pointer border-b border-base-200 last:border-b-0 ${
+                  isActive
+                    ? 'bg-base-200/80 border-l-2 border-l-primary'
+                    : 'hover:bg-base-200/50 border-l-2 border-l-transparent'
                 }`}
               >
-                {/* Color swatch — rendered with that theme's own colors */}
-                <div
-                  data-theme={name}
-                  className="bg-base-100 grid shrink-0 grid-cols-2 gap-0.5 rounded-md p-1 shadow-sm"
-                >
-                  <div className="bg-base-content size-1.5 rounded-full" />
-                  <div className="bg-primary size-1.5 rounded-full" />
-                  <div className="bg-secondary size-1.5 rounded-full" />
-                  <div className="bg-accent size-1.5 rounded-full" />
-                </div>
+                {/* Compact theme swatch */}
+                <ThemeSwatch name={name} isActive={isActive} />
 
                 <span className="flex-1 text-sm text-left text-base-content capitalize">
                   {name}
