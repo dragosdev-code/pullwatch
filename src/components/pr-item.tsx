@@ -2,15 +2,9 @@ import { useSpring, animated } from '@react-spring/web';
 import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
 import type { PullRequest } from '../../extension/common/types';
-import {
-  PullRequestOpenIcon,
-  PullRequestMergedIcon,
-  PullRequestDraftIcon,
-  CheckIcon,
-  XIcon,
-  ClockIcon,
-  CommentIcon,
-} from './ui/icons';
+import { PRStatusIcon } from './ui/pr-status-icon';
+import { StatusBadge } from './ui/status-badge';
+import { CheckIcon } from './ui/icons';
 
 interface PRItemProps {
   pr: PullRequest;
@@ -25,27 +19,6 @@ export const PRItem = ({
   isReviewed = false,
   showAuthorStatus = false,
 }: PRItemProps) => {
-  // Determine the hover background color based on authorReviewStatus
-  const getHoverBg = () => {
-    if (!showAuthorStatus || !pr.authorReviewStatus) {
-      return isReviewed ? 'hover:bg-base-200' : 'hover:bg-primary/8';
-    }
-
-    switch (pr.authorReviewStatus) {
-      case 'changes_requested':
-        return 'hover:bg-red-50';
-      case 'approved':
-        return 'hover:bg-green-50';
-      case 'pending':
-        return 'hover:bg-base-200';
-      case 'commented':
-        return 'hover:bg-blue-50';
-      case 'draft':
-        return 'hover:bg-base-200';
-      default:
-        return 'hover:bg-primary/8';
-    }
-  };
   const slideSpring = useSpring({
     from: isNew
       ? {
@@ -95,18 +68,14 @@ export const PRItem = ({
         'group block px-5 py-3 transition-all duration-200 cursor-pointer relative border-b border-base-200',
         isReviewed
           ? 'bg-base-200 text-base-content/70 opacity-90 border-l-2 hover:opacity-100'
-          : `bg-base-100 text-base-content border-l-2 ${getHoverBg()}`,
+          : 'bg-base-100 text-base-content border-l-2 hover:bg-base-200',
         isNew && !isReviewed && 'shadow-sm'
       )}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center mb-1">
-            {pr.type === 'open' && <PullRequestOpenIcon reviewed={isReviewed} />}
-
-            {pr.type === 'merged' && <PullRequestMergedIcon reviewed={isReviewed} />}
-
-            {pr.type === 'draft' && <PullRequestDraftIcon reviewed={isReviewed} />}
+            <PRStatusIcon type={pr.type} reviewed={isReviewed} />
 
             <h3
               className={clsx(
@@ -123,38 +92,7 @@ export const PRItem = ({
               </span>
             )}
             {showAuthorStatus && pr.authorReviewStatus && (
-              <>
-                {pr.authorReviewStatus === 'changes_requested' && (
-                  <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[11px] font-medium">
-                    <XIcon width={10} height={10} className="flex-shrink-0" />
-                    Requested
-                  </span>
-                )}
-                {pr.authorReviewStatus === 'approved' && (
-                  <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[11px] font-medium">
-                    <CheckIcon width={10} height={10} className="flex-shrink-0" />
-                    Approved
-                  </span>
-                )}
-                {pr.authorReviewStatus === 'pending' && (
-                  <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-medium">
-                    <ClockIcon width={10} height={10} className="flex-shrink-0" />
-                    Pending
-                  </span>
-                )}
-                {pr.authorReviewStatus === 'commented' && (
-                  <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[11px] font-medium">
-                    <CommentIcon width={10} height={10} className="flex-shrink-0" />
-                    Commented
-                  </span>
-                )}
-                {pr.authorReviewStatus === 'draft' && (
-                  <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px] font-medium">
-                    <PullRequestDraftIcon reviewed={true} className="flex-shrink-0" />
-                    Draft
-                  </span>
-                )}
-              </>
+              <StatusBadge status={pr.authorReviewStatus} className="ml-2" />
             )}
           </div>
           <p
