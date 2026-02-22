@@ -15,6 +15,9 @@ export const FETCH_INTERVAL_MS = FETCH_INTERVAL_MINUTES * 60 * 1000;
 // Cache TTL
 export const CACHE_TTL_MS = 60 * 1000; // 1 minute
 
+// Minimum time between manual refreshes to prevent rate limiting (30 seconds)
+export const MIN_REFRESH_INTERVAL_MS = 30 * 1000; // 30 seconds
+
 // Event Names (from background.js and requirements)
 export const EVENT_FETCH_PRS = 'fetchPRs';
 export const EVENT_PLAY_SOUND = 'playNotificationSound'; // From offscreen.js

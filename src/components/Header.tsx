@@ -7,6 +7,7 @@ import { useAuthoredPRs } from '../hooks/use-authored-prs';
 import { useRefreshMergedPRs } from '../hooks/use-refresh-merged-prs';
 import { useRefreshAssignedPRs } from '../hooks/use-refresh-assigned-prs';
 import { useRefreshAuthoredPRs } from '../hooks/use-refresh-authored-prs';
+import { useRateLimitedRefresh } from '../hooks/use-rate-limited-refresh';
 import { CountBadge } from './ui/count-badge';
 import { useEffect } from 'react';
 
@@ -26,6 +27,17 @@ export const Header = ({ prCount }: HeaderProps) => {
   const { isLoading: isLoadingAuthoredPRs, error: queryErrorAuthored } = useAuthoredPRs();
   const refreshAuthoredPRsMutation = useRefreshAuthoredPRs();
 
+  const { isAnyLoading, handleRefresh } = useRateLimitedRefresh({
+    refreshPRsMutation,
+    refreshMergedPRsMutation,
+    refreshAuthoredPRsMutation,
+    isLoadingPRs,
+    isLoadingMergedPRs,
+    isLoadingAuthoredPRs,
+    clearGlobalError,
+    setGlobalError,
+  });
+
   useEffect(() => {
     if (queryError || queryErrorMerged || queryErrorAuthored) {
       setGlobalError(
@@ -33,20 +45,6 @@ export const Header = ({ prCount }: HeaderProps) => {
       );
     }
   }, [queryError, queryErrorMerged, queryErrorAuthored, setGlobalError]);
-
-  const handleRefresh = async () => {
-    clearGlobalError();
-    try {
-      await Promise.all([
-        refreshPRsMutation.mutateAsync(),
-        refreshMergedPRsMutation.mutateAsync(),
-        refreshAuthoredPRsMutation.mutateAsync(),
-      ]);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to refresh PRs';
-      setGlobalError(errorMessage);
-    }
-  };
 
   return (
     <div className="flex justify-between items-center px-5 py-3 border-b border-base-300 relative">
@@ -68,17 +66,7 @@ export const Header = ({ prCount }: HeaderProps) => {
         <CountBadge value={prCount} size="md" tone="primary" className="ml-2" />
       </div>
 
-      <RefreshButton
-        isLoading={
-          refreshPRsMutation.isPending ||
-          isLoadingPRs ||
-          refreshMergedPRsMutation.isPending ||
-          isLoadingMergedPRs ||
-          refreshAuthoredPRsMutation.isPending ||
-          isLoadingAuthoredPRs
-        }
-        onRefresh={handleRefresh}
-      />
+      <RefreshButton isLoading={isAnyLoading} onRefresh={handleRefresh} />
     </div>
   );
 };

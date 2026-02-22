@@ -20,7 +20,7 @@ export const RefreshButton = ({ isLoading, onRefresh }: RefreshButtonProps) => {
       className={clsx(
         'p-2 rounded-full transition-colors duration-200',
         'text-base-content/50 hover:text-base-content hover:bg-base-200 hover:cursor-pointer hover:scale-105',
-        'disabled:opacity-50'
+        'disabled:opacity-50 disabled:pointer-events-none'
       )}
       aria-label="Refresh PRs"
     >
