@@ -5,13 +5,7 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PR Live Extension</title>
-    <script>
-      // Apply theme synchronously before render to prevent flicker
-      (function() {
-        const theme = localStorage.getItem('pr-extension-theme') || 'light';
-        document.documentElement.setAttribute('data-theme', theme);
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>
