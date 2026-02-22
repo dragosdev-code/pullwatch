@@ -93,10 +93,18 @@ export const PRItem = ({
           <div className="flex items-center mb-1">
             <PRStatusIcon type={pr.type} reviewed={isReviewed} />
 
-            <div className={clsx('min-w-0', isTruncated && ['tooltip', isFirst ? 'tooltip-bottom' : 'tooltip-top'])}>
+            <div
+              className={clsx(
+                'min-w-0',
+                isTruncated && [
+                  'tooltip rounded-3xl tooltip-neutral',
+                  isFirst ? 'tooltip-bottom' : 'tooltip-top',
+                ]
+              )}
+            >
               {isTruncated && (
-                <div className="tooltip-content z-[9999]">
-                  <div className="bg-neutral text-neutral-content text-xs px-3 py-2 rounded-lg shadow-xl max-w-[300px] whitespace-normal leading-relaxed text-left">
+                <div className="tooltip-content z-[9999] p-0 rounded-3xl">
+                  <div className="font-semibold text-xs px-3 py-2 rounded-3xl whitespace-normal leading-relaxed text-left">
                     {pr.title}
                   </div>
                 </div>
@@ -104,9 +112,9 @@ export const PRItem = ({
               <h3
                 ref={titleRef}
                 className={clsx(
-                  'text-sm font-medium truncate transition-colors duration-150',
+                  'text-sm font-medium truncate transition-all duration-150',
                   isReviewed ? 'text-base-content/60' : 'text-base-content',
-                  isTruncated && 'hover:text-primary'
+                  isTruncated && 'hover:text-base-content hover:underline'
                 )}
               >
                 {pr.title}

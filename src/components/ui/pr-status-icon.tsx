@@ -41,7 +41,7 @@ export const PRStatusIcon = ({ type, reviewed = false, className }: PRStatusIcon
     <PullRequestDraftIcon
       className={clsx(
         baseClasses,
-        reviewed ? 'text-neutral opacity-60' : 'text-neutral/00',
+        reviewed ? 'text-neutral opacity-60' : 'text-neutral contrast-0',
         className
       )}
     />
