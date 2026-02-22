@@ -1,4 +1,4 @@
-import type { PullRequest, ExtensionSettings } from '../../extension/common/types';
+import type { PullRequest, ExtensionSettings, NotificationSound } from '../../extension/common/types';
 
 /**
  * Service to handle Chrome extension communication.
@@ -108,6 +108,15 @@ export class ChromeExtensionService {
    */
   async sendTestNotification(): Promise<void> {
     return this.sendMessage('testNotification');
+  }
+
+  /**
+   * Plays a sound preview for the specified notification sound type.
+   * Used in settings to let users test sounds before selecting.
+   * @param sound - The sound type to preview ('ping', 'bell', or 'off')
+   */
+  async playSoundPreview(sound: NotificationSound): Promise<void> {
+    return this.sendMessage('previewSound', { sound });
   }
 
   /**

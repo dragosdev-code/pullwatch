@@ -47,6 +47,23 @@
   background-color: #5b616b;
 }
 
+:where(
+  :root:has(
+    .modal-open,
+    .modal[open],
+    .modal:target,
+    .modal-toggle:checked,
+    .drawer:not(.drawer-open) > .drawer-toggle:checked
+  )
+) {
+  overflow: hidden;
+  scrollbar-gutter: unset;
+}
+
+:where(.modal[open], .modal-open, .modal-toggle:checked + .modal):not(.modal-start, .modal-end) {
+  scrollbar-gutter: unset;
+}
+
 .custom-scrollbar {
   scrollbar-width: none;
 }

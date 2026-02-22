@@ -1,6 +1,7 @@
 import { debugLog, debugError, debugWarn, initializeDebugTools } from '../debug/debugLogger';
 import { EVENT_PLAY_SOUND, EVENT_OFFSCREEN_READY } from '../common/constants';
 import type { RuntimeMessage, MessageResponse, NotificationSound } from '../common/types';
+import { SOUND_PRESETS, type SoundPreset } from '../common/sound-config';
 
 // Initialize debug tools for this context
 initializeDebugTools();
@@ -13,43 +14,12 @@ interface WindowWithLegacyAudio extends Window {
 }
 
 /**
- * Sound configuration for different notification types
- */
-interface SoundConfig {
-  times: number[]; // Start times for tones
-  frequencies: number[]; // Frequencies of tones (Hz)
-  duration: number; // Duration of each tone (seconds)
-  initialGain: number; // Initial volume (0-1)
-  oscillatorType: OscillatorType; // Waveform type
-}
-
-/**
- * Sound presets for different notification types
- */
-const SOUND_PRESETS: Record<Exclude<NotificationSound, 'off'>, SoundConfig> = {
-  ping: {
-    times: [0, 0.12],
-    frequencies: [880, 1100], // Higher, sharper tones (A5, C#6)
-    duration: 0.08,
-    initialGain: 0.25,
-    oscillatorType: 'sine',
-  },
-  bell: {
-    times: [0, 0.25, 0.5],
-    frequencies: [523, 659, 784], // Lower, bell-like tones (C5, E5, G5)
-    duration: 0.15,
-    initialGain: 0.35,
-    oscillatorType: 'triangle', // Triangle wave sounds more bell-like
-  },
-};
-
-/**
  * Plays a notification sound using the Web Audio API.
  * @param audioContext - The AudioContext to use for playback.
  * @param soundType - The type of sound to play ('ping' or 'bell')
  */
 function playNotificationSound(audioContext: AudioContext, soundType: NotificationSound): void {
-  const config = SOUND_PRESETS[soundType as Exclude<NotificationSound, 'off'>];
+  const config = SOUND_PRESETS[soundType as Exclude<NotificationSound, 'off'>] as SoundPreset;
 
   if (!config) {
     debugError(`Unknown sound type: ${soundType}`);

@@ -6,6 +6,7 @@ import type {
   MessageResponse,
   ExtensionSettings,
   PullRequest,
+  NotificationSound,
 } from '../../common/types';
 import {
   EVENT_FETCH_PRS,
@@ -250,6 +251,10 @@ export class EventService implements IEventService {
       case 'testNotification':
       case 'testNotificationWithoutPopup':
         asyncWrapper(this.handleTestActions(message, sendResponse));
+        break;
+
+      case 'previewSound':
+        asyncWrapper(this.handlePreviewSoundAction(message, sendResponse));
         break;
 
       default:
@@ -630,6 +635,36 @@ export class EventService implements IEventService {
     } catch (error) {
       this.debugService.error('[EventService] Error handling test actions:', error);
       sendResponse({ success: false, error: 'Failed to handle test action' });
+    }
+  }
+
+  /**
+   * Handles sound preview action from the popup/settings.
+   * Plays the specified notification sound through the offscreen document.
+   */
+  async handlePreviewSoundAction(
+    message: RuntimeMessage,
+    sendResponse: (response: MessageResponse) => void
+  ): Promise<void> {
+    try {
+      if (this.isMessageAction<{ sound: NotificationSound }>(message, 'previewSound')) {
+        const { sound } = message.payload || { sound: 'ping' };
+
+        this.debugService.log(`[EventService] Playing sound preview: ${sound}`);
+
+        const soundService = this.serviceContainer.getService<ISoundService>('soundService');
+
+        // Play the sound (SoundService handles the offscreen document)
+        await soundService.playNotificationSound(sound);
+
+        this.debugService.log(`[EventService] Sound preview completed: ${sound}`);
+        sendResponse({ success: true, data: `Sound preview played: ${sound}` });
+      } else {
+        sendResponse({ success: false, error: 'Invalid payload for previewSound' });
+      }
+    } catch (error) {
+      this.debugService.error('[EventService] Error handling sound preview:', error);
+      sendResponse({ success: false, error: 'Failed to play sound preview' });
     }
   }
 
