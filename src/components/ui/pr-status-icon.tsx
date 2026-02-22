@@ -1,9 +1,5 @@
 import clsx from 'clsx';
-import {
-  PullRequestOpenIcon,
-  PullRequestMergedIcon,
-  PullRequestDraftIcon,
-} from './icons';
+import { PullRequestOpenIcon, PullRequestMergedIcon, PullRequestDraftIcon } from './icons';
 
 type PRType = 'open' | 'merged' | 'draft';
 
@@ -13,11 +9,7 @@ interface PRStatusIconProps {
   className?: string;
 }
 
-export const PRStatusIcon = ({
-  type,
-  reviewed = false,
-  className,
-}: PRStatusIconProps) => {
+export const PRStatusIcon = ({ type, reviewed = false, className }: PRStatusIconProps) => {
   const baseClasses = 'mr-2 flex-shrink-0';
 
   if (type === 'open') {
@@ -37,7 +29,7 @@ export const PRStatusIcon = ({
       <PullRequestMergedIcon
         className={clsx(
           baseClasses,
-          reviewed ? 'text-secondary opacity-60' : 'text-secondary',
+          reviewed ? 'text-secondary opacity-60' : 'text-accent',
           className
         )}
       />
@@ -49,7 +41,7 @@ export const PRStatusIcon = ({
     <PullRequestDraftIcon
       className={clsx(
         baseClasses,
-        reviewed ? 'text-neutral opacity-60' : 'text-neutral',
+        reviewed ? 'text-neutral opacity-60' : 'text-neutral/00',
         className
       )}
     />

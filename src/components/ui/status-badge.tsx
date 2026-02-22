@@ -33,7 +33,7 @@ const STATUS_CONFIG: Record<ReviewStatus, StatusConfig> = {
   draft: {
     icon: PullRequestDraftIcon,
     label: 'Draft',
-    classes: 'bg-neutral/15 text-neutral contrast-80',
+    classes: 'bg-neutral/15 text-neutral/90 contrast-0',
   },
 };
 
