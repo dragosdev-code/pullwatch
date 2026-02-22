@@ -1,6 +1,6 @@
-import React, { useContext } from 'react';
+import React from 'react';
 import { useTransition, animated } from '@react-spring/web';
-import { TabsContext } from './tabs-context';
+import { useTabControlStore } from '../../../stores/tab-control/store';
 import { TAB_SPRING_CONFIG } from './tabs-config';
 
 interface TabPanelProps {
@@ -10,9 +10,9 @@ interface TabPanelProps {
 }
 
 export const TabPanel: React.FC<TabPanelProps> = ({ tabId, children, className = '' }) => {
-  const context = useContext(TabsContext);
-  const isActive = context ? context.activeTab === tabId : false;
-  const direction = context ? context.direction : 1;
+  const activeTab = useTabControlStore((state) => state.activeTab);
+  const direction = useTabControlStore((state) => state.direction);
+  const isActive = activeTab === tabId;
 
   const transitions = useTransition(isActive, {
     initial: { opacity: 1, transform: 'translateX(0px)' },
