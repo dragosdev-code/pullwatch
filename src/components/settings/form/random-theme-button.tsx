@@ -6,7 +6,7 @@ interface RandomThemeButtonProps {
   themes: readonly string[];
   currentTheme: string;
   onRandomize: (theme: string) => void;
-  onScrollToTheme?: (theme: string) => void;
+  onScrollToTheme?: (theme: string, smooth?: boolean) => void;
 }
 
 export const RandomThemeButton = ({
@@ -47,7 +47,7 @@ export const RandomThemeButton = ({
         onRandomize(pick);
         setAnimating(false);
         api.set({ rotate: 0, scale: 1 });
-        onScrollToTheme?.(pick);
+        onScrollToTheme?.(pick, true);
       },
     });
   };

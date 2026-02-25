@@ -78,25 +78,31 @@ export const ThemePicker = () => {
   const { theme, setTheme } = useTheme();
   const scrollRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const hasMountedRef = useRef(false);
 
-  const scrollToTheme = useCallback((name: string) => {
+  const scrollToTheme = useCallback((name: string, smooth = true) => {
     const container = scrollRef.current;
     const item = itemRefs.current.get(name);
     if (!container || !item) return;
-    const containerTop = container.scrollTop;
-    const containerBottom = containerTop + container.clientHeight;
-    const itemTop = item.offsetTop;
-    const itemBottom = itemTop + item.offsetHeight;
-    if (itemTop < containerTop || itemBottom > containerBottom) {
-      item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
+
+    const containerRect = container.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+
+    const currentOffset = itemRect.top - containerRect.top;
+    const centeredOffset = (container.clientHeight - item.offsetHeight) / 2;
+
+    container.scrollTo({
+      top: container.scrollTop + currentOffset - centeredOffset,
+      behavior: smooth ? 'smooth' : 'instant',
+    });
   }, []);
 
-  // Scroll to the selected theme when the component mounts (settings overlay opens)
+  // Scroll to the selected theme only on initial mount (settings overlay opens)
   useEffect(() => {
-    // Use a small timeout to ensure refs are populated after initial render
+    if (hasMountedRef.current) return;
+    hasMountedRef.current = true;
     const timer = setTimeout(() => {
-      scrollToTheme(theme);
+      scrollToTheme(theme, false);
     }, 50);
     return () => clearTimeout(timer);
   }, [theme, scrollToTheme]);
