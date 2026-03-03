@@ -43,7 +43,13 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
       {changesRequestedPRs.length > 0 && (
         <>
           {changesRequestedPRs.map((pr, i) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={firstGroupIndex === 0 && i === 0} showAuthorStatus />
+            <PRItem
+              key={pr.id}
+              pr={pr}
+              isNew={newPrIds.has(pr.id)}
+              isFirst={firstGroupIndex === 0 && i === 0}
+              showAuthorStatus
+            />
           ))}
         </>
       )}
@@ -51,7 +57,13 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
       {approvedPRs.length > 0 && (
         <>
           {approvedPRs.map((pr, i) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={firstGroupIndex === 1 && i === 0} showAuthorStatus />
+            <PRItem
+              key={pr.id}
+              pr={pr}
+              isNew={newPrIds.has(pr.id)}
+              isFirst={firstGroupIndex === 1 && i === 0}
+              showAuthorStatus
+            />
           ))}
         </>
       )}
@@ -59,7 +71,13 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
       {pendingPRs.length > 0 && (
         <>
           {pendingPRs.map((pr, i) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={firstGroupIndex === 2 && i === 0} showAuthorStatus />
+            <PRItem
+              key={pr.id}
+              pr={pr}
+              isNew={newPrIds.has(pr.id)}
+              isFirst={firstGroupIndex === 2 && i === 0}
+              showAuthorStatus
+            />
           ))}
         </>
       )}
@@ -67,7 +85,13 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
       {commentedPRs.length > 0 && (
         <div className="space-y-0">
           {commentedPRs.map((pr, i) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={firstGroupIndex === 3 && i === 0} showAuthorStatus />
+            <PRItem
+              key={pr.id}
+              pr={pr}
+              isNew={newPrIds.has(pr.id)}
+              isFirst={firstGroupIndex === 3 && i === 0}
+              showAuthorStatus
+            />
           ))}
         </div>
       )}
@@ -75,7 +99,13 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
       {draftPRs.length > 0 && (
         <div className="space-y-0">
           {draftPRs.map((pr, i) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={firstGroupIndex === 4 && i === 0} showAuthorStatus />
+            <PRItem
+              key={pr.id}
+              pr={pr}
+              isNew={newPrIds.has(pr.id)}
+              isFirst={firstGroupIndex === 4 && i === 0}
+              showAuthorStatus
+            />
           ))}
         </div>
       )}

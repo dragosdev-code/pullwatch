@@ -4,7 +4,9 @@ import { SettingsSection } from './form/settings-section';
 import { ToggleField } from './form/toggle-field';
 import { SoundSelectField } from './form/sound-select-field';
 import { ThemePicker } from './form/theme-picker';
+import { LinkBehaviorField } from './form/link-behavior-field';
 import { useExtensionSettings } from '../../hooks/use-extension-settings';
+import { useLinkBehavior } from '../../hooks/use-link-behavior';
 import { DEFAULT_SETTINGS } from './types';
 import type { ExtensionSettings } from './types';
 
@@ -14,6 +16,7 @@ interface SettingsPageProps {
 
 export const SettingsPage = ({ onClose }: SettingsPageProps) => {
   const { settings, isLoading, saveSettings } = useExtensionSettings();
+  const { behavior: linkBehavior, setBehavior: setLinkBehavior } = useLinkBehavior();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSaved, setShowSaved] = useState(false);
   const savedFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -32,6 +35,14 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
 
   const assignedEnabled = methods.watch('assigned.notificationsEnabled');
   const mergedEnabled = methods.watch('merged.notificationsEnabled');
+
+  // Handle link behavior change with common saved indicator
+  const handleLinkBehaviorChange = (newBehavior: Parameters<typeof setLinkBehavior>[0]) => {
+    setLinkBehavior(newBehavior);
+    setShowSaved(true);
+    if (savedFadeRef.current) clearTimeout(savedFadeRef.current);
+    savedFadeRef.current = setTimeout(() => setShowSaved(false), 1500);
+  };
 
   // Auto-save settings when form values change
   useEffect(() => {
@@ -186,6 +197,11 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
             >
               <SoundSelectField name="merged.sound" label="Notification sound" />
             </div>
+          </SettingsSection>
+
+          {/* Behavior */}
+          <SettingsSection title="Behavior">
+            <LinkBehaviorField value={linkBehavior} onChange={handleLinkBehaviorChange} />
           </SettingsSection>
 
           {/* Appearance */}

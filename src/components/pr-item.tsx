@@ -1,8 +1,9 @@
 import { useSpring, animated } from '@react-spring/web';
 import { formatDistanceToNow } from 'date-fns';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import clsx from 'clsx';
 import type { PullRequest } from '../../extension/common/types';
+import { useLinkBehavior } from '../hooks/use-link-behavior';
 import { PRStatusIcon } from './ui/pr-status-icon';
 import { StatusBadge } from './ui/status-badge';
 import { CheckIcon } from './ui/icons';
@@ -22,8 +23,21 @@ export const PRItem = ({
   isReviewed = false,
   showAuthorStatus = false,
 }: PRItemProps) => {
+  const { behavior: linkBehavior } = useLinkBehavior();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [isTruncated, setIsTruncated] = useState(false);
+
+  const handleClick = useCallback(
+    (event: React.MouseEvent) => {
+      if (linkBehavior === 'background') {
+        event.preventDefault();
+        // Open tab in background without switching to it
+        chrome.tabs.create({ url: pr.url, active: false });
+      }
+      // For 'foreground', let the default anchor behavior handle it
+    },
+    [linkBehavior, pr.url]
+  );
 
   useEffect(() => {
     const el = titleRef.current;
@@ -78,6 +92,7 @@ export const PRItem = ({
       href={pr.url}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={handleClick}
       style={isNew && !isReviewed ? slideSpring : {}}
       data-pr-id={pr.id}
       className={clsx(

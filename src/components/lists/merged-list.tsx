@@ -34,7 +34,12 @@ export const MergedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: MergedLi
       {prs.length > 0 && (
         <>
           {prs.map((pr, i) => (
-            <PRItem key={pr.id} pr={pr} isNew={newPrIds.has(pr.id)} isFirst={i === 0} />
+            <PRItem
+              key={pr.id}
+              pr={pr}
+              isNew={newPrIds.has(pr.id)}
+              isFirst={i === 0}
+            />
           ))}
         </>
       )}
