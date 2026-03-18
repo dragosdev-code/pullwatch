@@ -8,6 +8,7 @@ import { BadgeService } from '../services/BadgeService';
 import { GitHubService } from '../services/GitHubService';
 import { SoundService } from '../services/SoundService';
 import { EventService } from '../services/EventService';
+import { DevTestService } from '../services/DevTestService';
 
 /**
  * Service container responsible for dependency injection and service lifecycle management.
@@ -57,6 +58,18 @@ export class ServiceContainer {
         gitHubService: this.getService('gitHubService'),
         notificationService: this.getService('notificationService'),
         badgeService: this.getService('badgeService'),
+      })
+    );
+
+    // Dev/Test services
+    this.registerService(
+      'devTestService',
+      new DevTestService({
+        debugService: this.getService('debugService'),
+        notificationService: this.getService('notificationService'),
+        alarmService: this.getService('alarmService'),
+        storageService: this.getService('storageService'),
+        soundService: this.getService('soundService'),
       })
     );
 

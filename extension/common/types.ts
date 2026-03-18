@@ -145,3 +145,41 @@ export type MessageHandler = (
   sender: chrome.runtime.MessageSender,
   sendResponse: (response: MessageResponse) => void
 ) => boolean | undefined | Promise<void>; // Return true for async sendResponse
+
+// ─── Dev Test Area Types ─────────────────────────────────────────────────────
+
+export interface DevTestNotificationOverrides {
+  title?: string;
+  message?: string;
+  sound?: NotificationSound;
+}
+
+export interface DevTestLooperState {
+  intervalMs: number;
+  isRunning: boolean;
+  sentCount: number;
+}
+
+export interface DevTestAlarmOverrideState {
+  intervalMs: number;
+  isOverridden: boolean;
+}
+
+export interface DevTestSettings {
+  notification: {
+    title: string;
+    message: string;
+    sound: NotificationSound;
+  };
+  looper: {
+    intervalMs: number;
+  };
+  alarmOverride: {
+    intervalMs: number;
+  };
+}
+
+export interface ScraperUrl {
+  label: string;
+  url: string;
+}

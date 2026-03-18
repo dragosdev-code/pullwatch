@@ -69,9 +69,9 @@ export interface IEventService {
   ): Promise<void>;
 
   /**
-   * Handles test actions (test notifications).
+   * Routes devTest:* actions to the DevTestService.
    */
-  handleTestActions(
+  handleDevTestActions(
     message: RuntimeMessage,
     sendResponse: (response: MessageResponse) => void
   ): Promise<void>;

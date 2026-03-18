@@ -7,13 +7,12 @@ import type {
   ExtensionSettings,
   PullRequest,
   NotificationSound,
+  DevTestNotificationOverrides,
 } from '../../common/types';
 import {
   EVENT_FETCH_PRS,
   EVENT_PLAY_SOUND,
   EVENT_OFFSCREEN_READY,
-  GITHUB_BASE_URL,
-  GITHUB_REVIEW_REQUESTS_URL_TEMPLATE,
 } from '../../common/constants';
 import { IPermissionService } from '../interfaces/IPermissionService';
 import { IAlarmService } from '../interfaces/IAlarmService';
@@ -22,6 +21,7 @@ import { IBadgeService } from '../interfaces/IBadgeService';
 import { INotificationService } from '../interfaces/INotificationService';
 import { IStorageService } from '../interfaces/IStorageService';
 import { ISoundService } from '../interfaces/ISoundService';
+import { IDevTestService } from '../interfaces/IDevTestService';
 
 /**
  * EventService coordinates Chrome extension events and handles message routing.
@@ -241,20 +241,26 @@ export class EventService implements IEventService {
         break;
 
       case EVENT_PLAY_SOUND:
-        // This specific handler manages its own sendResponse due to callback nature
         this.handleOffscreenActions(message, sendResponse);
         break;
       case EVENT_OFFSCREEN_READY:
         asyncWrapper(this.handleOffscreenActions(message, sendResponse));
         break;
 
-      case 'testNotification':
-      case 'testNotificationWithoutPopup':
-        asyncWrapper(this.handleTestActions(message, sendResponse));
-        break;
-
       case 'previewSound':
         asyncWrapper(this.handlePreviewSoundAction(message, sendResponse));
+        break;
+
+
+      case 'devTest:fireNotification':
+      case 'devTest:startLoop':
+      case 'devTest:stopLoop':
+      case 'devTest:getLooperState':
+      case 'devTest:overrideAlarm':
+      case 'devTest:restoreAlarm':
+      case 'devTest:getAlarmState':
+      case 'devTest:getScraperUrls':
+        asyncWrapper(this.handleDevTestActions(message, sendResponse));
         break;
 
       default:
@@ -596,45 +602,6 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Handles test notification actions.
-   */
-  async handleTestActions(
-    message: RuntimeMessage,
-    sendResponse: (response: MessageResponse) => void
-  ): Promise<void> {
-    try {
-      const testPR: PullRequest = {
-        id: `test-pr-${Date.now()}`,
-        url: `${GITHUB_REVIEW_REQUESTS_URL_TEMPLATE(GITHUB_BASE_URL)}/0`,
-        title: 'Test PR: This is a Test Notification',
-        number: 0,
-        repoName: 'test/repo',
-        author: { login: 'test-author' },
-        createdAt: new Date().toISOString(),
-        isNew: true,
-        type: 'open',
-      };
-
-      if (
-        this.isMessageAction(message, 'testNotification') ||
-        this.isMessageAction(message, 'testNotificationWithoutPopup')
-      ) {
-        this.debugService.log(`[EventService] Received ${message.action} message`);
-
-        const notificationService =
-          this.serviceContainer.getService<INotificationService>('notificationService');
-
-        await notificationService.showAssignedPRNotifications(testPR);
-
-        sendResponse({ success: true, data: `Test notification (${message.action}) triggered` });
-      }
-    } catch (error) {
-      this.debugService.error('[EventService] Error handling test actions:', error);
-      sendResponse({ success: false, error: 'Failed to handle test action' });
-    }
-  }
-
-  /**
    * Handles sound preview action from the popup/settings.
    * Plays the specified notification sound through the offscreen document.
    */
@@ -661,6 +628,68 @@ export class EventService implements IEventService {
     } catch (error) {
       this.debugService.error('[EventService] Error handling sound preview:', error);
       sendResponse({ success: false, error: 'Failed to play sound preview' });
+    }
+  }
+
+  /**
+   * Routes all devTest:* actions to the DevTestService.
+   */
+  async handleDevTestActions(
+    message: RuntimeMessage,
+    sendResponse: (response: MessageResponse) => void
+  ): Promise<void> {
+    try {
+      const devTestService =
+        this.serviceContainer.getService<IDevTestService>('devTestService');
+
+      switch (message.action) {
+        case 'devTest:fireNotification': {
+          const overrides = message.payload as DevTestNotificationOverrides | undefined;
+          await devTestService.fireTestNotification(overrides);
+          sendResponse({ success: true, data: 'Test notification fired' });
+          break;
+        }
+        case 'devTest:startLoop': {
+          const { intervalMs } = (message.payload as { intervalMs: number }) || { intervalMs: 3000 };
+          const state = await devTestService.startNotificationLoop(intervalMs);
+          sendResponse({ success: true, data: state });
+          break;
+        }
+        case 'devTest:stopLoop': {
+          const state = await devTestService.stopNotificationLoop();
+          sendResponse({ success: true, data: state });
+          break;
+        }
+        case 'devTest:getLooperState': {
+          sendResponse({ success: true, data: devTestService.getLooperState() });
+          break;
+        }
+        case 'devTest:overrideAlarm': {
+          const { intervalMs } = (message.payload as { intervalMs: number }) || { intervalMs: 30000 };
+          const alarmState = await devTestService.overrideAlarmInterval(intervalMs);
+          sendResponse({ success: true, data: alarmState });
+          break;
+        }
+        case 'devTest:restoreAlarm': {
+          const alarmState = await devTestService.restoreAlarmInterval();
+          sendResponse({ success: true, data: alarmState });
+          break;
+        }
+        case 'devTest:getAlarmState': {
+          const alarmState = await devTestService.getAlarmOverrideState();
+          sendResponse({ success: true, data: alarmState });
+          break;
+        }
+        case 'devTest:getScraperUrls': {
+          sendResponse({ success: true, data: devTestService.getScraperUrls() });
+          break;
+        }
+        default:
+          sendResponse({ success: false, error: `Unknown devTest action: ${message.action}` });
+      }
+    } catch (error) {
+      this.debugService.error('[EventService] Error handling devTest action:', error);
+      sendResponse({ success: false, error: 'Failed to handle devTest action' });
     }
   }
 

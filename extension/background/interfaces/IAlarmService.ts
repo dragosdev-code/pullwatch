@@ -18,6 +18,38 @@ export interface IAlarmService {
   getAlarm(name: string): Promise<chrome.alarms.Alarm | undefined>;
 
   /**
+   * Clears a single alarm by name.
+   */
+  clearAlarm(name: string): Promise<boolean>;
+
+  /**
+   * Replaces the fetch alarm with a custom interval (for dev/test override).
+   * @param intervalMs - The new interval in milliseconds (minimum 10 seconds).
+   */
+  overrideFetchAlarm(intervalMs: number): Promise<void>;
+
+  /**
+   * Restores the fetch alarm to the default production interval.
+   */
+  restoreFetchAlarm(): Promise<void>;
+
+  /**
+   * Returns whether the fetch alarm is currently overridden.
+   */
+  isFetchAlarmOverridden(): boolean;
+
+  /**
+   * Gets alarm status and information.
+   */
+  getAlarmStatus(): Promise<{
+    totalAlarms: number;
+    fetchAlarmActive: boolean;
+    nextScheduledTime?: number;
+    isOverridden: boolean;
+    currentIntervalMs?: number;
+  }>;
+
+  /**
    * Initializes the alarm service.
    */
   initialize(): Promise<void>;

@@ -1,4 +1,12 @@
-import type { PullRequest, ExtensionSettings, NotificationSound } from '../../extension/common/types';
+import type {
+  PullRequest,
+  ExtensionSettings,
+  NotificationSound,
+  DevTestNotificationOverrides,
+  DevTestLooperState,
+  DevTestAlarmOverrideState,
+  ScraperUrl,
+} from '../../extension/common/types';
 
 /**
  * Service to handle Chrome extension communication.
@@ -104,13 +112,6 @@ export class ChromeExtensionService {
   }
 
   /**
-   * Sends a test notification.
-   */
-  async sendTestNotification(): Promise<void> {
-    return this.sendMessage('testNotification');
-  }
-
-  /**
    * Plays a sound preview for the specified notification sound type.
    * Used in settings to let users test sounds before selecting.
    * @param sound - The sound type to preview ('ping', 'bell', or 'off')
@@ -145,7 +146,7 @@ export class ChromeExtensionService {
    */
   onSettingsChange(callback: (settings: ExtensionSettings) => void): () => void {
     if (!this.isExtensionContext()) {
-      return () => {}; // Return empty cleanup function
+      return () => {};
     }
 
     const messageListener = (message: { action: string; data?: unknown }) => {
@@ -156,10 +157,43 @@ export class ChromeExtensionService {
 
     chrome.runtime.onMessage.addListener(messageListener);
 
-    // Return cleanup function
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
     };
+  }
+
+  // ─── Dev Test Area ─────────────────────────────────────────────────────
+
+  async devTestFireNotification(overrides?: DevTestNotificationOverrides): Promise<void> {
+    return this.sendMessage('devTest:fireNotification', overrides);
+  }
+
+  async devTestStartLoop(intervalMs: number): Promise<DevTestLooperState> {
+    return this.sendMessage<DevTestLooperState>('devTest:startLoop', { intervalMs });
+  }
+
+  async devTestStopLoop(): Promise<DevTestLooperState> {
+    return this.sendMessage<DevTestLooperState>('devTest:stopLoop');
+  }
+
+  async devTestGetLooperState(): Promise<DevTestLooperState> {
+    return this.sendMessage<DevTestLooperState>('devTest:getLooperState');
+  }
+
+  async devTestOverrideAlarm(intervalMs: number): Promise<DevTestAlarmOverrideState> {
+    return this.sendMessage<DevTestAlarmOverrideState>('devTest:overrideAlarm', { intervalMs });
+  }
+
+  async devTestRestoreAlarm(): Promise<DevTestAlarmOverrideState> {
+    return this.sendMessage<DevTestAlarmOverrideState>('devTest:restoreAlarm');
+  }
+
+  async devTestGetAlarmState(): Promise<DevTestAlarmOverrideState> {
+    return this.sendMessage<DevTestAlarmOverrideState>('devTest:getAlarmState');
+  }
+
+  async devTestGetScraperUrls(): Promise<ScraperUrl[]> {
+    return this.sendMessage<ScraperUrl[]>('devTest:getScraperUrls');
   }
 }
 
