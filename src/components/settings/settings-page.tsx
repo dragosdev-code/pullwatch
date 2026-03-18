@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { SettingsSection } from './form/settings-section';
 import { ToggleField } from './form/toggle-field';
@@ -9,6 +9,8 @@ import { useExtensionSettings } from '../../hooks/use-extension-settings';
 import { useLinkBehavior } from '../../hooks/use-link-behavior';
 import { DEFAULT_SETTINGS } from './types';
 import type { ExtensionSettings } from './types';
+import { useSavedIndicator } from './use-saved-indicator';
+import { SavedIndicator } from './saved-indicator';
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -17,9 +19,9 @@ interface SettingsPageProps {
 export const SettingsPage = ({ onClose }: SettingsPageProps) => {
   const { settings, isLoading, saveSettings } = useExtensionSettings();
   const { behavior: linkBehavior, setBehavior: setLinkBehavior } = useLinkBehavior();
+  const { visible: savedVisible, flash: flashSaved } = useSavedIndicator();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [showSaved, setShowSaved] = useState(false);
-  const savedFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isResettingRef = useRef(false);
 
   // Initialize form with default settings, will be updated when settings load
   const methods = useForm<ExtensionSettings>({
@@ -29,43 +31,36 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
   // Update form values when settings are loaded from storage
   useEffect(() => {
     if (settings) {
+      isResettingRef.current = true;
       methods.reset(settings);
+      isResettingRef.current = false;
     }
   }, [settings, methods]);
 
   const assignedEnabled = methods.watch('assigned.notificationsEnabled');
   const mergedEnabled = methods.watch('merged.notificationsEnabled');
 
-  // Handle link behavior change with common saved indicator
   const handleLinkBehaviorChange = (newBehavior: Parameters<typeof setLinkBehavior>[0]) => {
     setLinkBehavior(newBehavior);
-    setShowSaved(true);
-    if (savedFadeRef.current) clearTimeout(savedFadeRef.current);
-    savedFadeRef.current = setTimeout(() => setShowSaved(false), 1500);
+    flashSaved();
   };
 
   // Auto-save settings when form values change
   useEffect(() => {
     const subscription = methods.watch((values) => {
-      // Don't save while loading initial settings
-      if (isLoading || !settings) return;
+      if (isLoading || !settings || isResettingRef.current) return;
 
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
-        // Save to chrome.storage.sync via the hook
         saveSettings(values as Partial<ExtensionSettings>);
-
-        setShowSaved(true);
-        if (savedFadeRef.current) clearTimeout(savedFadeRef.current);
-        savedFadeRef.current = setTimeout(() => setShowSaved(false), 1500);
+        flashSaved();
       }, 300);
     });
     return () => {
       subscription.unsubscribe();
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      if (savedFadeRef.current) clearTimeout(savedFadeRef.current);
     };
-  }, [methods, isLoading, settings, saveSettings]);
+  }, [methods, isLoading, settings, saveSettings, flashSaved]);
 
   // Show loading state while settings are loading
   if (isLoading) {
@@ -132,24 +127,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
 
           <h1 className="text-base font-bold text-base-content leading-none">Settings</h1>
 
-          {/* Saved indicator */}
-          <div
-            className={`flex items-center gap-1 ml-auto transition-opacity duration-300 ${
-              showSaved ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="2.5"
-              stroke="currentColor"
-              className="size-3 text-primary"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-            </svg>
-            <span className="text-[11px] text-base-content/50">Saved</span>
-          </div>
+          <SavedIndicator visible={savedVisible} />
         </div>
 
         {/* Scrollable content */}
