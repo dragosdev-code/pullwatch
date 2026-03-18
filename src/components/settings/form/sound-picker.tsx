@@ -6,7 +6,7 @@ import {
   type SoundDefinition,
 } from '../../../../extension/common/sound-config';
 import { SoundPreviewButton } from './sound-preview-button';
-import { CheckIcon, WaveIcon, BellIcon, MuteIcon } from '../../ui/icons';
+import { CheckIcon } from '../../ui/icons';
 
 interface SoundPickerProps {
   /** Currently selected sound */
@@ -23,39 +23,6 @@ interface SoundOptionProps {
   definition: SoundDefinition;
   isSelected: boolean;
   onSelect: () => void;
-}
-
-/**
- * Get the appropriate icon component for a sound type
- */
-function SoundTypeIcon({
-  icon,
-  color,
-  className = 'size-5',
-}: {
-  icon: SoundDefinition['icon'];
-  color: SoundDefinition['color'];
-  className?: string;
-}) {
-  const colorClass =
-    {
-      primary: 'text-primary',
-      secondary: 'text-secondary',
-      neutral: 'text-neutral',
-    }[color] || 'text-base-content';
-
-  const iconClass = `${className} ${colorClass}`;
-
-  switch (icon) {
-    case 'wave':
-      return <WaveIcon className={iconClass} />;
-    case 'bell':
-      return <BellIcon className={iconClass} />;
-    case 'mute':
-      return <MuteIcon className={iconClass} />;
-    default:
-      return <WaveIcon className={iconClass} />;
-  }
 }
 
 /**
@@ -82,19 +49,6 @@ function SoundOption({ definition, isSelected, onSelect }: SoundOptionProps) {
       }`}
       aria-label={`Select ${definition.name}`}
     >
-      {/* Sound type icon */}
-      <div
-        className={`shrink-0 p-2 rounded-md pointer-events-none ${
-          definition.color === 'primary'
-            ? 'bg-primary/10'
-            : definition.color === 'secondary'
-              ? 'bg-secondary/10'
-              : 'bg-neutral/10'
-        }`}
-      >
-        <SoundTypeIcon icon={definition.icon} color={definition.color} className="size-5" />
-      </div>
-
       {/* Sound info */}
       <div className="flex-1 min-w-0 pointer-events-none">
         <div className="flex items-center gap-2">

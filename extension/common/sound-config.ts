@@ -31,8 +31,6 @@ export interface SoundDefinition {
   name: string;
   /** Brief description of the sound character */
   description: string;
-  /** Visual icon type for the sound */
-  icon: 'wave' | 'bell' | 'mute';
   /** Color accent for the sound in the UI */
   color: 'primary' | 'secondary' | 'neutral';
 }
@@ -67,21 +65,18 @@ export const SOUND_DEFINITIONS: SoundDefinition[] = [
     id: 'ping',
     name: 'Ping',
     description: 'Quick, high-pitched digital tone',
-    icon: 'wave',
     color: 'primary',
   },
   {
     id: 'bell',
     name: 'Bell',
     description: 'Soft, melodic bell chime',
-    icon: 'bell',
     color: 'secondary',
   },
   {
     id: 'off',
     name: 'Off',
     description: 'No notification sound',
-    icon: 'mute',
     color: 'neutral',
   },
 ];
@@ -100,9 +95,7 @@ export function getSoundDefinition(soundId: NotificationSound): SoundDefinition 
  * @param soundId - The notification sound identifier
  * @returns The sound preset or undefined if not found (e.g., for 'off')
  */
-export function getSoundPreset(
-  soundId: NotificationSound
-): SoundPreset | undefined {
+export function getSoundPreset(soundId: NotificationSound): SoundPreset | undefined {
   if (soundId === 'off') return undefined;
   return SOUND_PRESETS[soundId];
 }

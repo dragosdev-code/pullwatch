@@ -5,7 +5,7 @@ import type { NotificationSound } from '../../../../extension/common/types';
 import { getSoundDefinition } from '../../../../extension/common/sound-config';
 import { SoundPicker } from './sound-picker';
 import { SoundPreviewButton } from './sound-preview-button';
-import { ChevronIcon, SoundIcon } from '../../ui/icons';
+import { MusicIcon } from '../../ui/icons';
 
 interface SoundSelectFieldProps {
   name: string;
@@ -47,21 +47,25 @@ export function SoundSelectField({ name, label, disabled = false }: SoundSelectF
           >
             <span className="text-sm font-medium text-base-content">{label}</span>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {/* Inline preview button */}
               <SoundPreviewButton sound={soundValue} disabled={disabled} size="sm" />
 
-              {/* Sound selector button */}
+              {/* Current selection badge */}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary ring-1 ring-primary/20">
+                <MusicIcon className="size-3" />
+                {soundDefinition?.name || soundValue}
+              </span>
+
+              {/* Open picker button */}
               <button
                 type="button"
                 onClick={openPicker}
                 disabled={disabled}
-                className="btn btn-sm btn-outline gap-2 min-w-0 h-8 px-3"
+                className="btn btn-sm btn-ghost h-8 px-3 text-xs font-medium text-base-content/50 hover:text-base-content border border-base-300 hover:border-base-content/30"
                 aria-label={`Current sound: ${soundDefinition?.name || soundValue}. Click to change.`}
               >
-                <SoundIcon sound={soundValue} className="size-4" />
-                <span className="text-sm font-normal">{soundDefinition?.name || soundValue}</span>
-                <ChevronIcon className="size-3.5 opacity-60" />
+                Change
               </button>
             </div>
 

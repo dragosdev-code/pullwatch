@@ -169,7 +169,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
               }`}
             >
               <ToggleField name="assigned.notifyOnDrafts" label="Notify on drafts" />
-              <SoundSelectField name="assigned.sound" label="Notification sound" />
+              <SoundSelectField name="assigned.sound" label="Sound" />
             </div>
 
             <div className="border-t border-base-300 pt-3">
@@ -195,7 +195,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
                 mergedEnabled ? '' : 'opacity-40 pointer-events-none'
               }`}
             >
-              <SoundSelectField name="merged.sound" label="Notification sound" />
+              <SoundSelectField name="merged.sound" label="Sound" />
             </div>
           </SettingsSection>
 
