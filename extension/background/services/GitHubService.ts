@@ -30,6 +30,7 @@ export class GitHubService implements IGitHubService {
   private authoredPendingURL: string;
   private authoredCommentedURL: string;
   private authoredDraftURL: string;
+  private avatarCache = new Map<string, string>();
 
   constructor(debugService: IDebugService) {
     this.debugService = debugService;
@@ -73,7 +74,7 @@ export class GitHubService implements IGitHubService {
   private async fetchGitHubData<T>(
     url: string,
     context: string,
-    transform: (html: string) => T
+    transform: (html: string) => T | Promise<T>
   ): Promise<T> {
     const response = await fetch(url, {
       credentials: 'include',
@@ -107,7 +108,89 @@ export class GitHubService implements IGitHubService {
       throw new Error('NotLoggedIn: User is not logged in to GitHub.');
     }
 
-    return transform(html);
+    return await transform(html);
+  }
+
+  /**
+   * Fetches a GitHub PR listing page and returns parsed + enriched PRs.
+   * Centralizes the common parse-then-enrich pipeline used by all fetch methods.
+   */
+  private async fetchPRs(url: string, context: string): Promise<PullRequest[]> {
+    return this.fetchGitHubData(url, context, async (html) => {
+      this.debugService.log(`[GitHubService] ${context} HTML received. Length:`, html.length);
+      const prs = this.parseAssignedPRsFromHTML(html);
+      return this.enrichPRsWithAvatars(prs);
+    });
+  }
+
+  /**
+   * Fetches an avatar image and converts it to a base64 data URL.
+   * Uses an in-memory cache keyed by login to avoid redundant network requests.
+   * Constructs the URL from the login (DOM-independent) via GitHub's /{login}.png redirect.
+   */
+  private async fetchAvatarAsBase64(login: string): Promise<string | null> {
+    if (this.avatarCache.has(login)) {
+      return this.avatarCache.get(login)!;
+    }
+
+    try {
+      const avatarUrl = `${this.baseURL}/${login}.png?size=80`;
+      const response = await fetch(avatarUrl);
+      if (!response.ok) return null;
+
+      const buffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const contentType = response.headers.get('content-type') || 'image/png';
+      const dataUrl = `data:${contentType};base64,${btoa(binary)}`;
+
+      this.avatarCache.set(login, dataUrl);
+      this.debugService.log(`[GitHubService] Cached avatar for ${login} (${dataUrl.length} chars)`);
+      return dataUrl;
+    } catch (error) {
+      this.debugService.error(
+        `[GitHubService] Failed to fetch avatar for ${login}:`,
+        error instanceof Error ? error.message : error
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Enriches parsed PRs with base64-encoded author avatars.
+   * Deduplicates by author login and fetches all unique avatars in parallel.
+   */
+  private async enrichPRsWithAvatars(prs: PullRequest[]): Promise<PullRequest[]> {
+    const uniqueLogins = [...new Set(prs.map((pr) => pr.author.login))].filter(
+      (login) => login !== 'Unknown Author'
+    );
+
+    this.debugService.log(
+      `[GitHubService] Enriching ${prs.length} PRs with avatars for ${uniqueLogins.length} unique authors`
+    );
+
+    const avatarEntries = await Promise.all(
+      uniqueLogins.map(async (login) => {
+        const base64 = await this.fetchAvatarAsBase64(login);
+        return [login, base64] as const;
+      })
+    );
+
+    const avatarMap = new Map(
+      avatarEntries.filter((entry): entry is [string, string] => entry[1] !== null)
+    );
+
+    return prs.map((pr) => {
+      const avatarUrl = avatarMap.get(pr.author.login);
+      if (!avatarUrl) return pr;
+      return {
+        ...pr,
+        author: { ...pr.author, avatarUrl },
+      };
+    });
   }
 
   /**
@@ -119,10 +202,7 @@ export class GitHubService implements IGitHubService {
       this.mergedPRsURL
     );
     try {
-      return await this.fetchGitHubData(this.mergedPRsURL, 'merged PR fetch', (html) => {
-        this.debugService.log('[GitHubService] Merged HTML received. Length:', html.length);
-        return this.parseAssignedPRsFromHTML(html);
-      });
+      return await this.fetchPRs(this.mergedPRsURL, 'merged PR fetch');
     } catch (error: unknown) {
       this.debugService.error(
         '[GitHubService] Error in fetchMergedPRs:',
@@ -145,24 +225,7 @@ export class GitHubService implements IGitHubService {
       this.reviewRequestsURL
     );
     try {
-      return await this.fetchGitHubData(this.reviewRequestsURL, 'assigned PR fetch', (html) => {
-        this.debugService.log('[GitHubService] HTML received. Length:', html.length);
-        if (html.length < 500) {
-          this.debugService.log('[GitHubService] Short HTML response content:', html);
-        }
-
-        if (
-          !html.includes('js-issue-row') &&
-          !html.includes('pull request') &&
-          !html.includes("You don't have any pull requests to review")
-        ) {
-          this.debugService.warn(
-            "[GitHubService] The fetched HTML doesn't look like a PR listing page. Content might be unexpected."
-          );
-        }
-
-        return this.parseAssignedPRsFromHTML(html);
-      });
+      return await this.fetchPRs(this.reviewRequestsURL, 'assigned PR fetch');
     } catch (error: unknown) {
       this.debugService.error(
         '[GitHubService] Error in fetchAssignedPRs:',
@@ -192,10 +255,7 @@ export class GitHubService implements IGitHubService {
     );
 
     try {
-      return await this.fetchGitHubData(this.reviewedPRsURL, 'reviewed PR fetch', (html) => {
-        this.debugService.log('[GitHubService] Reviewed HTML received. Length:', html.length);
-        return this.parseAssignedPRsFromHTML(html);
-      });
+      return await this.fetchPRs(this.reviewedPRsURL, 'reviewed PR fetch');
     } catch (error: unknown) {
       this.debugService.error(
         '[GitHubService] Error in fetchReviewedPRs:',
@@ -277,21 +337,17 @@ export class GitHubService implements IGitHubService {
     this.debugService.log(`[GitHubService] Fetching ${authorReviewStatus} PRs from: ${url}`);
 
     try {
-      return await this.fetchGitHubData(url, `${authorReviewStatus} authored PR fetch`, (html) => {
-        const prs = this.parseAssignedPRsFromHTML(html);
-        return prs.map((pr) => ({
-          ...pr,
-          authorReviewStatus,
-        }));
-      });
+      const prs = await this.fetchPRs(url, `${authorReviewStatus} authored PR fetch`);
+      return prs.map((pr) => ({
+        ...pr,
+        authorReviewStatus,
+      }));
     } catch (error: unknown) {
-      // Log but don't fail the entire fetch if one URL fails
       this.debugService.error(
         `[GitHubService] Error fetching ${authorReviewStatus} PRs:`,
         error instanceof Error ? error.message : error
       );
 
-      // Re-throw authentication errors
       if (
         error instanceof Error &&
         (error.message.startsWith('AuthenticationError') || error.message.startsWith('NotLoggedIn'))
@@ -299,7 +355,6 @@ export class GitHubService implements IGitHubService {
         throw error;
       }
 
-      // For other errors, return empty array to allow other fetches to succeed
       this.debugService.log(
         `[GitHubService] Returning empty array for ${authorReviewStatus} due to error`
       );
@@ -527,9 +582,19 @@ export class GitHubService implements IGitHubService {
       // Ensure URL is absolute
       const url = prUrl.startsWith('http') ? prUrl : `${this.baseURL}${prUrl}`;
 
-      // Extract PR number
+      // Extract PR number from URL, with fallback to #number in the opened-by span
       const numberMatch = prUrl.match(/\/pull\/(\d+)/);
-      const number = numberMatch ? parseInt(numberMatch[1], 10) : null;
+      let number = numberMatch ? parseInt(numberMatch[1], 10) : null;
+      if (number === null) {
+        const spanMatch = elementHtml.match(/#(\d+)\s+opened/);
+        if (spanMatch) {
+          number = parseInt(spanMatch[1], 10);
+          this.debugService.log(
+            '[GitHubService-RegexParser] PR number extracted from opened-by span:',
+            number
+          );
+        }
+      }
       this.debugService.log('[GitHubService-RegexParser] PR number extracted:', number);
 
       // Extract repository name
@@ -678,6 +743,7 @@ export class GitHubService implements IGitHubService {
    */
   async dispose(): Promise<void> {
     this.debugService.log('[GitHubService] GitHub service disposed');
+    this.avatarCache.clear();
     this.initialized = false;
   }
 }

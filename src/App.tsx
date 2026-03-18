@@ -103,11 +103,7 @@ function App() {
       {isDebugMode && <DevTestArea />}
 
       {/* Tabs Component */}
-      <Tabs
-        tabs={tabs}
-        className="flex-1 flex flex-col"
-        onChange={handleTabChange}
-      >
+      <Tabs tabs={tabs} className="flex-1 flex flex-col" onChange={handleTabChange}>
         <TabPanel tabId={TAB_IDS.ASSIGNED} className="flex-1 h-0">
           <AssignedList
             prs={assignedPRs}
