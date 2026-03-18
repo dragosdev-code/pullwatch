@@ -116,11 +116,11 @@ export class SoundService implements ISoundService {
 
   /**
    * Plays a notification sound based on the sound type.
-   * @param sound - The sound type to play ('ping', 'bell', or 'off')
+   * Awaits until the offscreen document confirms playback is complete,
+   * keeping the service worker alive for the full sound duration.
    */
   async playNotificationSound(sound: NotificationSound = 'ping'): Promise<void> {
     try {
-      // Early return if sound is disabled
       if (sound === 'off') {
         this.debugService.log('[SoundService] Sound is disabled (off), skipping playback');
         return;
@@ -130,26 +130,29 @@ export class SoundService implements ISoundService {
 
       await this.ensureOffscreenDocument();
 
-      // Send message to the offscreen document with sound type directly
-      chrome.runtime.sendMessage(
-        { action: EVENT_PLAY_SOUND, payload: { soundType: sound } },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            this.debugService.error(
-              '[SoundService] Error sending play sound message to offscreen:',
-              chrome.runtime.lastError.message
-            );
-          } else {
-            this.debugService.log(
-              '[SoundService] Play sound message sent to offscreen, response:',
-              response
-            );
+      await new Promise<void>((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { action: EVENT_PLAY_SOUND, payload: { soundType: sound } },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              this.debugService.error(
+                '[SoundService] Error sending play sound message to offscreen:',
+                chrome.runtime.lastError.message
+              );
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              this.debugService.log(
+                '[SoundService] Sound playback completed, response:',
+                response
+              );
+              resolve();
+            }
           }
-        }
-      );
+        );
+      });
     } catch (error) {
       this.debugService.error('[SoundService] Error playing notification sound:', error);
-      throw error;
+      // Don't re-throw: sound failure should not break the notification flow
     }
   }
 

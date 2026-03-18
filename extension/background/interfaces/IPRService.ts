@@ -6,8 +6,10 @@ import type { PullRequest } from '../../common/types';
 export interface IPRService {
   /**
    * Fetches and updates assigned/review pull requests with state management.
+   * @param forceRefresh - Bypass cache AND skip notifications (for install/startup/manual refresh)
+   * @param bypassCache - Bypass cache but still show notifications (for alarm-triggered fetches)
    */
-  fetchAndUpdateAssignedPRs(forceRefresh?: boolean): Promise<PullRequest[]>;
+  fetchAndUpdateAssignedPRs(forceRefresh?: boolean, bypassCache?: boolean): Promise<PullRequest[]>;
 
   /**
    * Gets currently stored assigned/review pull requests.
@@ -26,13 +28,17 @@ export interface IPRService {
 
   /**
    * Fetches and updates authored pull requests with state management.
+   * @param forceRefresh - Bypass cache
+   * @param bypassCache - Bypass cache (for alarm-triggered fetches)
    */
-  updateAuthoredPRs(forceRefresh?: boolean): Promise<PullRequest[]>;
+  updateAuthoredPRs(forceRefresh?: boolean, bypassCache?: boolean): Promise<PullRequest[]>;
 
   /**
    * Fetches and updates merged pull requests with state management.
+   * @param forceRefresh - Bypass cache AND skip notifications
+   * @param bypassCache - Bypass cache but still show notifications (for alarm-triggered fetches)
    */
-  updateMergedPRs(forceRefresh?: boolean): Promise<PullRequest[]>;
+  updateMergedPRs(forceRefresh?: boolean, bypassCache?: boolean): Promise<PullRequest[]>;
 
   /**
    * Compares old and new PR lists to identify new PRs.

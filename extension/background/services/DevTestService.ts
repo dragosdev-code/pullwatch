@@ -72,15 +72,19 @@ export class DevTestService implements IDevTestService {
     const title = overrides?.title?.trim() || 'Test PR: Dev Test Notification';
     const message = overrides?.message?.trim() || 'This is a mock notification from the Dev Test Area';
 
-    await this.notificationService.createNotification({
-      type: 'basic',
-      iconUrl: 'https://github.com/favicon.ico',
-      title,
-      message,
-      requireInteraction: false,
-      silent: true,
-      priority: 2,
-    });
+    const notificationId = `devtest-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    await this.notificationService.createNotification(
+      {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('logo.png'),
+        title,
+        message,
+        requireInteraction: false,
+        silent: true,
+        priority: 2,
+      },
+      notificationId
+    );
 
     if (isPlayableSound(sound)) {
       await this.soundService.playNotificationSound(sound);

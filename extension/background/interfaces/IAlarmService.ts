@@ -36,7 +36,7 @@ export interface IAlarmService {
   /**
    * Returns whether the fetch alarm is currently overridden.
    */
-  isFetchAlarmOverridden(): boolean;
+  isFetchAlarmOverridden(): Promise<boolean>;
 
   /**
    * Gets alarm status and information.

@@ -208,6 +208,15 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
           <SettingsSection title="Appearance">
             <ThemePicker />
           </SettingsSection>
+
+          {/* macOS notification tip
+          {(assignedEnabled || mergedEnabled) && (
+            <div className="text-[11px] text-base-content/40 leading-relaxed px-1">
+              <span className="font-medium text-base-content/50">Tip:</span> On macOS, go to
+              System Settings &gt; Notifications &gt; Chrome and set the alert style to
+              &quot;Alerts&quot; for notifications that stay until dismissed.
+            </div>
+          )} */}
         </div>
       </div>
     </FormProvider>

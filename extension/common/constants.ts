@@ -78,6 +78,7 @@ export const USER_AGENT = 'Mozilla/5.0 (compatible; GitHub PR Live Extension)';
 
 // Dev Test Area
 export const STORAGE_KEY_DEV_TEST_SETTINGS = 'dev_test_settings';
+export const STORAGE_KEY_ALARM_OVERRIDE = 'alarm_override_state';
 export const DEV_TEST_MIN_LOOP_INTERVAL_MS = 1000;
 export const DEV_TEST_MIN_ALARM_OVERRIDE_MS = 10_000;
 export const DEV_TEST_NOTIFICATION_DEBOUNCE_MS = 1500;

@@ -14,16 +14,26 @@ interface WindowWithLegacyAudio extends Window {
 }
 
 /**
+ * Calculates total playback duration for a sound preset in milliseconds.
+ */
+function getSoundDurationMs(config: SoundPreset): number {
+  const lastToneEnd = Math.max(...config.times) + config.duration;
+  // Add a small buffer (100ms) to ensure oscillators fully finish
+  return Math.ceil(lastToneEnd * 1000) + 100;
+}
+
+/**
  * Plays a notification sound using the Web Audio API.
  * @param audioContext - The AudioContext to use for playback.
  * @param soundType - The type of sound to play ('ping' or 'bell')
+ * @returns Duration in ms the sound will take to finish
  */
-function playNotificationSound(audioContext: AudioContext, soundType: NotificationSound): void {
+function playNotificationSound(audioContext: AudioContext, soundType: NotificationSound): number {
   const config = SOUND_PRESETS[soundType as Exclude<NotificationSound, 'off'>] as SoundPreset;
 
   if (!config) {
     debugError(`Unknown sound type: ${soundType}`);
-    return;
+    return 0;
   }
 
   config.times.forEach((time, index) => {
@@ -39,7 +49,6 @@ function playNotificationSound(audioContext: AudioContext, soundType: Notificati
       audioContext.currentTime + time
     );
     gainNode.gain.setValueAtTime(config.initialGain, audioContext.currentTime + time);
-    // Fade out the sound
     gainNode.gain.exponentialRampToValueAtTime(
       0.01,
       audioContext.currentTime + time + config.duration
@@ -49,17 +58,18 @@ function playNotificationSound(audioContext: AudioContext, soundType: Notificati
     oscillator.stop(audioContext.currentTime + time + config.duration);
   });
 
-  debugLog(`Offscreen notification sound playback initiated: ${soundType}`);
+  const durationMs = getSoundDurationMs(config);
+  debugLog(`Offscreen notification sound playback initiated: ${soundType} (${durationMs}ms)`);
+  return durationMs;
 }
 
 /**
  * Handles the request to play a notification sound.
- * Creates or resumes an AudioContext and then plays the sound.
- * @param soundType - The type of sound to play ('ping' or 'bell')
+ * Resolves only after the full sound duration has elapsed, keeping the
+ * service worker alive via the pending sendResponse channel.
  */
 async function handlePlayNotificationSound(soundType: NotificationSound = 'ping'): Promise<void> {
   try {
-    // Early return if sound is disabled
     if (soundType === 'off') {
       debugLog('Sound is disabled (off), skipping playback');
       return;
@@ -77,14 +87,21 @@ async function handlePlayNotificationSound(soundType: NotificationSound = 'ping'
     const audioContext = new AudioContextConstructor();
     debugLog('Offscreen AudioContext state:', audioContext.state);
 
-    // Resume audio context if it's suspended (often required due to browser autoplay policies)
     if (audioContext.state === 'suspended') {
       debugLog('Offscreen AudioContext is suspended, attempting to resume...');
       await audioContext.resume();
       debugLog('AudioContext resumed.');
     }
 
-    playNotificationSound(audioContext, soundType);
+    const durationMs = playNotificationSound(audioContext, soundType);
+
+    // Wait for the sound to finish before resolving.
+    // This keeps the sendResponse channel open, which in turn keeps the
+    // service worker alive until playback is complete.
+    if (durationMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, durationMs));
+      debugLog(`Offscreen sound playback completed: ${soundType}`);
+    }
   } catch (error) {
     debugError('Failed to play sound in offscreen document:', error);
   }

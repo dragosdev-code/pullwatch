@@ -44,9 +44,9 @@ export class PRService implements IPRService {
     this.debugService.log('[PRService] PR service initialized');
   }
 
-  async fetchAndUpdateAssignedPRs(forceRefresh = false): Promise<PullRequest[]> {
+  async fetchAndUpdateAssignedPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
     this.debugService.log(
-      `[PRService] Fetching and updating assigned PRs (force: ${forceRefresh})`
+      `[PRService] Fetching and updating assigned PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`
     );
 
     try {
@@ -54,10 +54,11 @@ export class PRService implements IPRService {
       const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_ASSIGNED_PRS);
 
       // Check cache before fetching from GitHub
+      // bypassCache is used by alarm-triggered fetches to ensure fresh data without skipping notifications
       const isCacheValid =
         storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
 
-      if (isCacheValid && !forceRefresh) {
+      if (isCacheValid && !forceRefresh && !bypassCache) {
         this.debugService.log('[PRService] Returning cached Assigned PRs');
         return storedData.prs;
       }
@@ -231,8 +232,8 @@ export class PRService implements IPRService {
     return stored?.prs || [];
   }
 
-  async updateAuthoredPRs(forceRefresh = false): Promise<PullRequest[]> {
-    this.debugService.log(`[PRService] Updating authored PRs (force: ${forceRefresh})`);
+  async updateAuthoredPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
+    this.debugService.log(`[PRService] Updating authored PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`);
 
     try {
       // Check cache before fetching from GitHub
@@ -240,7 +241,7 @@ export class PRService implements IPRService {
       const isCacheValid =
         stored && stored.timestamp && Date.now() - stored.timestamp < CACHE_TTL_MS;
 
-      if (isCacheValid && !forceRefresh) {
+      if (isCacheValid && !forceRefresh && !bypassCache) {
         this.debugService.log('[PRService] Returning cached Authored PRs');
         return stored.prs;
       }
@@ -262,8 +263,8 @@ export class PRService implements IPRService {
     }
   }
 
-  async updateMergedPRs(forceRefresh = false): Promise<PullRequest[]> {
-    this.debugService.log(`[PRService] Updating merged PRs (force: ${forceRefresh})`);
+  async updateMergedPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
+    this.debugService.log(`[PRService] Updating merged PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`);
 
     try {
       // Get current stored merged PRs for comparison and cache check
@@ -273,7 +274,7 @@ export class PRService implements IPRService {
       const isCacheValid =
         storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
 
-      if (isCacheValid && !forceRefresh) {
+      if (isCacheValid && !forceRefresh && !bypassCache) {
         this.debugService.log('[PRService] Returning cached Merged PRs');
         return storedData.prs;
       }

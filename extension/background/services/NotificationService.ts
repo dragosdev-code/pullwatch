@@ -119,6 +119,7 @@ export class NotificationService implements INotificationService {
     category: 'assigned' | 'merged'
   ): Promise<void> {
     const isMerged = category === 'merged';
+    const localIconUrl = chrome.runtime.getURL('logo.png');
 
     for (const pr of prs) {
       const title = isMerged
@@ -129,16 +130,21 @@ export class NotificationService implements INotificationService {
           ? 'New PR Review Request'
           : `New PR Review Request (${prs.indexOf(pr) + 1}/${prs.length})`;
 
-      await this.createNotification({
-        type: 'basic',
-        iconUrl: 'https://github.com/favicon.ico',
-        title,
-        message: pr.title,
-        contextMessage: `${pr.repoName} by ${pr.author.login}`,
-        requireInteraction: false,
-        silent: true,
-        priority: 2,
-      });
+      const notificationId = `pr-${category}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      await this.createNotification(
+        {
+          type: 'basic',
+          iconUrl: localIconUrl,
+          title,
+          message: pr.title,
+          contextMessage: `${pr.repoName} by ${pr.author.login}`,
+          requireInteraction: false,
+          silent: true,
+          priority: 2,
+        },
+        notificationId
+      );
 
       this.debugService.log(`[NotificationService] Visual notification shown for: ${pr.title}`);
     }
@@ -177,11 +183,22 @@ export class NotificationService implements INotificationService {
     }
   }
 
-  async createNotification(options: chrome.notifications.NotificationCreateOptions): Promise<void> {
+  async createNotification(
+    options: chrome.notifications.NotificationCreateOptions,
+    notificationId?: string
+  ): Promise<void> {
     try {
-      const notificationId = await chrome.notifications.create(options);
+      // Clear first to work around a Chrome bug where dismissed notification IDs
+      // fail to re-display on macOS (crbug #324115501)
+      if (notificationId) {
+        try { await chrome.notifications.clear(notificationId); } catch { /* ignore */ }
+      }
+
+      const id = notificationId
+        ? await chrome.notifications.create(notificationId, options)
+        : await chrome.notifications.create(options);
       this.debugService.log(
-        `[NotificationService] Created notification: ${notificationId} - ${options.title}`
+        `[NotificationService] Created notification: ${id} - ${options.title}`
       );
     } catch (error) {
       this.debugService.error('[NotificationService] Error creating notification:', error);

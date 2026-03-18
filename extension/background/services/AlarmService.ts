@@ -1,29 +1,46 @@
 import type { IAlarmService } from '../interfaces/IAlarmService';
 import type { IDebugService } from '../interfaces/IDebugService';
-import { EVENT_FETCH_PRS, FETCH_INTERVAL_MS, DEV_TEST_MIN_ALARM_OVERRIDE_MS } from '../../common/constants';
+import { EVENT_FETCH_PRS, FETCH_INTERVAL_MS, DEV_TEST_MIN_ALARM_OVERRIDE_MS, STORAGE_KEY_ALARM_OVERRIDE } from '../../common/constants';
+
+interface AlarmOverrideState {
+  overridden: boolean;
+  intervalMs: number | null;
+}
 
 /**
  * AlarmService handles Chrome extension alarm scheduling and management.
  * Manages periodic tasks like PR fetching through Chrome's alarm API.
+ * Override state is persisted to chrome.storage.local so it survives service worker restarts.
  */
 export class AlarmService implements IAlarmService {
   private debugService: IDebugService;
   private initialized = false;
-  private overridden = false;
-  private overrideIntervalMs: number | null = null;
 
   constructor(debugService: IDebugService) {
     this.debugService = debugService;
   }
 
   /**
-   * Initializes the alarm service.
+   * Initializes the alarm service and restores persisted override state.
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
     this.initialized = true;
     this.debugService.log('[AlarmService] Alarm service initialized');
+  }
+
+  private async getOverrideState(): Promise<AlarmOverrideState> {
+    try {
+      const result = await chrome.storage.local.get(STORAGE_KEY_ALARM_OVERRIDE);
+      return result[STORAGE_KEY_ALARM_OVERRIDE] || { overridden: false, intervalMs: null };
+    } catch {
+      return { overridden: false, intervalMs: null };
+    }
+  }
+
+  private async setOverrideState(state: AlarmOverrideState): Promise<void> {
+    await chrome.storage.local.set({ [STORAGE_KEY_ALARM_OVERRIDE]: state });
   }
 
   /**
@@ -180,9 +197,7 @@ export class AlarmService implements IAlarmService {
     try {
       await this.clearAlarm(EVENT_FETCH_PRS);
       await this.createAlarm(EVENT_FETCH_PRS, { periodInMinutes });
-
-      this.overridden = true;
-      this.overrideIntervalMs = safeInterval;
+      await this.setOverrideState({ overridden: true, intervalMs: safeInterval });
 
       this.debugService.log(
         `[AlarmService] Fetch alarm overridden to ${safeInterval}ms (${periodInMinutes} min)`
@@ -202,9 +217,7 @@ export class AlarmService implements IAlarmService {
 
       const periodInMinutes = FETCH_INTERVAL_MS / (60 * 1000);
       await this.createAlarm(EVENT_FETCH_PRS, { periodInMinutes });
-
-      this.overridden = false;
-      this.overrideIntervalMs = null;
+      await this.setOverrideState({ overridden: false, intervalMs: null });
 
       this.debugService.log(
         `[AlarmService] Fetch alarm restored to production interval: ${periodInMinutes} min`
@@ -215,8 +228,9 @@ export class AlarmService implements IAlarmService {
     }
   }
 
-  isFetchAlarmOverridden(): boolean {
-    return this.overridden;
+  async isFetchAlarmOverridden(): Promise<boolean> {
+    const state = await this.getOverrideState();
+    return state.overridden;
   }
 
   /**
@@ -232,14 +246,15 @@ export class AlarmService implements IAlarmService {
     try {
       const allAlarms = await this.getAllAlarms();
       const fetchAlarm = await this.getAlarm(EVENT_FETCH_PRS);
+      const overrideState = await this.getOverrideState();
 
       const status = {
         totalAlarms: allAlarms.length,
         fetchAlarmActive: !!fetchAlarm,
         nextScheduledTime: fetchAlarm?.scheduledTime,
-        isOverridden: this.overridden,
-        currentIntervalMs: this.overridden
-          ? (this.overrideIntervalMs ?? undefined)
+        isOverridden: overrideState.overridden,
+        currentIntervalMs: overrideState.overridden
+          ? (overrideState.intervalMs ?? undefined)
           : FETCH_INTERVAL_MS,
       };
 

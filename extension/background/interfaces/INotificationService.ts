@@ -28,8 +28,13 @@ export interface INotificationService {
 
   /**
    * Creates a custom notification.
+   * @param options - Chrome notification options
+   * @param notificationId - Optional explicit ID (recommended for dedup and macOS compatibility)
    */
-  createNotification(options: chrome.notifications.NotificationCreateOptions): Promise<void>;
+  createNotification(
+    options: chrome.notifications.NotificationCreateOptions,
+    notificationId?: string
+  ): Promise<void>;
 
   /**
    * Clears a notification by ID.

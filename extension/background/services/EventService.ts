@@ -38,61 +38,16 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Initializes the event service and sets up event listeners.
+   * Initializes the event service.
+   * NOTE: Chrome event listeners are registered synchronously in main.ts
+   * using the "initialization gate" pattern to ensure the service worker
+   * wakes up reliably for alarms, messages, and other events.
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    try {
-      await this.setupEventListeners();
-      this.initialized = true;
-      this.debugService.log('[EventService] Event service initialized');
-    } catch (error) {
-      this.debugService.error('[EventService] Failed to initialize:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Sets up Chrome extension event listeners.
-   */
-  async setupEventListeners(): Promise<void> {
-    try {
-      // Runtime installation and startup events
-      chrome.runtime.onInstalled.addListener((details) => {
-        this.handleInstallation(details).catch((error) => {
-          this.debugService.error('[EventService] Error in onInstalled:', error);
-        });
-      });
-
-      chrome.runtime.onStartup.addListener(() => {
-        this.handleStartup().catch((error) => {
-          this.debugService.error('[EventService] Error in onStartup:', error);
-        });
-      });
-
-      // Alarm events
-      chrome.alarms.onAlarm.addListener((alarm) => {
-        this.handleAlarm(alarm).catch((error) => {
-          this.debugService.error('[EventService] Error in onAlarm:', error);
-        });
-      });
-
-      // Notification events
-      chrome.notifications.onClicked.addListener((notificationId) => {
-        this.handleNotificationClick(notificationId).catch((error) => {
-          this.debugService.error('[EventService] Error in onNotificationClick:', error);
-        });
-      });
-
-      // Runtime messages
-      chrome.runtime.onMessage.addListener(this.handleMessage.bind(this));
-
-      this.debugService.log('[EventService] Event listeners set up successfully');
-    } catch (error) {
-      this.debugService.error('[EventService] Error setting up event listeners:', error);
-      throw error;
-    }
+    this.initialized = true;
+    this.debugService.log('[EventService] Event service initialized');
   }
 
   /**
@@ -161,15 +116,12 @@ export class EventService implements IEventService {
 
         const prService = this.serviceContainer.getService<IPRService>('prService');
 
-        // Fetch assigned PRs (includes notifications for new assigned PRs)
-        await prService.fetchAndUpdateAssignedPRs();
-
-        // Fetch merged PRs (includes notifications for newly merged PRs)
-        await prService.updateMergedPRs();
-
-        // Note: Authored PRs don't have notifications enabled by default, but we still fetch them
-        // to keep the data fresh for the UI
-        await prService.updateAuthoredPRs();
+        // Always bypass cache for alarm-triggered fetches.
+        // The alarm interval itself is the rate limiter; the cache exists to
+        // prevent double-fetching when the popup opens shortly after an alarm.
+        await prService.fetchAndUpdateAssignedPRs(false, true);
+        await prService.updateMergedPRs(false, true);
+        await prService.updateAuthoredPRs(false, true);
 
         this.debugService.log('[EventService] Completed alarm fetch for all PR types');
       } else {
@@ -705,22 +657,11 @@ export class EventService implements IEventService {
 
   /**
    * Disposes the event service.
+   * NOTE: Chrome event listeners registered in main.ts persist for the
+   * lifetime of the service worker and cannot be reliably removed.
    */
   async dispose(): Promise<void> {
-    try {
-      // Remove event listeners
-      // Note: Chrome extension APIs don't provide reliable ways to check if specific listeners exist
-      // We'll attempt to remove them and catch any errors
-      chrome.runtime.onInstalled.removeListener(this.handleInstallation);
-      chrome.runtime.onStartup.removeListener(this.handleStartup);
-      chrome.alarms.onAlarm.removeListener(this.handleAlarm);
-      chrome.notifications.onClicked.removeListener(this.handleNotificationClick);
-      chrome.runtime.onMessage.removeListener(this.handleMessage);
-
-      this.debugService.log('[EventService] Event service disposed');
-      this.initialized = false;
-    } catch (error) {
-      this.debugService.error('[EventService] Error during disposal:', error);
-    }
+    this.debugService.log('[EventService] Event service disposed');
+    this.initialized = false;
   }
 }

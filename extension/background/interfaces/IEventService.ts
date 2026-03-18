@@ -6,14 +6,9 @@ import type { RuntimeMessage, MessageResponse } from '../../common/types';
  */
 export interface IEventService {
   /**
-   * Initializes the event service and sets up event listeners.
+   * Initializes the event service.
    */
   initialize(): Promise<void>;
-
-  /**
-   * Sets up Chrome extension event listeners.
-   */
-  setupEventListeners(): Promise<void>;
 
   /**
    * Handles extension installation and updates.
