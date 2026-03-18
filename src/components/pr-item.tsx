@@ -6,7 +6,7 @@ import type { PullRequest } from '../../extension/common/types';
 import { useLinkBehavior } from '../hooks/use-link-behavior';
 import { PRStatusIcon } from './ui/pr-status-icon';
 import { StatusBadge } from './ui/status-badge';
-import { CheckIcon } from './ui/icons';
+import { CheckIcon, RepoIcon } from './ui/icons';
 
 interface PRItemProps {
   pr: PullRequest;
@@ -76,7 +76,6 @@ export const PRItem = ({
   const formatTimeAgo = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      // Check if the date is valid
       if (isNaN(date.getTime())) {
         return 'Unknown date';
       }
@@ -87,6 +86,8 @@ export const PRItem = ({
     }
   };
 
+  const avatarInitial = pr.author.login.charAt(0).toUpperCase();
+
   return (
     <animated.a
       href={pr.url}
@@ -96,64 +97,128 @@ export const PRItem = ({
       style={isNew && !isReviewed ? slideSpring : {}}
       data-pr-id={pr.id}
       className={clsx(
-        'group block px-5 py-3 transition-all duration-200 cursor-pointer relative border-b border-base-200 hover:z-10',
+        'group block px-5 py-2 transition-all duration-200 cursor-pointer relative border-b border-base-200 hover:z-10',
         isReviewed
           ? 'bg-base-200 text-base-content/70 opacity-90 border-l-2 hover:opacity-100'
           : 'bg-base-100 text-base-content border-l-2 hover:bg-base-200',
         isNew && !isReviewed && 'shadow-sm'
       )}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center mb-1">
-            <PRStatusIcon type={pr.type} reviewed={isReviewed} />
+      {/* Row 1: PR status icon + title + badges */}
+      <div className="flex items-center gap-1 mb-1.5">
+        <PRStatusIcon type={pr.type} reviewed={isReviewed} />
 
-            <div
-              className={clsx(
-                'min-w-0',
-                isTruncated && [
-                  'tooltip rounded-3xl tooltip-neutral',
-                  isFirst ? 'tooltip-bottom' : 'tooltip-top',
-                ]
-              )}
-            >
-              {isTruncated && (
-                <div className="tooltip-content z-[9999] p-0 rounded-3xl">
-                  <div className="font-semibold text-xs px-3 py-2 rounded-3xl whitespace-normal leading-relaxed text-left">
-                    {pr.title}
-                  </div>
-                </div>
-              )}
-              <h3
-                ref={titleRef}
-                className={clsx(
-                  'text-sm font-medium truncate transition-all duration-150',
-                  isReviewed ? 'text-base-content/60' : 'text-base-content',
-                  isTruncated && 'hover:text-base-content hover:underline'
-                )}
-              >
+        <div
+          className={clsx(
+            'min-w-0 flex-1',
+            isTruncated && [
+              'tooltip rounded-3xl tooltip-neutral',
+              isFirst ? 'tooltip-bottom' : 'tooltip-top',
+            ]
+          )}
+        >
+          {isTruncated && (
+            <div className="tooltip-content z-[9999] p-0 rounded-3xl">
+              <div className="font-semibold text-xs px-3 py-2 rounded-3xl whitespace-normal leading-relaxed text-left">
                 {pr.title}
-              </h3>
+              </div>
             </div>
-            {isReviewed && (
-              <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-base-300 text-base-content/70 text-[11px] font-medium">
-                <CheckIcon width={10} height={10} className="flex-shrink-0" />
-                Reviewed
-              </span>
-            )}
-            {showAuthorStatus && pr.authorReviewStatus && (
-              <StatusBadge status={pr.authorReviewStatus} className="ml-2" />
-            )}
-          </div>
-          <p
+          )}
+          <h3
+            ref={titleRef}
             className={clsx(
-              'text-xs truncate',
-              isReviewed ? 'text-base-content/40' : 'text-base-content/50'
+              'text-sm font-medium truncate transition-all duration-150',
+              isReviewed ? 'text-base-content/60' : 'text-base-content',
+              isTruncated && 'hover:text-base-content hover:underline'
             )}
           >
-            {pr.repoName} • {pr.author.login} • {formatTimeAgo(pr.createdAt || '')}
-          </p>
+            {pr.title}
+          </h3>
         </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          {isReviewed && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-base-300 text-base-content/70 text-[11px] font-medium">
+              <CheckIcon width={10} height={10} className="flex-shrink-0" />
+              Reviewed
+            </span>
+          )}
+          {showAuthorStatus && pr.authorReviewStatus && (
+            <StatusBadge status={pr.authorReviewStatus} />
+          )}
+        </div>
+      </div>
+
+      {/* Row 2: repo name as code badge (left) + PR number (right) */}
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <RepoIcon
+            width={11}
+            height={11}
+            className={clsx(
+              'shrink-0',
+              isReviewed ? 'text-base-content/35' : 'text-base-content/50'
+            )}
+          />
+          <span
+            className={clsx(
+              'font-mono text-[11px] px-1.5 py-0.5 rounded truncate',
+              isReviewed
+                ? 'bg-base-300/60 text-base-content/45'
+                : 'bg-base-200 text-base-content/65'
+            )}
+          >
+            {pr.repoName}
+          </span>
+        </div>
+        {pr.number !== null && (
+          <span
+            className={clsx(
+              'text-[11px] font-mono shrink-0',
+              isReviewed ? 'text-base-content/35' : 'text-base-content/50'
+            )}
+          >
+            #{pr.number}
+          </span>
+        )}
+      </div>
+
+      {/* Row 3: author avatar + name (left) + timestamp (right) */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {pr.author.avatarUrl ? (
+            <img
+              src={pr.author.avatarUrl}
+              alt={pr.author.login}
+              className="w-4 h-4 rounded-full object-cover shrink-0"
+            />
+          ) : (
+            <span
+              className={clsx(
+                'w-4 h-4 rounded-full shrink-0 inline-flex items-center justify-center text-[9px] font-bold bg-base-300',
+                isReviewed ? 'text-base-content/40' : 'text-base-content/60'
+              )}
+            >
+              {avatarInitial}
+            </span>
+          )}
+          <span
+            className={clsx(
+              'text-xs truncate',
+              isReviewed ? 'text-base-content/40' : 'text-base-content/60'
+            )}
+          >
+            {pr.author.login}
+          </span>
+        </div>
+        <span
+          className={clsx(
+            'text-[11px] shrink-0',
+            isReviewed ? 'text-base-content/35' : 'text-base-content/45'
+          )}
+        >
+          {formatTimeAgo(pr.createdAt || '')}
+        </span>
       </div>
     </animated.a>
   );

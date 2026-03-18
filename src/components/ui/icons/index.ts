@@ -16,3 +16,4 @@ export { PullRequestDraftIcon } from './pull-request-draft-icon';
 export { XIcon } from './x-icon';
 export { ClockIcon } from './clock-icon';
 export { CommentIcon } from './comment-icon';
+export { RepoIcon } from './repo-icon';
