@@ -75,7 +75,7 @@ const ThemeSwatch = ({ name, isActive }: ThemeSwatchProps) => {
 };
 
 export const ThemePicker = () => {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, isThemeLoaded } = useTheme();
   const scrollRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const hasMountedRef = useRef(false);
@@ -97,15 +97,18 @@ export const ThemePicker = () => {
     });
   }, []);
 
-  // Scroll to the selected theme only on initial mount (settings overlay opens)
+  // Scroll to the selected theme once, but only after the real theme has loaded
+  // from storage (isThemeLoaded). Without this guard the effect would fire with
+  // the default "light" value before storage resolves, lock hasMountedRef, and
+  // never scroll to the actual stored theme.
   useEffect(() => {
-    if (hasMountedRef.current) return;
+    if (!isThemeLoaded || hasMountedRef.current) return;
     hasMountedRef.current = true;
     const timer = setTimeout(() => {
       scrollToTheme(theme, false);
     }, 50);
     return () => clearTimeout(timer);
-  }, [theme, scrollToTheme]);
+  }, [theme, isThemeLoaded, scrollToTheme]);
 
   return (
     <div className="flex flex-col gap-2">

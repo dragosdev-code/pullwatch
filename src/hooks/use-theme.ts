@@ -6,6 +6,7 @@ const DEFAULT_THEME = 'light';
 
 export const useTheme = () => {
   const [theme, setThemeState] = useState<string>(DEFAULT_THEME);
+  const [isThemeLoaded, setIsThemeLoaded] = useState(false);
 
   useEffect(() => {
     const loadTheme = async () => {
@@ -19,6 +20,8 @@ export const useTheme = () => {
         localStorage.setItem(STORAGE_KEY, resolved);
       } catch {
         document.documentElement.setAttribute('data-theme', DEFAULT_THEME);
+      } finally {
+        setIsThemeLoaded(true);
       }
     };
     loadTheme();
@@ -37,5 +40,5 @@ export const useTheme = () => {
     }
   }, []);
 
-  return { theme, setTheme };
+  return { theme, setTheme, isThemeLoaded };
 };
