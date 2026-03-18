@@ -57,7 +57,7 @@ export const LinkBehaviorField = ({ value, onChange }: LinkBehaviorFieldProps) =
           >
             <span className="font-medium leading-tight">{option.label}</span>
             <span
-              className={`text-[10px] leading-tight ${
+              className={`text-[11px] leading-tight ${
                 value === option.value ? 'text-base-content/60' : 'text-base-content/40'
               }`}
             >
