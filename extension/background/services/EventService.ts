@@ -623,12 +623,8 @@ export class EventService implements IEventService {
 
         const notificationService =
           this.serviceContainer.getService<INotificationService>('notificationService');
-        const storageService = this.serviceContainer.getService<IStorageService>('storageService');
-        const settings = await storageService.getExtensionSettings();
 
-        await notificationService.showAssignedPRNotifications(testPR, {
-          includeDrafts: settings.assigned.notifyOnDrafts,
-        });
+        await notificationService.showAssignedPRNotifications(testPR);
 
         sendResponse({ success: true, data: `Test notification (${message.action}) triggered` });
       }

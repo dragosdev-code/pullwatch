@@ -1,7 +1,4 @@
-import type {
-  INotificationService,
-  AssignedNotificationOptions,
-} from '../interfaces/INotificationService';
+import type { INotificationService } from '../interfaces/INotificationService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type { IStorageService } from '../interfaces/IStorageService';
 import type { ISoundService } from '../interfaces/ISoundService';
@@ -39,8 +36,7 @@ export class NotificationService implements INotificationService {
    * Respects assigned notification settings including draft filtering.
    */
   async showAssignedPRNotifications(
-    newPRs: PullRequest | PullRequest[],
-    options: AssignedNotificationOptions
+    newPRs: PullRequest | PullRequest[]
   ): Promise<void> {
     try {
       const settings = await this.storageService.getExtensionSettings();
@@ -57,7 +53,7 @@ export class NotificationService implements INotificationService {
       const prsArray = Array.isArray(newPRs) ? newPRs : [newPRs];
 
       // Filter out drafts if notifyOnDrafts is false
-      const filteredPRs = options.includeDrafts
+      const filteredPRs = settings.assigned.notifyOnDrafts
         ? prsArray
         : prsArray.filter((pr) => pr.type !== 'draft');
 

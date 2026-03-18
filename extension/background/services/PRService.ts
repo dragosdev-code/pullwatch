@@ -132,9 +132,7 @@ export class PRService implements IPRService {
       // Show notifications for new PRs (NotificationService handles settings and sound)
       if (newPRs.length > 0 && !forceRefresh) {
         this.debugService.log(`[PRService] Showing notifications for ${newPRs.length} new PR(s)`);
-        await this.notificationService.showAssignedPRNotifications(newPRs, {
-          includeDrafts: settings.assigned.notifyOnDrafts,
-        });
+        await this.notificationService.showAssignedPRNotifications(newPRs);
       } else if (newPRs.length === 0) {
         this.debugService.log('[PRService] No new PRs detected, skipping notifications');
       } else if (forceRefresh) {
