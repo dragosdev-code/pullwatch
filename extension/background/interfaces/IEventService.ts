@@ -1,14 +1,11 @@
 import type { RuntimeMessage, MessageResponse } from '../../common/types';
+import type { IService } from './IService';
 
 /**
  * Event service interface for managing Chrome extension events and messages.
  * Coordinates between different services and handles Chrome extension lifecycle events.
  */
-export interface IEventService {
-  /**
-   * Initializes the event service.
-   */
-  initialize(): Promise<void>;
+export interface IEventService extends IService {
 
   /**
    * Handles extension installation and updates.
@@ -70,9 +67,4 @@ export interface IEventService {
     message: RuntimeMessage,
     sendResponse: (response: MessageResponse) => void
   ): Promise<void>;
-
-  /**
-   * Disposes the event service.
-   */
-  dispose(): Promise<void>;
 }

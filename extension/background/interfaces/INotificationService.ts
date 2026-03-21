@@ -1,10 +1,11 @@
 import type { PullRequest } from '../../common/types';
+import type { IService } from './IService';
 
 /**
  * Interface for the notification service that handles Chrome extension notifications.
  * Supports category-specific notifications for assigned and merged PRs.
  */
-export interface INotificationService {
+export interface INotificationService extends IService {
   /**
    * Shows notifications for new assigned pull requests.
    * Respects assigned notification settings including draft filtering.
@@ -50,14 +51,4 @@ export interface INotificationService {
    * Gets all active notifications.
    */
   getAllNotifications(): Promise<string[]>;
-
-  /**
-   * Initializes the notification service.
-   */
-  initialize(): Promise<void>;
-
-  /**
-   * Disposes the notification service.
-   */
-  dispose(): Promise<void>;
 }

@@ -1,3 +1,5 @@
+import type { IService } from './IService';
+
 export interface RateLimitState {
   isLimited: boolean;
   retryAfterTimestamp: number | null;
@@ -8,8 +10,7 @@ export interface RateLimitState {
 /**
  * Interface for tracking GitHub rate limit state and enforcing backoff.
  */
-export interface IRateLimitService {
-  initialize(): Promise<void>;
+export interface IRateLimitService extends IService {
 
   /**
    * Records a 429 rate limit response. Increases backoff duration exponentially.
@@ -31,6 +32,4 @@ export interface IRateLimitService {
    * Returns the current rate limit state for debugging.
    */
   getState(): RateLimitState;
-
-  dispose(): Promise<void>;
 }

@@ -1,5 +1,6 @@
 import type { IEventService } from '../interfaces/IEventService';
 import type { IDebugService } from '../interfaces/IDebugService';
+import type { IPRService } from '../interfaces/IPRService';
 import type { ServiceContainer } from '../core/ServiceContainer';
 import type {
   RuntimeMessage,
@@ -14,15 +15,6 @@ import {
   EVENT_PLAY_SOUND,
   EVENT_OFFSCREEN_READY,
 } from '../../common/constants';
-import { IPermissionService } from '../interfaces/IPermissionService';
-import { IAlarmService } from '../interfaces/IAlarmService';
-import { IPRService } from '../interfaces/IPRService';
-import { IBadgeService } from '../interfaces/IBadgeService';
-import { INotificationService } from '../interfaces/INotificationService';
-import { IStorageService } from '../interfaces/IStorageService';
-import { ISoundService } from '../interfaces/ISoundService';
-import { IDevTestService } from '../interfaces/IDevTestService';
-import { IRateLimitService } from '../interfaces/IRateLimitService';
 
 /**
  * EventService coordinates Chrome extension events and handles message routing.
@@ -60,10 +52,10 @@ export class EventService implements IEventService {
 
       // Get services directly from container
       const permissionService =
-        this.serviceContainer.getService<IPermissionService>('permissionService');
-      const alarmService = this.serviceContainer.getService<IAlarmService>('alarmService');
-      const prService = this.serviceContainer.getService<IPRService>('prService');
-      const badgeService = this.serviceContainer.getService<IBadgeService>('badgeService');
+        this.serviceContainer.getService('permissionService');
+      const alarmService = this.serviceContainer.getService('alarmService');
+      const prService = this.serviceContainer.getService('prService');
+      const badgeService = this.serviceContainer.getService('badgeService');
 
       // Handle installation logic
       await permissionService.checkAllPermissions();
@@ -92,9 +84,9 @@ export class EventService implements IEventService {
 
       // Get services directly from container
       const permissionService =
-        this.serviceContainer.getService<IPermissionService>('permissionService');
-      const alarmService = this.serviceContainer.getService<IAlarmService>('alarmService');
-      const prService = this.serviceContainer.getService<IPRService>('prService');
+        this.serviceContainer.getService('permissionService');
+      const alarmService = this.serviceContainer.getService('alarmService');
+      const prService = this.serviceContainer.getService('prService');
 
       // Handle startup logic
       await permissionService.checkAllPermissions();
@@ -119,7 +111,7 @@ export class EventService implements IEventService {
         }
 
         const rateLimitService =
-          this.serviceContainer.getService<IRateLimitService>('rateLimitService');
+          this.serviceContainer.getService('rateLimitService');
         if (rateLimitService.shouldSkipFetch()) {
           this.debugService.log('[EventService] Skipping fetch - rate limited (backoff active)');
           return;
@@ -127,7 +119,7 @@ export class EventService implements IEventService {
 
         this.debugService.log('[EventService] Fetch alarm triggered - fetching all PR types');
 
-        const prService = this.serviceContainer.getService<IPRService>('prService');
+        const prService = this.serviceContainer.getService('prService');
 
         // Always bypass cache for alarm-triggered fetches.
         // The alarm interval itself is the rate limiter; the cache exists to
@@ -154,7 +146,7 @@ export class EventService implements IEventService {
 
       // Get notification service and handle click
       const notificationService =
-        this.serviceContainer.getService<INotificationService>('notificationService');
+        this.serviceContainer.getService('notificationService');
       await notificationService.handleNotificationClick(notificationId);
     } catch (error) {
       this.debugService.error('[EventService] Error handling notification click:', error);
@@ -247,7 +239,7 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      const prService = this.serviceContainer.getService<IPRService>('prService');
+      const prService = this.serviceContainer.getService('prService');
 
       if (this.isMessageAction(message, 'getAssignedPRs')) {
         this.debugService.log('[EventService] Getting stored assigned PRs and fetching fresh data');
@@ -287,7 +279,7 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      const prService = this.serviceContainer.getService<IPRService>('prService');
+      const prService = this.serviceContainer.getService('prService');
 
       if (this.isMessageAction(message, 'getMergedPRs')) {
         this.debugService.log('[EventService] Getting stored merged PRs and fetching fresh data');
@@ -372,7 +364,7 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      const prService = this.serviceContainer.getService<IPRService>('prService');
+      const prService = this.serviceContainer.getService('prService');
 
       if (this.isMessageAction(message, 'getAuthoredPRs')) {
         this.debugService.log('[EventService] Getting stored authored PRs and fetching fresh data');
@@ -479,7 +471,7 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      const storageService = this.serviceContainer.getService<IStorageService>('storageService');
+      const storageService = this.serviceContainer.getService('storageService');
 
       if (this.isMessageAction<Partial<ExtensionSettings>>(message, 'saveSettings')) {
         if (message.payload) {
@@ -531,7 +523,7 @@ export class EventService implements IEventService {
   ): Promise<void> {
     try {
       if (this.isMessageAction(message, EVENT_PLAY_SOUND)) {
-        const soundService = this.serviceContainer.getService<ISoundService>('soundService');
+        const soundService = this.serviceContainer.getService('soundService');
 
         await soundService.ensureOffscreenDocument();
 
@@ -580,7 +572,7 @@ export class EventService implements IEventService {
 
         this.debugService.log(`[EventService] Playing sound preview: ${sound}`);
 
-        const soundService = this.serviceContainer.getService<ISoundService>('soundService');
+        const soundService = this.serviceContainer.getService('soundService');
 
         // Play the sound (SoundService handles the offscreen document)
         await soundService.playNotificationSound(sound);
@@ -605,7 +597,7 @@ export class EventService implements IEventService {
   ): Promise<void> {
     try {
       const devTestService =
-        this.serviceContainer.getService<IDevTestService>('devTestService');
+        this.serviceContainer.getService('devTestService');
 
       switch (message.action) {
         case 'devTest:fireNotification': {

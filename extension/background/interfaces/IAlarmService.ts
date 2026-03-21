@@ -1,7 +1,9 @@
+import type { IService } from './IService';
+
 /**
  * Interface for the alarm service that handles Chrome extension alarms.
  */
-export interface IAlarmService {
+export interface IAlarmService extends IService {
   /**
    * Sets up the fetch alarm for periodic PR fetching.
    */
@@ -48,14 +50,4 @@ export interface IAlarmService {
     isOverridden: boolean;
     currentIntervalMs?: number;
   }>;
-
-  /**
-   * Initializes the alarm service.
-   */
-  initialize(): Promise<void>;
-
-  /**
-   * Disposes the alarm service.
-   */
-  dispose(): Promise<void>;
 }

@@ -1,9 +1,4 @@
 import type { ServiceContainer } from '../core/ServiceContainer';
-import { IAlarmService } from '../interfaces/IAlarmService';
-import { IBadgeService } from '../interfaces/IBadgeService';
-import { IDebugService } from '../interfaces/IDebugService';
-import { IPermissionService } from '../interfaces/IPermissionService';
-import { IPRService } from '../interfaces/IPRService';
 
 /**
  * BackgroundManager orchestrates all services and handles Chrome extension lifecycle.
@@ -43,11 +38,10 @@ export class BackgroundManager {
    * Performs initial setup tasks like permission checks and alarms.
    */
   private async performInitialSetup(): Promise<void> {
-    const permissionService =
-      this.serviceContainer.getService<IPermissionService>('permissionService');
-    const alarmService = this.serviceContainer.getService<IAlarmService>('alarmService');
-    const prService = this.serviceContainer.getService<IPRService>('prService');
-    const badgeService = this.serviceContainer.getService<IBadgeService>('badgeService');
+    const permissionService = this.serviceContainer.getService('permissionService');
+    const alarmService = this.serviceContainer.getService('alarmService');
+    const prService = this.serviceContainer.getService('prService');
+    const badgeService = this.serviceContainer.getService('badgeService');
 
     try {
       // Check permissions
@@ -89,7 +83,7 @@ export class BackgroundManager {
    */
   private debugLog(message: string, ...args: unknown[]): void {
     try {
-      const debugService = this.serviceContainer.getService<IDebugService>('debugService');
+      const debugService = this.serviceContainer.getService('debugService');
       debugService.log(message, ...args);
     } catch {
       console.log(message, ...args);
@@ -101,7 +95,7 @@ export class BackgroundManager {
    */
   private debugError(message: string, ...args: unknown[]): void {
     try {
-      const debugService = this.serviceContainer.getService<IDebugService>('debugService');
+      const debugService = this.serviceContainer.getService('debugService');
       debugService.error(message, ...args);
     } catch {
       console.error(message, ...args);

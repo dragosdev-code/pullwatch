@@ -1,9 +1,10 @@
 import type { PullRequest } from '../../common/types';
+import type { IService } from './IService';
 
 /**
  * Interface for the PR service that handles pull request management and coordination.
  */
-export interface IPRService {
+export interface IPRService extends IService {
   /**
    * Fetches and updates assigned/review pull requests with state management.
    * @param forceRefresh - Bypass cache AND skip notifications (for install/startup/manual refresh)
@@ -50,14 +51,4 @@ export interface IPRService {
     newPRs: PullRequest[];
     allPRsWithStatus: PullRequest[];
   };
-
-  /**
-   * Initializes the PR service.
-   */
-  initialize(): Promise<void>;
-
-  /**
-   * Disposes the PR service.
-   */
-  dispose(): Promise<void>;
 }

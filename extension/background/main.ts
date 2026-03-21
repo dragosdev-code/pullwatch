@@ -26,7 +26,7 @@ const initPromise: Promise<void> = backgroundManager.initialize().catch((error) 
 });
 
 function getEventService(): IEventService {
-  return serviceContainer.getService<IEventService>('eventService');
+  return serviceContainer.getService('eventService');
 }
 
 // ─── Synchronous listener registration ───────────────────────────────────────

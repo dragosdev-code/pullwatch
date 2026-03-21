@@ -35,6 +35,7 @@ export class DevTestService implements IDevTestService {
   private initialized = false;
 
   private loopTimer: ReturnType<typeof setInterval> | null = null;
+  private loopIntervalMs = 0;
   private loopSentCount = 0;
 
   constructor(deps: {
@@ -101,6 +102,7 @@ export class DevTestService implements IDevTestService {
     this.stopLoopInternal();
 
     const safeInterval = Math.max(intervalMs, DEV_TEST_MIN_LOOP_INTERVAL_MS);
+    this.loopIntervalMs = safeInterval;
     this.loopSentCount = 0;
 
     this.loopTimer = setInterval(async () => {
@@ -127,7 +129,7 @@ export class DevTestService implements IDevTestService {
 
   getLooperState(): DevTestLooperState {
     return {
-      intervalMs: DEV_TEST_MIN_LOOP_INTERVAL_MS,
+      intervalMs: this.loopIntervalMs,
       isRunning: this.loopTimer !== null,
       sentCount: this.loopSentCount,
     };
@@ -137,6 +139,7 @@ export class DevTestService implements IDevTestService {
     if (this.loopTimer !== null) {
       clearInterval(this.loopTimer);
       this.loopTimer = null;
+      this.loopIntervalMs = 0;
     }
   }
 

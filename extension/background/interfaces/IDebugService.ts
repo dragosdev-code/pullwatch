@@ -1,7 +1,9 @@
+import type { IService } from './IService';
+
 /**
  * Interface for the debug service that handles all logging operations.
  */
-export interface IDebugService {
+export interface IDebugService extends IService {
   /**
    * Logs a debug message.
    */
@@ -16,14 +18,4 @@ export interface IDebugService {
    * Logs a warning message.
    */
   warn(message: string, ...args: unknown[]): void;
-
-  /**
-   * Initializes the debug service.
-   */
-  initialize(): Promise<void>;
-
-  /**
-   * Disposes the debug service.
-   */
-  dispose(): Promise<void>;
 }

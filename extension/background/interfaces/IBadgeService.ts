@@ -1,7 +1,9 @@
+import type { IService } from './IService';
+
 /**
  * Interface for the badge service that handles Chrome extension badge management.
  */
-export interface IBadgeService {
+export interface IBadgeService extends IService {
   /**
    * Updates the badge with a count or text.
    */
@@ -26,14 +28,4 @@ export interface IBadgeService {
    * Sets the badge to show PR count.
    */
   setPRCountBadge(count: number): Promise<void>;
-
-  /**
-   * Initializes the badge service.
-   */
-  initialize(): Promise<void>;
-
-  /**
-   * Disposes the badge service.
-   */
-  dispose(): Promise<void>;
 }

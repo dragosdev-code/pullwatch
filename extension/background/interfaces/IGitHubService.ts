@@ -1,9 +1,10 @@
 import type { PullRequest } from '../../common/types';
+import type { IService } from './IService';
 
 /**
  * Interface for the GitHub service that handles GitHub API operations.
  */
-export interface IGitHubService {
+export interface IGitHubService extends IService {
   /**
    * Fetches assigned pull requests from GitHub.
    */
@@ -23,14 +24,4 @@ export interface IGitHubService {
    * Fetches authored pull requests (PRs created by the user) with different review statuses.
    */
   fetchAuthoredPRs(): Promise<PullRequest[]>;
-
-  /**
-   * Initializes the GitHub service.
-   */
-  initialize(): Promise<void>;
-
-  /**
-   * Disposes the GitHub service.
-   */
-  dispose(): Promise<void>;
 }

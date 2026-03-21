@@ -1,7 +1,9 @@
+import type { IService } from './IService';
+
 /**
  * Interface for the permission service that handles Chrome extension permissions.
  */
-export interface IPermissionService {
+export interface IPermissionService extends IService {
   /**
    * Checks if all required permissions are granted.
    */
@@ -21,14 +23,4 @@ export interface IPermissionService {
    * Gets the status of all required permissions.
    */
   getPermissionStatus(): Promise<Record<string, boolean>>;
-
-  /**
-   * Initializes the permission service.
-   */
-  initialize(): Promise<void>;
-
-  /**
-   * Disposes the permission service.
-   */
-  dispose(): Promise<void>;
 }

@@ -4,8 +4,9 @@ import type {
   DevTestAlarmOverrideState,
   ScraperUrl,
 } from '../../common/types';
+import type { IService } from './IService';
 
-export interface IDevTestService {
+export interface IDevTestService extends IService {
   fireTestNotification(overrides?: DevTestNotificationOverrides): Promise<void>;
 
   startNotificationLoop(intervalMs: number): Promise<DevTestLooperState>;
@@ -17,7 +18,4 @@ export interface IDevTestService {
   getAlarmOverrideState(): Promise<DevTestAlarmOverrideState>;
 
   getScraperUrls(): ScraperUrl[];
-
-  initialize(): Promise<void>;
-  dispose(): Promise<void>;
 }

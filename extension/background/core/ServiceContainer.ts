@@ -10,13 +10,15 @@ import { SoundService } from '../services/SoundService';
 import { EventService } from '../services/EventService';
 import { DevTestService } from '../services/DevTestService';
 import { RateLimitService } from '../services/RateLimitService';
+import type { IService } from '../interfaces/IService';
+import type { ServiceMap } from './ServiceMap';
 
 /**
  * Service container responsible for dependency injection and service lifecycle management.
  * Implements the dependency injection pattern to provide loose coupling between services.
  */
 export class ServiceContainer {
-  private services = new Map<string, unknown>();
+  private services = new Map<keyof ServiceMap, IService>();
   private initialized = false;
 
   /**
@@ -84,72 +86,51 @@ export class ServiceContainer {
   /**
    * Registers a service with the container.
    */
-  private registerService<T>(key: string, service: T): void {
+  private registerService<K extends keyof ServiceMap>(key: K, service: ServiceMap[K]): void {
     this.services.set(key, service);
   }
 
   /**
    * Retrieves a service from the container.
    */
-  getService<T>(key: string): T {
+  getService<K extends keyof ServiceMap>(key: K): ServiceMap[K] {
     const service = this.services.get(key);
     if (!service) {
       throw new Error(`Service '${key}' not found in container`);
     }
-    return service as T;
+    return service as ServiceMap[K];
   }
 
   /**
-   * Gets all registered services.
-   */
-  getAllServices(): Map<string, unknown> {
-    return new Map(this.services);
-  }
-
-  /**
-   * Initializes all services that have an initialize method.
+   * Initializes all registered services.
    */
   private async initializeAllServices(): Promise<void> {
     const initPromises: Promise<void>[] = [];
 
     for (const [key, service] of this.services) {
-      if (
-        service &&
-        typeof (service as unknown as { initialize: () => Promise<void> }).initialize === 'function'
-      ) {
-        initPromises.push(
-          (service as unknown as { initialize: () => Promise<void> })
-            .initialize()
-            .catch((error: unknown) => {
-              console.error(`Failed to initialize service '${key}':`, error);
-              throw error;
-            })
-        );
-      }
+      initPromises.push(
+        service.initialize().catch((error: unknown) => {
+          console.error(`Failed to initialize service '${key}':`, error);
+          throw error;
+        })
+      );
     }
 
     await Promise.all(initPromises);
   }
 
   /**
-   * Disposes all services that have a dispose method.
+   * Disposes all registered services.
    */
   async dispose(): Promise<void> {
     const disposePromises: Promise<void>[] = [];
 
     for (const [key, service] of this.services) {
-      if (
-        service &&
-        typeof (service as unknown as { dispose: () => Promise<void> }).dispose === 'function'
-      ) {
-        disposePromises.push(
-          (service as unknown as { dispose: () => Promise<void> })
-            .dispose()
-            .catch((error: unknown) => {
-              console.error(`Failed to dispose service '${key}':`, error);
-            })
-        );
-      }
+      disposePromises.push(
+        service.dispose().catch((error: unknown) => {
+          console.error(`Failed to dispose service '${key}':`, error);
+        })
+      );
     }
 
     await Promise.all(disposePromises);

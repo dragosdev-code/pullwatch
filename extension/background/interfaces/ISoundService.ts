@@ -1,9 +1,10 @@
 import type { NotificationSound } from '../../common/types';
+import type { IService } from './IService';
 
 /**
  * Interface for the sound service that handles audio playback.
  */
-export interface ISoundService {
+export interface ISoundService extends IService {
   /**
    * Plays a notification sound.
    * @param sound - The sound type to play ('ping', 'bell', or 'off')
@@ -14,14 +15,4 @@ export interface ISoundService {
    * Ensures the offscreen document is ready for audio playback.
    */
   ensureOffscreenDocument(): Promise<void>;
-
-  /**
-   * Initializes the sound service.
-   */
-  initialize(): Promise<void>;
-
-  /**
-   * Disposes the sound service.
-   */
-  dispose(): Promise<void>;
 }

@@ -123,28 +123,12 @@ export interface RuntimeMessage<T = unknown> {
   payload?: T;
 }
 
-// Specific message payloads
-export interface PlaySoundPayload {
-  soundUrl?: string; // Optional: URL to a custom sound file
-}
-
-export interface FetchPRsPayload {
-  forceRefresh?: boolean;
-}
-
 // Response structure for messages
 export interface MessageResponse<R = unknown, E = unknown> {
   success: boolean;
   data?: R;
   error?: E;
 }
-
-// Type for functions handling messages
-export type MessageHandler = (
-  message: RuntimeMessage,
-  sender: chrome.runtime.MessageSender,
-  sendResponse: (response: MessageResponse) => void
-) => boolean | undefined | Promise<void>; // Return true for async sendResponse
 
 // ─── Dev Test Area Types ─────────────────────────────────────────────────────
 

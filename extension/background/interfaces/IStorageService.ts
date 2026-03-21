@@ -1,9 +1,10 @@
 import type { ExtensionSettings, PullRequest, StorageKeyMap, StorageKeyPRs } from '../../common/types';
+import type { IService } from './IService';
 
 /**
  * Interface for the storage service that handles Chrome extension storage operations.
  */
-export interface IStorageService {
+export interface IStorageService extends IService {
   /**
    * Gets stored pull requests by storage key.
    */
@@ -50,14 +51,4 @@ export interface IStorageService {
    * Removes a value from storage by key.
    */
   remove(key: string): Promise<void>;
-
-  /**
-   * Initializes the storage service.
-   */
-  initialize(): Promise<void>;
-
-  /**
-   * Disposes the storage service.
-   */
-  dispose(): Promise<void>;
 }

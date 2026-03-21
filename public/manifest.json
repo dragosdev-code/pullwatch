@@ -9,7 +9,7 @@
   "action": {
     "default_popup": "index.html"
   },
-  "permissions": ["storage", "activeTab", "notifications", "alarms", "offscreen"],
+  "permissions": ["storage", "notifications", "alarms", "offscreen"],
   "host_permissions": ["https://api.github.com/*", "https://github.com/*", "https://avatars.githubusercontent.com/*"],
   "background": {
     "service_worker": "background.js",
