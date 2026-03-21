@@ -5,11 +5,13 @@ import { AlarmService } from '../services/AlarmService';
 import { PRService } from '../services/PRService';
 import { NotificationService } from '../services/NotificationService';
 import { BadgeService } from '../services/BadgeService';
+import { AvatarService } from '../services/AvatarService';
 import { GitHubService } from '../services/GitHubService';
 import { SoundService } from '../services/SoundService';
 import { EventService } from '../services/EventService';
 import { DevTestService } from '../services/DevTestService';
 import { RateLimitService } from '../services/RateLimitService';
+import { GITHUB_BASE_URL } from '../../common/constants';
 import type { IService } from '../interfaces/IService';
 import type { ServiceMap } from './ServiceMap';
 
@@ -42,7 +44,14 @@ export class ServiceContainer {
     this.registerService('eventService', new EventService(this.getService('debugService'), this));
 
     // Initialize business logic services
-    this.registerService('gitHubService', new GitHubService(this.getService('debugService')));
+    this.registerService(
+      'avatarService',
+      new AvatarService(this.getService('debugService'), GITHUB_BASE_URL)
+    );
+    this.registerService(
+      'gitHubService',
+      new GitHubService(this.getService('debugService'), this.getService('avatarService'))
+    );
     this.registerService('rateLimitService', new RateLimitService(this.getService('debugService')));
 
     this.registerService(

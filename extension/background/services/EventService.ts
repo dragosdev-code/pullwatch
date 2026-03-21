@@ -1,6 +1,5 @@
 import type { IEventService } from '../interfaces/IEventService';
 import type { IDebugService } from '../interfaces/IDebugService';
-import type { IPRService } from '../interfaces/IPRService';
 import type { ServiceContainer } from '../core/ServiceContainer';
 import type {
   RuntimeMessage,
@@ -254,7 +253,13 @@ export class EventService implements IEventService {
         sendResponse(response);
 
         // 3. Fetch fresh data in background (don't wait for response)
-        this.fetchFreshDataInBackground(prService);
+        this.fetchFreshInBackground({
+          category: 'assigned',
+          fetchFn: () => prService.fetchAndUpdateAssignedPRs(),
+          storedPRs,
+          broadcastAction: 'assignedPrDataUpdated',
+          summarize: (prs) => prs.map((pr) => ({ id: pr.id, title: pr.title, reviewStatus: pr.reviewStatus })),
+        });
       } else if (this.isMessageAction(message, 'fetchAssignedPRs')) {
         // fetchAssignedPRs: Fetch fresh data from GitHub and update storage (manual refresh)
         this.debugService.log('[EventService] Manual refresh - fetching fresh assigned PRs from GitHub');
@@ -292,7 +297,13 @@ export class EventService implements IEventService {
         sendResponse({ success: true, data: storedPRs });
 
         // 3. Fetch fresh data in background (don't wait for response)
-        this.fetchFreshMergedDataInBackground(prService, storedPRs);
+        this.fetchFreshInBackground({
+          category: 'merged',
+          fetchFn: () => prService.updateMergedPRs(),
+          storedPRs,
+          broadcastAction: 'mergedPrDataUpdated',
+          summarize: (prs) => prs.map((pr) => ({ id: pr.id, title: pr.title })),
+        });
       } else if (this.isMessageAction(message, 'fetchMergedPRs')) {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
@@ -308,51 +319,33 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Fetches fresh merged data in the background and notifies popup if data changed.
-   * Delegates business logic to PRService, including notification handling.
+   * Generic background fetch: calls a PRService method, compares old vs new via
+   * a caller-supplied summarizer, and broadcasts to the popup if data changed.
    */
-  private async fetchFreshMergedDataInBackground(
-    prService: IPRService,
-    storedPRs: PullRequest[]
-  ): Promise<void> {
+  private async fetchFreshInBackground(config: {
+    category: string;
+    fetchFn: () => Promise<PullRequest[]>;
+    storedPRs: PullRequest[];
+    broadcastAction: string;
+    summarize: (prs: PullRequest[]) => unknown[];
+  }): Promise<void> {
     try {
-      this.debugService.log('[EventService] Background merged PR fetch started');
-
-      // Delegate fetching + storage + notifications to PRService
-      const freshPRs = await prService.updateMergedPRs();
-
-      // Check if there are any changes (excluding the isNew flag)
-      const summarize = (list: PullRequest[]) =>
-        list.map((pr) => ({ id: pr.id, title: pr.title }));
-
+      const freshPRs = await config.fetchFn();
       const hasChanges =
-        JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(freshPRs));
+        JSON.stringify(config.summarize(config.storedPRs)) !==
+        JSON.stringify(config.summarize(freshPRs));
 
       if (hasChanges) {
-        this.debugService.log(
-          '[EventService] Background merged PR fetch detected changes, notifying popup'
-        );
-
-        // Send message to popup to update its display
         try {
-          await chrome.runtime.sendMessage({
-            action: 'mergedPrDataUpdated',
-            data: freshPRs,
-          });
-        } catch (messageError) {
-          // Popup might be closed - that's ok, just log it
+          await chrome.runtime.sendMessage({ action: config.broadcastAction, data: freshPRs });
+        } catch {
           this.debugService.log(
-            '[EventService] Could not notify popup for merged PRs (likely closed):',
-            messageError
+            `[EventService] Could not notify popup for ${config.category} (likely closed)`
           );
         }
-      } else {
-        this.debugService.log(
-          '[EventService] Background merged PR fetch completed - no changes detected'
-        );
       }
     } catch (error) {
-      this.debugService.error('[EventService] Error in background merged fetch:', error);
+      this.debugService.error(`[EventService] Error in background ${config.category} fetch:`, error);
     }
   }
 
@@ -373,7 +366,13 @@ export class EventService implements IEventService {
         sendResponse({ success: true, data: storedPRs });
 
         // Background refresh
-        this.fetchFreshAuthoredDataInBackground(prService, storedPRs);
+        this.fetchFreshInBackground({
+          category: 'authored',
+          fetchFn: () => prService.updateAuthoredPRs(),
+          storedPRs,
+          broadcastAction: 'authoredPrDataUpdated',
+          summarize: (prs) => prs.map((pr) => ({ id: pr.id, title: pr.title })),
+        });
       } else if (this.isMessageAction(message, 'fetchAuthoredPRs')) {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
@@ -387,81 +386,6 @@ export class EventService implements IEventService {
     }
   }
 
-  /**
-   * Fetches fresh authored data in the background and notifies popup if data changed.
-   */
-  private async fetchFreshAuthoredDataInBackground(
-    prService: IPRService,
-    storedPRs: PullRequest[]
-  ): Promise<void> {
-    try {
-      const fresh = await prService.updateAuthoredPRs();
-
-      const summarize = (list: PullRequest[]) => list.map((pr) => ({ id: pr.id, title: pr.title }));
-      const changed = JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(fresh));
-
-      if (changed) {
-        try {
-          await chrome.runtime.sendMessage({ action: 'authoredPrDataUpdated', data: fresh });
-        } catch (e) {
-          this.debugService.log('[EventService] Could not notify popup for authored PRs:', e);
-        }
-      } else {
-        this.debugService.log('[EventService] Background authored fetch completed - no changes');
-      }
-    } catch (error) {
-      this.debugService.error('[EventService] Error in background authored fetch:', error);
-    }
-  }
-
-  /**
-   * Fetches fresh assigned PR data in the background and notifies popup if data changed.
-   * Delegates all business logic to PRService.
-   */
-  private async fetchFreshDataInBackground(prService: IPRService): Promise<void> {
-    try {
-      this.debugService.log('[EventService] Background assigned PR fetch started');
-
-      // Get current stored PRs for comparison before fetching
-      const storedPRs = await prService.getStoredAssignedPRs();
-
-      // Delegate fetching + storage + badge + notifications to PRService
-      const freshPRs = await prService.fetchAndUpdateAssignedPRs();
-
-      // Check if there are any changes
-      const summarize = (list: PullRequest[]) =>
-        list.map((pr) => ({ id: pr.id, title: pr.title, reviewStatus: pr.reviewStatus }));
-
-      const hasChanges =
-        JSON.stringify(summarize(storedPRs)) !== JSON.stringify(summarize(freshPRs));
-
-      if (hasChanges) {
-        this.debugService.log(
-          '[EventService] Background assigned PR fetch detected changes, notifying popup'
-        );
-
-        // Send message to popup to update its display
-        try {
-          await chrome.runtime.sendMessage({
-            action: 'assignedPrDataUpdated',
-            data: freshPRs,
-          });
-        } catch (messageError) {
-          // Popup might be closed - that's ok, just log it
-          this.debugService.log(
-            '[EventService] Could not notify popup (likely closed):',
-            messageError
-          );
-        }
-      } else {
-        this.debugService.log(
-          '[EventService] Background assigned PR fetch completed - no changes detected'
-        );
-      }
-    } catch (error) {
-      this.debugService.error('[EventService] Error in background assigned PR fetch:', error);
-    }
-  }
 
   /**
    * Handles settings related actions (saveSettings, getSettings).

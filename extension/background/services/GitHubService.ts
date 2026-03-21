@@ -1,5 +1,6 @@
 import type { IGitHubService } from '../interfaces/IGitHubService';
 import type { IDebugService } from '../interfaces/IDebugService';
+import type { IAvatarService } from '../interfaces/IAvatarService';
 import type { PullRequest } from '../../common/types';
 import {
   GITHUB_BASE_URL,
@@ -15,13 +16,15 @@ import {
   REQUEST_DELAY_MS,
 } from '../../common/constants';
 import { RateLimitError } from '../../common/errors';
+import { GitHubHTMLParser } from './GitHubHTMLParser';
 
 /**
- * GitHubService handles GitHub API operations with enhanced error handling and state management.
- * Provides methods to fetch pull requests and manage GitHub authentication.
+ * GitHubService handles GitHub HTTP operations for fetching pull requests.
+ * Delegates HTML parsing to GitHubHTMLParser and avatar enrichment to AvatarService.
  */
 export class GitHubService implements IGitHubService {
   private debugService: IDebugService;
+  private avatarService: IAvatarService;
   private initialized = false;
   private baseURL: string;
   private reviewRequestsURL: string;
@@ -32,10 +35,10 @@ export class GitHubService implements IGitHubService {
   private authoredPendingURL: string;
   private authoredCommentedURL: string;
   private authoredDraftURL: string;
-  private avatarCache = new Map<string, string>();
 
-  constructor(debugService: IDebugService) {
+  constructor(debugService: IDebugService, avatarService: IAvatarService) {
     this.debugService = debugService;
+    this.avatarService = avatarService;
     this.baseURL = GITHUB_BASE_URL;
     this.reviewRequestsURL = GITHUB_REVIEW_REQUESTS_URL_TEMPLATE(this.baseURL);
     this.mergedPRsURL = GITHUB_MERGED_PRS_URL_TEMPLATE(this.baseURL);
@@ -55,9 +58,6 @@ export class GitHubService implements IGitHubService {
     Expires: '0',
   };
 
-  /**
-   * Initializes the GitHub service.
-   */
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
@@ -118,90 +118,15 @@ export class GitHubService implements IGitHubService {
   }
 
   /**
-   * Fetches a GitHub PR listing page and returns parsed + enriched PRs.
-   * Centralizes the common parse-then-enrich pipeline used by all fetch methods.
+   * Fetches a GitHub PR listing page and returns parsed + avatar-enriched PRs.
    */
   private async fetchPRs(url: string, context: string): Promise<PullRequest[]> {
     return this.fetchGitHubData(url, context, async (html) => {
-      this.debugService.log(`[GitHubService] ${context} HTML received. Length:`, html.length);
-      const prs = this.parseAssignedPRsFromHTML(html);
-      return this.enrichPRsWithAvatars(prs);
+      const prs = GitHubHTMLParser.parseFromHTML(html, this.baseURL);
+      return this.avatarService.enrichPRsWithAvatars(prs);
     });
   }
 
-  /**
-   * Fetches an avatar image and converts it to a base64 data URL.
-   * Uses an in-memory cache keyed by login to avoid redundant network requests.
-   * Constructs the URL from the login (DOM-independent) via GitHub's /{login}.png redirect.
-   */
-  private async fetchAvatarAsBase64(login: string): Promise<string | null> {
-    if (this.avatarCache.has(login)) {
-      return this.avatarCache.get(login)!;
-    }
-
-    try {
-      const avatarUrl = `${this.baseURL}/${login}.png?size=80`;
-      const response = await fetch(avatarUrl);
-      if (!response.ok) return null;
-
-      const buffer = await response.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const contentType = response.headers.get('content-type') || 'image/png';
-      const dataUrl = `data:${contentType};base64,${btoa(binary)}`;
-
-      this.avatarCache.set(login, dataUrl);
-      this.debugService.log(`[GitHubService] Cached avatar for ${login} (${dataUrl.length} chars)`);
-      return dataUrl;
-    } catch (error) {
-      this.debugService.error(
-        `[GitHubService] Failed to fetch avatar for ${login}:`,
-        error instanceof Error ? error.message : error
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Enriches parsed PRs with base64-encoded author avatars.
-   * Deduplicates by author login and fetches all unique avatars in parallel.
-   */
-  private async enrichPRsWithAvatars(prs: PullRequest[]): Promise<PullRequest[]> {
-    const uniqueLogins = [...new Set(prs.map((pr) => pr.author.login))].filter(
-      (login) => login !== 'Unknown Author'
-    );
-
-    this.debugService.log(
-      `[GitHubService] Enriching ${prs.length} PRs with avatars for ${uniqueLogins.length} unique authors`
-    );
-
-    const avatarEntries = await Promise.all(
-      uniqueLogins.map(async (login) => {
-        const base64 = await this.fetchAvatarAsBase64(login);
-        return [login, base64] as const;
-      })
-    );
-
-    const avatarMap = new Map(
-      avatarEntries.filter((entry): entry is [string, string] => entry[1] !== null)
-    );
-
-    return prs.map((pr) => {
-      const avatarUrl = avatarMap.get(pr.author.login);
-      if (!avatarUrl) return pr;
-      return {
-        ...pr,
-        author: { ...pr.author, avatarUrl },
-      };
-    });
-  }
-
-  /**
-   * Fetches user's merged pull requests from GitHub.
-   */
   async fetchMergedPRs(): Promise<PullRequest[]> {
     this.debugService.log(
       '[GitHubService] Attempting to fetch merged PRs from:',
@@ -223,9 +148,6 @@ export class GitHubService implements IGitHubService {
     }
   }
 
-  /**
-   * Fetches assigned pull requests from GitHub.
-   */
   async fetchAssignedPRs(): Promise<PullRequest[]> {
     this.debugService.log(
       '[GitHubService] Attempting to fetch assigned PRs from:',
@@ -253,9 +175,6 @@ export class GitHubService implements IGitHubService {
     }
   }
 
-  /**
-   * Fetches reviewed (but still open) pull requests from GitHub.
-   */
   async fetchReviewedPRs(): Promise<PullRequest[]> {
     this.debugService.log(
       '[GitHubService] Attempting to fetch reviewed PRs from:',
@@ -287,12 +206,7 @@ export class GitHubService implements IGitHubService {
 
   /**
    * Fetches authored pull requests from GitHub (PRs created by the user).
-   * Fetches from multiple URLs to get different review statuses:
-   * - Approved
-   * - Changes Requested
-   * - Pending Review (no review yet)
-   * - Commented (note: GitHub doesn't properly support this filter yet)
-   * - Draft
+   * Fetches from multiple URLs to get different review statuses.
    */
   async fetchAuthoredPRs(): Promise<PullRequest[]> {
     this.debugService.log('[GitHubService] Fetching authored PRs sequentially');
@@ -349,9 +263,6 @@ export class GitHubService implements IGitHubService {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  /**
-   * Helper method to fetch PRs from a specific URL and tag them with authorReviewStatus.
-   */
   private async fetchFromURL(
     url: string,
     authorReviewStatus: 'approved' | 'changes_requested' | 'pending' | 'commented' | 'draft'
@@ -386,388 +297,8 @@ export class GitHubService implements IGitHubService {
     }
   }
 
-  /**
-   * Regex-based HTML parser for GitHub PR pages.
-   */
-  private parseAssignedPRsFromHTML(html: string): PullRequest[] {
-    this.debugService.log(
-      '[GitHubService-RegexParser] Starting to parse HTML. Length:',
-      html.length
-    );
-    const prs: PullRequest[] = [];
-
-    // Debug: Check what we actually received
-    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    this.debugService.log(
-      '[GitHubService-RegexParser] Page title:',
-      titleMatch?.[1] || 'No title found'
-    );
-
-    // Selectors for GitHub search results page (adapted for regex)
-    const prSelectors = [
-      // GitHub search results selectors
-      'js-issue-row', // Main search result row
-      'Box-row', // Generic box row
-      'issue-list-item', // Issue list item
-      'data-hovercard-type="pull_request"', // PR-specific
-    ];
-
-    let prElements: RegExpMatchArray[] = [];
-
-    // Try to find PR containers using various patterns
-    for (const selector of prSelectors) {
-      let pattern: RegExp;
-      if (selector === 'data-hovercard-type="pull_request"') {
-        // Special case for hovercard attribute
-        pattern = new RegExp(`<[^>]*${selector}[^>]*>(.*?)</[^>]*>`, 'gis');
-      } else {
-        // Regular class-based selectors - improved to capture full container
-        if (selector === 'js-issue-row') {
-          // For js-issue-row, match the full div container with proper nesting
-          pattern = new RegExp(
-            `<div[^>]*class="[^"]*${selector}[^"]*"[^>]*>.*?</div>(?=\\s*(?:<div[^>]*class="[^"]*${selector}|</div>|$))`,
-            'gis'
-          );
-        } else {
-          pattern = new RegExp(`<[^>]*class="[^"]*${selector}[^"]*"[^>]*>(.*?)</[^>]*>`, 'gis');
-        }
-      }
-
-      const matches = [...html.matchAll(pattern)];
-      this.debugService.log(
-        `[GitHubService-RegexParser] Selector "${selector}" found ${matches.length} elements`
-      );
-
-      if (matches.length > 0) {
-        prElements = matches;
-        this.debugService.log(
-          `[GitHubService-RegexParser] Using selector "${selector}" with ${matches.length} matches`
-        );
-        break;
-      }
-    }
-
-    // If no specific PR selectors work, try to find any links to PRs
-    if (prElements.length === 0) {
-      this.debugService.log(
-        '[GitHubService-RegexParser] No PR containers found, looking for PR links...'
-      );
-      const prLinkPattern = /<a[^>]*href="[^"]*\/pull\/\d+[^"]*"[^>]*>([^<]*)<\/a>/gi;
-      const allLinks = [...html.matchAll(prLinkPattern)];
-      this.debugService.log(
-        `[GitHubService-RegexParser] Found ${allLinks.length} PR links in total`
-      );
-
-      // Group links by finding their containing elements
-      const containerPattern =
-        /<(?:div|article|li|tr)[^>]*>.*?<a[^>]*href="([^"]*\/pull\/\d+)[^"]*"[^>]*>([^<]*)<\/a>.*?<\/(?:div|article|li|tr)>/gi;
-      prElements = [...html.matchAll(containerPattern)];
-      this.debugService.log(
-        `[GitHubService-RegexParser] Extracted ${prElements.length} unique PR containers`
-      );
-    }
-
-    this.debugService.log(
-      `[GitHubService-RegexParser] Total PR containers to process: ${prElements.length}`
-    );
-    let successfullyParsed = 0;
-    let failedToParse = 0;
-
-    prElements.forEach((element, index) => {
-      try {
-        this.debugService.log(
-          `[GitHubService-RegexParser] Processing element ${index + 1}/${prElements.length}`
-        );
-        const pr = this.extractPRDataFromElement(element);
-        if (pr) {
-          this.debugService.log(
-            `[GitHubService-RegexParser] ✅ Successfully extracted PR: ${pr.title}`
-          );
-          prs.push(pr);
-          successfullyParsed++;
-        } else {
-          this.debugService.log(
-            `[GitHubService-RegexParser] ❌ Failed to extract PR data from element ${index + 1}`
-          );
-          failedToParse++;
-        }
-      } catch (error) {
-        this.debugService.error(
-          `[GitHubService-RegexParser] ❌ Error parsing PR element ${index + 1}:`,
-          error
-        );
-        failedToParse++;
-      }
-    });
-
-    this.debugService.log(`[GitHubService-RegexParser] PARSING SUMMARY:`);
-    this.debugService.log(`[GitHubService-RegexParser] - Containers found: ${prElements.length}`);
-    this.debugService.log(
-      `[GitHubService-RegexParser] - Successfully parsed: ${successfullyParsed}`
-    );
-    this.debugService.log(`[GitHubService-RegexParser] - Failed to parse: ${failedToParse}`);
-    this.debugService.log(`[GitHubService-RegexParser] - Final PR count: ${prs.length}`);
-
-    if (prElements.length === 0 && html.includes('js-issue-row')) {
-      this.debugService.warn(
-        "[GitHubService-RegexParser] Found 'js-issue-row' in HTML, but no PR containers found with any selector."
-      );
-    }
-
-    if (prs.length === 0 && !html.includes("You don't have any pull requests to review")) {
-      this.debugService.warn(
-        '[GitHubService-RegexParser] No PRs parsed. This could be due to: no assigned PRs, user not logged in, unexpected page structure, or regex patterns needing update.'
-      );
-    }
-
-    this.debugService.log(`[GitHubService-RegexParser] Total PRs extracted: ${prs.length}`);
-    prs.sort(
-      (a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime()
-    );
-    return prs;
-  }
-
-  /**
-   * Extracts PR data from a single HTML element.
-   */
-  private extractPRDataFromElement(element: RegExpMatchArray): PullRequest | null {
-    try {
-      // The element[0] contains the full matched content
-      const elementHtml = element[0];
-
-      this.debugService.log(
-        '[GitHubService-RegexParser] ==================== ELEMENT EXTRACTION START ===================='
-      );
-      this.debugService.log('[GitHubService-RegexParser] Element HTML length:', elementHtml.length);
-      this.debugService.log(
-        '[GitHubService-RegexParser] Element HTML sample (first 500 chars):',
-        elementHtml.substring(0, 500)
-      );
-
-      // Extract PR URL and title with multiple patterns
-      let prUrl = '';
-      let title = '';
-
-      // Pattern 1: Look for PR links with various class patterns
-      const prLinkPatterns = [
-        /<a[^>]*href="([^"]*\/pull\/\d+)"[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*>([^<]+)<\/a>/i,
-        /<a[^>]*href="([^"]*\/pull\/\d+)"[^>]*>([^<]+)<\/a>/i,
-        /<a[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*href="([^"]*\/pull\/\d+)"[^>]*>([^<]+)<\/a>/i,
-      ];
-
-      this.debugService.log('[GitHubService-RegexParser] Trying to extract PR URL and title...');
-      for (let i = 0; i < prLinkPatterns.length; i++) {
-        const pattern = prLinkPatterns[i];
-        const match = elementHtml.match(pattern);
-        this.debugService.log(
-          `[GitHubService-RegexParser] Pattern ${i + 1} result:`,
-          match ? `Found: ${match[1]} | ${match[2]}` : 'No match'
-        );
-        if (match && match[1] && match[2]) {
-          prUrl = match[1];
-          title = match[2].trim().replace(/\s+/g, ' ');
-          this.debugService.log(
-            `[GitHubService-RegexParser] ✅ Found PR link with pattern ${i + 1}:`,
-            prUrl,
-            '|',
-            title
-          );
-          break;
-        }
-      }
-
-      if (!prUrl || !title) {
-        this.debugService.warn(
-          '[GitHubService-RegexParser] ❌ Could not extract PR URL and title from element'
-        );
-        this.debugService.log('[GitHubService-RegexParser] Looking for ANY links in element...');
-
-        // Let's see what links exist in this element
-        const allLinks = elementHtml.match(/<a[^>]*href="[^"]*"[^>]*>.*?<\/a>/gi);
-        this.debugService.log(
-          '[GitHubService-RegexParser] All links found in element:',
-          allLinks?.length || 0
-        );
-        if (allLinks) {
-          allLinks.slice(0, 3).forEach((link, idx) => {
-            this.debugService.log(
-              `[GitHubService-RegexParser] Link ${idx + 1}:`,
-              link.substring(0, 200)
-            );
-          });
-        }
-
-        this.debugService.log(
-          '[GitHubService-RegexParser] ==================== ELEMENT EXTRACTION FAILED ===================='
-        );
-        return null;
-      }
-
-      // Ensure URL is absolute
-      const url = prUrl.startsWith('http') ? prUrl : `${this.baseURL}${prUrl}`;
-
-      // Extract PR number from URL, with fallback to #number in the opened-by span
-      const numberMatch = prUrl.match(/\/pull\/(\d+)/);
-      let number = numberMatch ? parseInt(numberMatch[1], 10) : null;
-      if (number === null) {
-        const spanMatch = elementHtml.match(/#(\d+)\s+opened/);
-        if (spanMatch) {
-          number = parseInt(spanMatch[1], 10);
-          this.debugService.log(
-            '[GitHubService-RegexParser] PR number extracted from opened-by span:',
-            number
-          );
-        }
-      }
-      this.debugService.log('[GitHubService-RegexParser] PR number extracted:', number);
-
-      // Extract repository name
-      const repoNameMatch = prUrl.match(/\/([^/]+\/[^/]+)\/pull/);
-      const repoName = repoNameMatch ? repoNameMatch[1] : 'Unknown Repo';
-      this.debugService.log('[GitHubService-RegexParser] Repository name extracted:', repoName);
-
-      // Extract author with multiple patterns
-      let authorLogin = 'Unknown Author';
-      const authorPatterns = [
-        /<a[^>]*href="[^"]*\/([^"/?]+)"[^>]*title="[^"]*"[^>]*>([^<]+)<\/a>/i,
-        /<a[^>]*class="[^"]*author[^"]*"[^>]*>([^<]+)<\/a>/i,
-        /<a[^>]*data-hovercard-type="user"[^>]*data-hovercard-url="[^"]*\/users\/([^"/]+)\/[^"]*"[^>]*>/i,
-        /opened[^<]*by[^<]*<a[^>]*>([^<]+)<\/a>/i,
-      ];
-
-      this.debugService.log('[GitHubService-RegexParser] Trying to extract author...');
-      for (let i = 0; i < authorPatterns.length; i++) {
-        const pattern = authorPatterns[i];
-        const match = elementHtml.match(pattern);
-        this.debugService.log(
-          `[GitHubService-RegexParser] Author pattern ${i + 1} result:`,
-          match ? `Found: ${match[1] || match[2]}` : 'No match'
-        );
-        if (match && (match[1] || match[2])) {
-          authorLogin = (match[1] || match[2]).trim();
-          this.debugService.log(
-            `[GitHubService-RegexParser] ✅ Found author with pattern ${i + 1}:`,
-            authorLogin
-          );
-          break;
-        }
-      }
-
-      // Extract creation time
-      let createdAt = new Date().toISOString();
-      const timePatterns = [
-        /<relative-time[^>]+datetime="([^"]+)"/i,
-        /<time[^>]+datetime="([^"]+)"/i,
-        /datetime="([^"]+)"/i,
-      ];
-
-      this.debugService.log('[GitHubService-RegexParser] Trying to extract creation time...');
-      for (let i = 0; i < timePatterns.length; i++) {
-        const pattern = timePatterns[i];
-        const match = elementHtml.match(pattern);
-        this.debugService.log(
-          `[GitHubService-RegexParser] Time pattern ${i + 1} result:`,
-          match ? `Found: ${match[1]}` : 'No match'
-        );
-        if (match && match[1]) {
-          createdAt = match[1];
-          this.debugService.log(
-            `[GitHubService-RegexParser] ✅ Found creation time with pattern ${i + 1}:`,
-            createdAt
-          );
-          break;
-        }
-      }
-
-      // Extract PR type (draft or open) using aria-label and fallbacks
-      let prType: 'draft' | 'open' | 'merged' = 'open';
-      if (/aria-label="[^"]*Draft Pull Request[^"]*"/i.test(elementHtml)) {
-        prType = 'draft';
-        this.debugService.log(
-          '[GitHubService-RegexParser] PR type detected from aria-label: draft'
-        );
-      } else if (/aria-label="[^"]*Open Pull Request[^"]*"/i.test(elementHtml)) {
-        prType = 'open';
-        this.debugService.log('[GitHubService-RegexParser] PR type detected from aria-label: open');
-      } else if (/aria-label="[^"]*Merged Pull Request[^"]*"/i.test(elementHtml)) {
-        prType = 'merged';
-        this.debugService.log(
-          '[GitHubService-RegexParser] PR type detected from aria-label: merged'
-        );
-      } else {
-        // Fallbacks: SVG class names or textual Draft badge
-        if (
-          /octicon-git-pull-request-draft/i.test(elementHtml) ||
-          /(^|[^a-z])Draft([^a-z]|$)/i.test(elementHtml)
-        ) {
-          prType = 'draft';
-          this.debugService.log(
-            '[GitHubService-RegexParser] PR type inferred from SVG class or badge: draft'
-          );
-        } else if (
-          /octicon-git-pull-request(?!-)/i.test(elementHtml) ||
-          /color-fg-open/i.test(elementHtml)
-        ) {
-          prType = 'open';
-          this.debugService.log(
-            '[GitHubService-RegexParser] PR type inferred from SVG class: open'
-          );
-        } else if (/octicon-git-merge/i.test(elementHtml)) {
-          prType = 'merged';
-          this.debugService.log(
-            '[GitHubService-RegexParser] PR type inferred from SVG class: merged'
-          );
-        } else {
-          this.debugService.log(
-            '[GitHubService-RegexParser] PR type not explicitly found; defaulting to open'
-          );
-        }
-      }
-
-      const pr: PullRequest = {
-        id: url,
-        url,
-        title,
-        number,
-        repoName,
-        author: { login: authorLogin },
-        createdAt,
-        type: prType,
-        isNew: false,
-      };
-
-      this.debugService.log('[GitHubService-RegexParser] ✅ Successfully created PR object:', {
-        id: pr.id,
-        title: pr.title,
-        number: pr.number,
-        repoName: pr.repoName,
-        author: pr.author.login,
-        createdAt: pr.createdAt,
-        type: pr.type,
-      });
-      this.debugService.log(
-        '[GitHubService-RegexParser] ==================== ELEMENT EXTRACTION SUCCESS ===================='
-      );
-
-      return pr;
-    } catch (error) {
-      this.debugService.error(
-        '[GitHubService-RegexParser] ❌ Error in extractPRDataFromElement:',
-        error
-      );
-      this.debugService.log(
-        '[GitHubService-RegexParser] ==================== ELEMENT EXTRACTION ERROR ===================='
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Disposes the GitHub service.
-   */
   async dispose(): Promise<void> {
     this.debugService.log('[GitHubService] GitHub service disposed');
-    this.avatarCache.clear();
     this.initialized = false;
   }
 }

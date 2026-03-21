@@ -27,6 +27,9 @@ export class PRService implements IPRService {
   private badgeService: IBadgeService;
   private rateLimitService: IRateLimitService;
   private initialized = false;
+  private assignedFetchInProgress: Promise<PullRequest[]> | null = null;
+  private mergedFetchInProgress: Promise<PullRequest[]> | null = null;
+  private authoredFetchInProgress: Promise<PullRequest[]> | null = null;
 
   constructor(deps: {
     debugService: IDebugService;
@@ -51,16 +54,23 @@ export class PRService implements IPRService {
   }
 
   async fetchAndUpdateAssignedPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
+    if (this.assignedFetchInProgress) {
+      this.debugService.log('[PRService] Assigned fetch already in progress, reusing');
+      return this.assignedFetchInProgress;
+    }
+    this.assignedFetchInProgress = this.doFetchAndUpdateAssignedPRs(forceRefresh, bypassCache)
+      .finally(() => { this.assignedFetchInProgress = null; });
+    return this.assignedFetchInProgress;
+  }
+
+  private async doFetchAndUpdateAssignedPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
     this.debugService.log(
       `[PRService] Fetching and updating assigned PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`
     );
 
     try {
-      // Get current stored PRs for comparison and cache check
       const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_ASSIGNED_PRS);
 
-      // Check cache before fetching from GitHub
-      // bypassCache is used by alarm-triggered fetches to ensure fresh data without skipping notifications
       const isCacheValid =
         storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
 
@@ -77,7 +87,6 @@ export class PRService implements IPRService {
         `[PRService] Current stored pending PRs count: ${oldPendingPRs.length}`
       );
 
-      // Fetch fresh PRs from GitHub sequentially to avoid secondary rate limits
       const freshPendingPRsRaw = await this.gitHubService.fetchAssignedPRs();
       await this.delay(REQUEST_DELAY_MS);
       const freshReviewedPRsRaw = await this.gitHubService.fetchReviewedPRs();
@@ -96,7 +105,6 @@ export class PRService implements IPRService {
       );
       this.debugService.log(`[PRService] New pending PRs detected: ${newPRs.length}`);
 
-      // Deduplicate: exclude reviewed PRs that are already in the pending list
       const pendingIds = new Set(pendingPRsWithStatus.map((pr) => pr.id || pr.url));
 
       const freshReviewedPRs = freshReviewedPRsRaw
@@ -110,10 +118,8 @@ export class PRService implements IPRService {
           })
         );
 
-      // Get settings to check showDraftsInList
       const settings = await this.storageService.getExtensionSettings();
 
-      // Filter drafts if showDraftsInList is disabled
       const filteredPendingPRs = settings.assigned.showDraftsInList
         ? pendingPRsWithStatus
         : pendingPRsWithStatus.filter((pr) => pr.type !== 'draft');
@@ -122,20 +128,16 @@ export class PRService implements IPRService {
         ? freshReviewedPRs
         : freshReviewedPRs.filter((pr) => pr.type !== 'draft');
 
-      // Only use fresh API data — no merging with stale reviewed PRs
       const allPRsWithStatus = [...filteredPendingPRs, ...filteredReviewedPRs];
       this.debugService.log(
         `[PRService] Total PRs to store (pending + reviewed): ${allPRsWithStatus.length}`
       );
 
-      // Update storage with fresh data and last fetch time
       await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRsWithStatus);
       await this.storageService.setLastFetchTime(Date.now());
 
-      // Update badge with filtered pending count
       await this.badgeService.setPRCountBadge(filteredPendingPRs.length);
 
-      // Show notifications for new PRs (NotificationService handles settings and sound)
       if (newPRs.length > 0 && !forceRefresh) {
         this.debugService.log(`[PRService] Showing notifications for ${newPRs.length} new PR(s)`);
         await this.notificationService.showAssignedPRNotifications(newPRs);
@@ -242,10 +244,19 @@ export class PRService implements IPRService {
   }
 
   async updateAuthoredPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
+    if (this.authoredFetchInProgress) {
+      this.debugService.log('[PRService] Authored fetch already in progress, reusing');
+      return this.authoredFetchInProgress;
+    }
+    this.authoredFetchInProgress = this.doUpdateAuthoredPRs(forceRefresh, bypassCache)
+      .finally(() => { this.authoredFetchInProgress = null; });
+    return this.authoredFetchInProgress;
+  }
+
+  private async doUpdateAuthoredPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
     this.debugService.log(`[PRService] Updating authored PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`);
 
     try {
-      // Check cache before fetching from GitHub
       const stored = await this.storageService.getStoredPRs(STORAGE_KEY_AUTHORED_PRS);
       const isCacheValid =
         stored && stored.timestamp && Date.now() - stored.timestamp < CACHE_TTL_MS;
@@ -277,13 +288,21 @@ export class PRService implements IPRService {
   }
 
   async updateMergedPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
+    if (this.mergedFetchInProgress) {
+      this.debugService.log('[PRService] Merged fetch already in progress, reusing');
+      return this.mergedFetchInProgress;
+    }
+    this.mergedFetchInProgress = this.doUpdateMergedPRs(forceRefresh, bypassCache)
+      .finally(() => { this.mergedFetchInProgress = null; });
+    return this.mergedFetchInProgress;
+  }
+
+  private async doUpdateMergedPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
     this.debugService.log(`[PRService] Updating merged PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`);
 
     try {
-      // Get current stored merged PRs for comparison and cache check
       const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_MERGED_PRS);
 
-      // Check cache before fetching from GitHub
       const isCacheValid =
         storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
 
@@ -295,21 +314,17 @@ export class PRService implements IPRService {
       const oldPRs = storedData?.prs || [];
       this.debugService.log(`[PRService] Current stored merged PRs count: ${oldPRs.length}`);
 
-      // Fetch fresh merged PRs from GitHub
       const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
       this.debugService.log(`[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`);
 
-      // Compare to find newly merged PRs
       const { newPRs, allPRsWithStatus: mergedPRsWithStatus } = this.comparePRs(
         oldPRs,
         freshMergedPRs
       );
       this.debugService.log(`[PRService] Newly merged PRs detected: ${newPRs.length}`);
 
-      // Update storage with fresh data
       await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, mergedPRsWithStatus);
 
-      // Show notifications for newly merged PRs (unless force refresh)
       if (newPRs.length > 0 && !forceRefresh) {
         this.debugService.log(
           `[PRService] Triggering merged PR notifications for ${newPRs.length} PR(s)`

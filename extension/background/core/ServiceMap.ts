@@ -1,4 +1,5 @@
 import type { IAlarmService } from '../interfaces/IAlarmService';
+import type { IAvatarService } from '../interfaces/IAvatarService';
 import type { IBadgeService } from '../interfaces/IBadgeService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type { IDevTestService } from '../interfaces/IDevTestService';
@@ -20,6 +21,7 @@ export interface ServiceMap {
   permissionService: IPermissionService;
   storageService: IStorageService;
   alarmService: IAlarmService;
+  avatarService: IAvatarService;
   badgeService: IBadgeService;
   soundService: ISoundService;
   eventService: IEventService;
