@@ -166,7 +166,7 @@ export const PRItem = ({
           />
           <span
             className={clsx(
-              'font-mono text-[11px] px-1.5 py-0.5 rounded truncate ml-[3px]',
+              'font-mono text-[11px] px-1.5 py-0.5 rounded truncate ml-[2.5px]',
               isReviewed
                 ? 'bg-base-300/60 text-base-content/45'
                 : 'bg-base-200 text-base-content/65'
@@ -208,7 +208,7 @@ export const PRItem = ({
           )}
           <span
             className={clsx(
-              'text-xs truncate ml-[3px]',
+              'text-xs truncate ml-[2.5px]',
               isReviewed ? 'text-base-content/40' : 'text-base-content/60'
             )}
           >
