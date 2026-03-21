@@ -9,14 +9,21 @@ export const STORAGE_KEY_SETTINGS = 'settings'; // As per requirements
 export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
 
 // Fetch Intervals
-export const FETCH_INTERVAL_MINUTES = 1;
+export const FETCH_INTERVAL_MINUTES = 3;
 export const FETCH_INTERVAL_MS = FETCH_INTERVAL_MINUTES * 60 * 1000;
+
+// Delay between sequential GitHub requests to avoid secondary rate limits
+export const REQUEST_DELAY_MS = 1500;
 
 // Cache TTL
 export const CACHE_TTL_MS = 60 * 1000; // 1 minute
 
 // Minimum time between manual refreshes to prevent rate limiting (30 seconds)
 export const MIN_REFRESH_INTERVAL_MS = 30 * 1000; // 30 seconds
+
+// Rate Limit
+export const STORAGE_KEY_RATE_LIMIT = 'rate_limit_state';
+export const RATE_LIMIT_MAX_BACKOFF_MS = 30 * 60 * 1000; // 30 minutes
 
 // Event Names (from background.js and requirements)
 export const EVENT_FETCH_PRS = 'fetchPRs';

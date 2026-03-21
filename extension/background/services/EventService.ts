@@ -22,6 +22,7 @@ import { INotificationService } from '../interfaces/INotificationService';
 import { IStorageService } from '../interfaces/IStorageService';
 import { ISoundService } from '../interfaces/ISoundService';
 import { IDevTestService } from '../interfaces/IDevTestService';
+import { IRateLimitService } from '../interfaces/IRateLimitService';
 
 /**
  * EventService coordinates Chrome extension events and handles message routing.
@@ -112,6 +113,18 @@ export class EventService implements IEventService {
       this.debugService.log('[EventService] Handling alarm:', alarm.name);
 
       if (alarm.name === EVENT_FETCH_PRS) {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          this.debugService.log('[EventService] Skipping fetch - device appears offline');
+          return;
+        }
+
+        const rateLimitService =
+          this.serviceContainer.getService<IRateLimitService>('rateLimitService');
+        if (rateLimitService.shouldSkipFetch()) {
+          this.debugService.log('[EventService] Skipping fetch - rate limited (backoff active)');
+          return;
+        }
+
         this.debugService.log('[EventService] Fetch alarm triggered - fetching all PR types');
 
         const prService = this.serviceContainer.getService<IPRService>('prService');

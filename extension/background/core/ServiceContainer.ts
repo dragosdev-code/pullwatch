@@ -9,6 +9,7 @@ import { GitHubService } from '../services/GitHubService';
 import { SoundService } from '../services/SoundService';
 import { EventService } from '../services/EventService';
 import { DevTestService } from '../services/DevTestService';
+import { RateLimitService } from '../services/RateLimitService';
 
 /**
  * Service container responsible for dependency injection and service lifecycle management.
@@ -40,6 +41,7 @@ export class ServiceContainer {
 
     // Initialize business logic services
     this.registerService('gitHubService', new GitHubService(this.getService('debugService')));
+    this.registerService('rateLimitService', new RateLimitService(this.getService('debugService')));
 
     this.registerService(
       'notificationService',
@@ -58,6 +60,7 @@ export class ServiceContainer {
         gitHubService: this.getService('gitHubService'),
         notificationService: this.getService('notificationService'),
         badgeService: this.getService('badgeService'),
+        rateLimitService: this.getService('rateLimitService'),
       })
     );
 

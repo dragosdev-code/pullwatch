@@ -4,13 +4,16 @@ import type { IStorageService } from '../interfaces/IStorageService';
 import type { IGitHubService } from '../interfaces/IGitHubService';
 import type { INotificationService } from '../interfaces/INotificationService';
 import type { IBadgeService } from '../interfaces/IBadgeService';
+import type { IRateLimitService } from '../interfaces/IRateLimitService';
 import type { PullRequest } from '../../common/types';
 import {
   CACHE_TTL_MS,
+  REQUEST_DELAY_MS,
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_MERGED_PRS,
 } from '../../common/constants';
+import { RateLimitError } from '../../common/errors';
 
 /**
  * PRService handles pull request management and coordination between services.
@@ -22,6 +25,7 @@ export class PRService implements IPRService {
   private gitHubService: IGitHubService;
   private notificationService: INotificationService;
   private badgeService: IBadgeService;
+  private rateLimitService: IRateLimitService;
   private initialized = false;
 
   constructor(deps: {
@@ -30,12 +34,14 @@ export class PRService implements IPRService {
     gitHubService: IGitHubService;
     notificationService: INotificationService;
     badgeService: IBadgeService;
+    rateLimitService: IRateLimitService;
   }) {
     this.debugService = deps.debugService;
     this.storageService = deps.storageService;
     this.gitHubService = deps.gitHubService;
     this.notificationService = deps.notificationService;
     this.badgeService = deps.badgeService;
+    this.rateLimitService = deps.rateLimitService;
   }
 
   async initialize(): Promise<void> {
@@ -71,11 +77,10 @@ export class PRService implements IPRService {
         `[PRService] Current stored pending PRs count: ${oldPendingPRs.length}`
       );
 
-      // Fetch fresh PRs from GitHub
-      const [freshPendingPRsRaw, freshReviewedPRsRaw] = await Promise.all([
-        this.gitHubService.fetchAssignedPRs(),
-        this.gitHubService.fetchReviewedPRs(),
-      ]);
+      // Fetch fresh PRs from GitHub sequentially to avoid secondary rate limits
+      const freshPendingPRsRaw = await this.gitHubService.fetchAssignedPRs();
+      await this.delay(REQUEST_DELAY_MS);
+      const freshReviewedPRsRaw = await this.gitHubService.fetchReviewedPRs();
       this.debugService.log(
         `[PRService] Fetched fresh pending PRs: ${freshPendingPRsRaw.length}, reviewed PRs: ${freshReviewedPRsRaw.length}`
       );
@@ -140,9 +145,13 @@ export class PRService implements IPRService {
         this.debugService.log('[PRService] Force refresh detected, skipping notifications');
       }
 
+      this.rateLimitService.recordSuccess();
       this.debugService.log(`[PRService] Successfully updated ${allPRsWithStatus.length} PRs`);
       return allPRsWithStatus;
     } catch (error) {
+      if (error instanceof RateLimitError) {
+        this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
+      }
       this.debugService.error('[PRService] Error fetching and updating PRs:', error);
       await this.badgeService.setErrorBadge();
       throw error;
@@ -253,11 +262,15 @@ export class PRService implements IPRService {
 
       await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, freshAuthoredPRs);
 
+      this.rateLimitService.recordSuccess();
       this.debugService.log(
         `[PRService] Successfully updated ${freshAuthoredPRs.length} authored PRs`
       );
       return freshAuthoredPRs;
     } catch (error) {
+      if (error instanceof RateLimitError) {
+        this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
+      }
       this.debugService.error('[PRService] Error updating authored PRs:', error);
       throw error;
     }
@@ -308,12 +321,20 @@ export class PRService implements IPRService {
         this.debugService.log('[PRService] Force refresh detected, skipping merged notifications');
       }
 
+      this.rateLimitService.recordSuccess();
       this.debugService.log(`[PRService] Successfully updated ${mergedPRsWithStatus.length} merged PRs`);
       return mergedPRsWithStatus;
     } catch (error) {
+      if (error instanceof RateLimitError) {
+        this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
+      }
       this.debugService.error('[PRService] Error updating merged PRs:', error);
       throw error;
     }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   async dispose(): Promise<void> {

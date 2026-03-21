@@ -12,7 +12,9 @@ import {
   GITHUB_AUTHORED_COMMENTED_URL_TEMPLATE,
   GITHUB_AUTHORED_DRAFT_URL_TEMPLATE,
   USER_AGENT,
+  REQUEST_DELAY_MS,
 } from '../../common/constants';
+import { RateLimitError } from '../../common/errors';
 
 /**
  * GitHubService handles GitHub API operations with enhanced error handling and state management.
@@ -91,6 +93,10 @@ export class GitHubService implements IGitHubService {
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
         throw new Error('AuthenticationError: Not logged in or insufficient permissions on GitHub.');
+      }
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+        throw new RateLimitError(context, retryAfter);
       }
       throw new Error(`GitHub ${context} request failed: ${response.status}`);
     }
@@ -204,6 +210,7 @@ export class GitHubService implements IGitHubService {
     try {
       return await this.fetchPRs(this.mergedPRsURL, 'merged PR fetch');
     } catch (error: unknown) {
+      if (error instanceof RateLimitError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchMergedPRs:',
         error instanceof Error ? error.message : error
@@ -227,6 +234,7 @@ export class GitHubService implements IGitHubService {
     try {
       return await this.fetchPRs(this.reviewRequestsURL, 'assigned PR fetch');
     } catch (error: unknown) {
+      if (error instanceof RateLimitError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchAssignedPRs:',
         error instanceof Error ? error.message : error
@@ -257,6 +265,7 @@ export class GitHubService implements IGitHubService {
     try {
       return await this.fetchPRs(this.reviewedPRsURL, 'reviewed PR fetch');
     } catch (error: unknown) {
+      if (error instanceof RateLimitError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchReviewedPRs:',
         error instanceof Error ? error.message : error
@@ -286,29 +295,38 @@ export class GitHubService implements IGitHubService {
    * - Draft
    */
   async fetchAuthoredPRs(): Promise<PullRequest[]> {
-    this.debugService.log('[GitHubService] Fetching authored PRs from multiple URLs');
+    this.debugService.log('[GitHubService] Fetching authored PRs sequentially');
+
+    const fetchSequence: {
+      url: string;
+      status: 'approved' | 'changes_requested' | 'pending' | 'draft';
+    }[] = [
+      { url: this.authoredApprovedURL, status: 'approved' },
+      { url: this.authoredChangesRequestedURL, status: 'changes_requested' },
+      { url: this.authoredPendingURL, status: 'pending' },
+      { url: this.authoredDraftURL, status: 'draft' },
+    ];
 
     try {
-      // Fetch from all 5 URLs in parallel
-      const [approvedPRs, changesRequestedPRs, pendingPRs, draftPRs] = await Promise.all([
-        this.fetchFromURL(this.authoredApprovedURL, 'approved'),
-        this.fetchFromURL(this.authoredChangesRequestedURL, 'changes_requested'),
-        this.fetchFromURL(this.authoredPendingURL, 'pending'),
-        // this.fetchFromURL(this.authoredCommentedURL, 'commented'),
-        this.fetchFromURL(this.authoredDraftURL, 'draft'),
-      ]);
+      const resultsByStatus: Record<string, PullRequest[]> = {};
+      for (let i = 0; i < fetchSequence.length; i++) {
+        const { url, status } = fetchSequence[i];
+        resultsByStatus[status] = await this.fetchFromURL(url, status);
+        if (i < fetchSequence.length - 1) {
+          await this.delay(REQUEST_DELAY_MS);
+        }
+      }
 
-      // Combine all PRs
-      const allAuthoredPRs = [...approvedPRs, ...changesRequestedPRs, ...pendingPRs, ...draftPRs];
+      const allAuthoredPRs = fetchSequence.flatMap(({ status }) => resultsByStatus[status]);
 
       this.debugService.log(
         `[GitHubService] Fetched ${allAuthoredPRs.length} total authored PRs:`,
-        `approved=${approvedPRs.length}, changes_requested=${changesRequestedPRs.length},`,
-        `pending=${pendingPRs.length}, draft=${draftPRs.length}`
+        fetchSequence.map(({ status }) => `${status}=${resultsByStatus[status].length}`).join(', ')
       );
 
       return allAuthoredPRs;
     } catch (error: unknown) {
+      if (error instanceof RateLimitError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchAuthoredPRs:',
         error instanceof Error ? error.message : error
@@ -327,6 +345,10 @@ export class GitHubService implements IGitHubService {
     }
   }
 
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   /**
    * Helper method to fetch PRs from a specific URL and tag them with authorReviewStatus.
    */
@@ -343,6 +365,8 @@ export class GitHubService implements IGitHubService {
         authorReviewStatus,
       }));
     } catch (error: unknown) {
+      if (error instanceof RateLimitError) throw error;
+
       this.debugService.error(
         `[GitHubService] Error fetching ${authorReviewStatus} PRs:`,
         error instanceof Error ? error.message : error
