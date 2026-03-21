@@ -1,24 +1,13 @@
-import { useEffect } from 'react';
 import type { PullRequest } from '../../../extension/common/types';
 import { PRItem } from '../pr-item';
 import { PRListEmptyState } from './pr-list-empty-state';
 
 interface AuthoredListProps {
   prs: PullRequest[];
-  newPrIds: Set<string>;
   hasEverLoaded: boolean;
-  onViewIds: (ids: string[]) => void;
 }
 
-export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: AuthoredListProps) => {
-  // Mark new PRs as viewed when this component unmounts (user switches tabs)
-  useEffect(() => {
-    return () => {
-      const idsToMark = prs.filter((pr) => newPrIds.has(pr.id)).map((pr) => pr.id);
-      if (idsToMark.length > 0) onViewIds(idsToMark);
-    };
-  }, [prs, newPrIds, onViewIds]);
-
+export const AuthoredList = ({ prs, hasEverLoaded }: AuthoredListProps) => {
   const changesRequestedPRs = prs.filter((pr) => pr.authorReviewStatus === 'changes_requested');
   const approvedPRs = prs.filter((pr) => pr.authorReviewStatus === 'approved');
   const pendingPRs = prs.filter((pr) => pr.authorReviewStatus === 'pending');
@@ -46,7 +35,7 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
             <PRItem
               key={pr.id}
               pr={pr}
-              isNew={newPrIds.has(pr.id)}
+              isNew={false}
               isFirst={firstGroupIndex === 0 && i === 0}
               showAuthorStatus
             />
@@ -60,7 +49,7 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
             <PRItem
               key={pr.id}
               pr={pr}
-              isNew={newPrIds.has(pr.id)}
+              isNew={false}
               isFirst={firstGroupIndex === 1 && i === 0}
               showAuthorStatus
             />
@@ -74,7 +63,7 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
             <PRItem
               key={pr.id}
               pr={pr}
-              isNew={newPrIds.has(pr.id)}
+              isNew={false}
               isFirst={firstGroupIndex === 2 && i === 0}
               showAuthorStatus
             />
@@ -88,7 +77,7 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
             <PRItem
               key={pr.id}
               pr={pr}
-              isNew={newPrIds.has(pr.id)}
+              isNew={false}
               isFirst={firstGroupIndex === 3 && i === 0}
               showAuthorStatus
             />
@@ -102,7 +91,7 @@ export const AuthoredList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Author
             <PRItem
               key={pr.id}
               pr={pr}
-              isNew={newPrIds.has(pr.id)}
+              isNew={false}
               isFirst={firstGroupIndex === 4 && i === 0}
               showAuthorStatus
             />

@@ -8,9 +8,16 @@ interface AssignedListProps {
   newPrIds: Set<string>;
   hasEverLoaded: boolean;
   onViewIds: (ids: string[]) => void;
+  onEntranceSeenOpen?: (prId: string) => void;
 }
 
-export const AssignedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: AssignedListProps) => {
+export const AssignedList = ({
+  prs,
+  newPrIds,
+  hasEverLoaded,
+  onViewIds,
+  onEntranceSeenOpen,
+}: AssignedListProps) => {
   // Mark new PRs as viewed when this component unmounts (user switches tabs)
   useEffect(() => {
     return () => {
@@ -43,6 +50,7 @@ export const AssignedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Assign
               isNew={newPrIds.has(pr.id)}
               isFirst={i === 0}
               isReviewed={pr.reviewStatus === 'reviewed'}
+              onPrLinkActivated={onEntranceSeenOpen}
             />
           ))}
         </>
@@ -56,6 +64,7 @@ export const AssignedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: Assign
               isNew={newPrIds.has(pr.id)}
               isFirst={pendingPRs.length === 0 && i === 0}
               isReviewed={pr.reviewStatus === 'reviewed'}
+              onPrLinkActivated={onEntranceSeenOpen}
             />
           ))}
         </>

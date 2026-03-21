@@ -8,9 +8,16 @@ interface MergedListProps {
   newPrIds: Set<string>;
   hasEverLoaded: boolean;
   onViewIds: (ids: string[]) => void;
+  onEntranceSeenOpen?: (prId: string) => void;
 }
 
-export const MergedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: MergedListProps) => {
+export const MergedList = ({
+  prs,
+  newPrIds,
+  hasEverLoaded,
+  onViewIds,
+  onEntranceSeenOpen,
+}: MergedListProps) => {
   // Mark new PRs as viewed when this component unmounts (user switches tabs)
   useEffect(() => {
     return () => {
@@ -39,6 +46,7 @@ export const MergedList = ({ prs, newPrIds, hasEverLoaded, onViewIds }: MergedLi
               pr={pr}
               isNew={newPrIds.has(pr.id)}
               isFirst={i === 0}
+              onPrLinkActivated={onEntranceSeenOpen}
             />
           ))}
         </>

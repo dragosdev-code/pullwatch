@@ -14,6 +14,8 @@ interface PRItemProps {
   isFirst?: boolean;
   isReviewed?: boolean;
   showAuthorStatus?: boolean;
+  /** Called when the user activates the PR link (assigned / merged entrance-seen). */
+  onPrLinkActivated?: (prId: string) => void;
 }
 
 export const PRItem = ({
@@ -22,6 +24,7 @@ export const PRItem = ({
   isFirst = false,
   isReviewed = false,
   showAuthorStatus = false,
+  onPrLinkActivated,
 }: PRItemProps) => {
   const { behavior: linkBehavior } = useLinkBehavior();
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -29,6 +32,7 @@ export const PRItem = ({
 
   const handleClick = useCallback(
     (event: React.MouseEvent) => {
+      onPrLinkActivated?.(pr.id);
       if (linkBehavior === 'background') {
         event.preventDefault();
         // Open tab in background without switching to it
@@ -36,7 +40,7 @@ export const PRItem = ({
       }
       // For 'foreground', let the default anchor behavior handle it
     },
-    [linkBehavior, pr.url]
+    [linkBehavior, onPrLinkActivated, pr.id, pr.url]
   );
 
   useEffect(() => {

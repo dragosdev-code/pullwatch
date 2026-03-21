@@ -18,7 +18,7 @@ export function useMergedPRs() {
         : Promise.resolve(mergedPRsMock as PullRequest[]),
     staleTime: 1000 * 30,
     gcTime: 1000 * 60 * 5,
-    refetchOnMount: false,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData, // Keep showing old data while fetching
     retry: 3,

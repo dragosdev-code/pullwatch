@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Header } from './components/header';
 import { Tabs } from './components/ui/tabs/tabs';
 import { TabPanel } from './components/ui/tabs/tab-panel';
@@ -11,6 +11,7 @@ import { useAssignedPRs } from './hooks/use-assigned-prs';
 import { useMergedPRs } from './hooks/use-merged-prs';
 import { useAuthoredPRs } from './hooks/use-authored-prs';
 import { usePRUpdates } from './hooks/use-pr-updates';
+import { usePrEntranceViewedState } from './hooks/use-pr-entrance-viewed-state';
 import { useStorageSync } from './hooks/use-storage-sync';
 import { useGlobalError, useClearGlobalError } from './stores/global-error';
 import { useDebugMode } from './stores/debug';
@@ -22,7 +23,6 @@ function App() {
   const isDebugMode = useDebugMode();
   const clearGlobalError = useClearGlobalError();
 
-  // Sync with Chrome storage
   useStorageSync();
 
   const { data: assignedPRs = [], isSuccess } = useAssignedPRs();
@@ -37,37 +37,14 @@ function App() {
 
   const hasEverLoaded = isSuccess || assignedPRs.length > 0;
 
-  // Calculate pending PR count to match badge count (only PRs needing review)
   const pendingPRCount = useMemo(
     () => assignedPRs.filter((pr) => pr.reviewStatus === 'pending').length,
     [assignedPRs]
   );
 
-  // Track which "new" PR IDs the user has already seen this session
-  const [viewedIds, setViewedIds] = useState<Set<string>>(new Set());
-
-  const handleMarkAsViewed = useCallback((ids: string[]) => {
-    setViewedIds((prev) => {
-      const next = new Set(prev);
-      ids.forEach((id) => next.add(id));
-      return next;
-    });
-  }, []);
-
-  // Per-tab newPrIds: only PRs that are isNew AND not yet viewed
-  const assignedNewPrIds = useMemo(
-    () => new Set(assignedPRs.filter((pr) => pr.isNew && !viewedIds.has(pr.id)).map((pr) => pr.id)),
-    [assignedPRs, viewedIds]
-  );
-
-  const authoredNewPrIds = useMemo(
-    () => new Set(authoredPRs.filter((pr) => pr.isNew && !viewedIds.has(pr.id)).map((pr) => pr.id)),
-    [authoredPRs, viewedIds]
-  );
-
-  const mergedNewPrIds = useMemo(
-    () => new Set(mergedPRs.filter((pr) => pr.isNew && !viewedIds.has(pr.id)).map((pr) => pr.id)),
-    [mergedPRs, viewedIds]
+  const { assignedNewPrIds, mergedNewPrIds, markViewedIds, markViewedId } = usePrEntranceViewedState(
+    assignedPRs,
+    mergedPRs
   );
 
   const tabs: Tab[] = useMemo(
@@ -81,7 +58,6 @@ function App() {
 
   const handleTabChange = (tabId: string) => {
     console.log('Tab changed to:', tabId);
-    //TODO: Add any additional logic when tabs change
   };
 
   return (
@@ -102,24 +78,19 @@ function App() {
 
       {isDebugMode && <DevTestArea />}
 
-      {/* Tabs Component */}
       <Tabs tabs={tabs} className="flex-1 flex flex-col" onChange={handleTabChange}>
         <TabPanel tabId={TAB_IDS.ASSIGNED} className="flex-1 h-0">
           <AssignedList
             prs={assignedPRs}
             newPrIds={assignedNewPrIds}
             hasEverLoaded={hasEverLoaded}
-            onViewIds={handleMarkAsViewed}
+            onViewIds={markViewedIds}
+            onEntranceSeenOpen={markViewedId}
           />
         </TabPanel>
 
         <TabPanel tabId={TAB_IDS.AUTHORED} className="flex-1 h-0">
-          <AuthoredList
-            prs={authoredPRs}
-            newPrIds={authoredNewPrIds}
-            hasEverLoaded={hasEverLoaded}
-            onViewIds={handleMarkAsViewed}
-          />
+          <AuthoredList prs={authoredPRs} hasEverLoaded={hasEverLoaded} />
         </TabPanel>
 
         <TabPanel tabId={TAB_IDS.MERGED} className="flex-1 h-0">
@@ -127,13 +98,13 @@ function App() {
             prs={mergedPRs}
             newPrIds={mergedNewPrIds}
             hasEverLoaded={hasEverLoaded}
-            onViewIds={handleMarkAsViewed}
+            onViewIds={markViewedIds}
+            onEntranceSeenOpen={markViewedId}
           />
         </TabPanel>
       </Tabs>
 
       <SettingsOverlay position="right" />
-      {/* <Footer /> */}
     </div>
   );
 }
