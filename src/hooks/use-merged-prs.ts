@@ -9,7 +9,7 @@ import mergedPRsMock from '../mocks/merged-prs.json';
  * Hook to get stored merged PRs with automatic background refresh.
  * Uses mock data when not running in browser extension context.
  */
-export function useMergedPRs() {
+export const useMergedPRs = () => {
   return useQuery({
     queryKey: queryKeys.mergedPrs,
     queryFn: () =>
@@ -24,4 +24,4 @@ export function useMergedPRs() {
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
-}
+};

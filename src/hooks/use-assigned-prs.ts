@@ -10,7 +10,7 @@ import assignedPRsMock from '../mocks/assigned-prs.json';
  * Returns stored PRs immediately and fetches fresh data in background.
  * Uses mock data when not running in browser extension context.
  */
-export function useAssignedPRs() {
+export const useAssignedPRs = () => {
   return useQuery({
     queryKey: queryKeys.assignedPrs,
     queryFn: () =>
@@ -25,4 +25,4 @@ export function useAssignedPRs() {
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
-}
+};

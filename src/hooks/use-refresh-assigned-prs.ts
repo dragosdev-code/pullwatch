@@ -5,7 +5,7 @@ import { queryKeys } from '../constants/query-keys';
 /**
  * Hook to manually refresh assigned/review PRs (force fetch from GitHub).
  */
-export function useRefreshAssignedPRs() {
+export const useRefreshAssignedPRs = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -18,4 +18,4 @@ export function useRefreshAssignedPRs() {
       console.error('Failed to refresh assigned PRs:', error);
     },
   });
-}
+};

@@ -17,11 +17,11 @@ interface SoundPreviewButtonProps {
  * Inline sound preview button.
  * Allows quick testing of a sound without opening the full picker modal.
  */
-export function SoundPreviewButton({
+export const SoundPreviewButton = ({
   sound,
   disabled = false,
   size = 'sm',
-}: SoundPreviewButtonProps) {
+}: SoundPreviewButtonProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -101,4 +101,4 @@ export function SoundPreviewButton({
       )}
     </button>
   );
-}
+};

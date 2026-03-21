@@ -28,7 +28,7 @@ interface SoundOptionProps {
 /**
  * Individual sound option row
  */
-function SoundOption({ definition, isSelected, onSelect }: SoundOptionProps) {
+const SoundOption = ({ definition, isSelected, onSelect }: SoundOptionProps) => {
   const isPlayable = isPlayableSound(definition.id);
 
   return (
@@ -68,13 +68,13 @@ function SoundOption({ definition, isSelected, onSelect }: SoundOptionProps) {
       )}
     </div>
   );
-}
+};
 
 /**
  * SoundPicker modal component.
  * Displays available notification sounds with preview capability.
  */
-export function SoundPicker({ value, onChange, onClose, isOpen }: SoundPickerProps) {
+export const SoundPicker = ({ value, onChange, onClose, isOpen }: SoundPickerProps) => {
   const [selectedSound, setSelectedSound] = useState<NotificationSound>(value);
   const modalRef = useRef<HTMLDialogElement>(null);
 
@@ -188,4 +188,4 @@ export function SoundPicker({ value, onChange, onClose, isOpen }: SoundPickerPro
       </form>
     </dialog>
   );
-}
+};

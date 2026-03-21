@@ -10,7 +10,7 @@ import authoredPRsMock from '../mocks/authored-prs.json';
  * Returns stored PRs immediately and fetches fresh data in background.
  * Uses mock data when not running in browser extension context.
  */
-export function useAuthoredPRs() {
+export const useAuthoredPRs = () => {
   return useQuery({
     queryKey: queryKeys.authoredPrs,
     queryFn: () =>
@@ -25,4 +25,4 @@ export function useAuthoredPRs() {
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
-}
+};

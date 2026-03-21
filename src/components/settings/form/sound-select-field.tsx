@@ -17,7 +17,7 @@ interface SoundSelectFieldProps {
  * Enhanced sound selection field with modal picker and preview.
  * Replaces the native select dropdown with a rich modal-based picker.
  */
-export function SoundSelectField({ name, label, disabled = false }: SoundSelectFieldProps) {
+export const SoundSelectField = ({ name, label, disabled = false }: SoundSelectFieldProps) => {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const { control } = useFormContext<ExtensionSettings>();
 
@@ -81,4 +81,4 @@ export function SoundSelectField({ name, label, disabled = false }: SoundSelectF
       }}
     />
   );
-}
+};

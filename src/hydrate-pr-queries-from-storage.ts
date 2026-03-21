@@ -12,7 +12,9 @@ import { isExtensionContext } from './utils/is-extension-context';
  * Prefills React Query from chrome.storage.local so the popup first paint matches
  * cached PR lists without waiting on the service worker + sendMessage.
  */
-export async function hydratePrQueriesFromStorage(queryClient: QueryClient): Promise<void> {
+export const hydratePrQueriesFromStorage = async (
+  queryClient: QueryClient
+): Promise<void> => {
   if (!isExtensionContext() || typeof chrome === 'undefined' || !chrome.storage?.local) {
     return;
   }
@@ -27,4 +29,4 @@ export async function hydratePrQueriesFromStorage(queryClient: QueryClient): Pro
   queryClient.setQueryData(queryKeys.assignedPrs, assigned);
   queryClient.setQueryData(queryKeys.mergedPrs, merged);
   queryClient.setQueryData(queryKeys.authoredPrs, authored);
-}
+};

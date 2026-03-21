@@ -5,7 +5,7 @@ import { queryKeys } from '../constants/query-keys';
 /**
  * Hook to manually refresh merged PRs (force fetch from GitHub).
  */
-export function useRefreshMergedPRs() {
+export const useRefreshMergedPRs = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -18,4 +18,4 @@ export function useRefreshMergedPRs() {
       console.error('Failed to refresh merged PRs:', error);
     },
   });
-}
+};

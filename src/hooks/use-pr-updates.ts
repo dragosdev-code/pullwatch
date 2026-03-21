@@ -6,7 +6,7 @@ import { queryKeys } from '../constants/query-keys';
 /**
  * Hook to listen for background script messages and update cache accordingly.
  */
-export function usePRUpdates() {
+export const usePRUpdates = () => {
   const queryClient = useQueryClient();
 
   return {
@@ -30,4 +30,4 @@ export function usePRUpdates() {
       });
     },
   };
-}
+};

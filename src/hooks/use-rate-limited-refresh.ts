@@ -39,7 +39,7 @@ interface UseRateLimitedRefreshResult {
  * @param options - Configuration object containing mutations, loading states, and error handlers
  * @returns Rate-limited refresh state and handler
  */
-export function useRateLimitedRefresh({
+export const useRateLimitedRefresh = ({
   refreshPRsMutation,
   refreshMergedPRsMutation,
   refreshAuthoredPRsMutation,
@@ -48,7 +48,7 @@ export function useRateLimitedRefresh({
   isLoadingAuthoredPRs,
   clearGlobalError,
   setGlobalError,
-}: UseRateLimitedRefreshOptions): UseRateLimitedRefreshResult {
+}: UseRateLimitedRefreshOptions): UseRateLimitedRefreshResult => {
   // Local state for controlling refresh animation independently from actual fetch
   const [isRefreshing, setIsRefreshing] = useState(false);
   const lastRefreshTimestampRef = useRef<number>(0);
@@ -112,4 +112,4 @@ export function useRateLimitedRefresh({
     timeRemainingMs,
     canRefresh,
   };
-}
+};

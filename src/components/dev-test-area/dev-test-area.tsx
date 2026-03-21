@@ -12,6 +12,48 @@ import {
 
 type SectionKey = 'notification' | 'looper' | 'alarm' | 'urls';
 
+const CollapsibleSection = ({
+  label,
+  open,
+  onToggle,
+  revision,
+  children,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  revision?: number;
+  children: React.ReactNode;
+}) => {
+  return (
+    <div className="rounded border border-base-300/60">
+      <button
+        className="flex items-center justify-between w-full px-2.5 py-1.5 hover:bg-base-200/50 transition-colors"
+        onClick={onToggle}
+      >
+        <span className="flex items-center gap-1.5">
+          <span className="text-[11px] font-bold text-warning uppercase tracking-wide">
+            {label}
+          </span>
+          {revision !== undefined && <AutoSaveIndicator revision={revision} />}
+        </span>
+        <svg
+          className={`w-3 h-3 text-base-content/50 transition-transform ${open ? 'rotate-180' : ''}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </button>
+      {open && <div className="px-2.5 pb-2.5">{children}</div>}
+    </div>
+  );
+};
+
 export const DevTestArea = () => {
   const [open, setOpen] = useState<Record<SectionKey, boolean>>({
     notification: true,
@@ -82,45 +124,3 @@ export const DevTestArea = () => {
     </div>
   );
 };
-
-function CollapsibleSection({
-  label,
-  open,
-  onToggle,
-  revision,
-  children,
-}: {
-  label: string;
-  open: boolean;
-  onToggle: () => void;
-  revision?: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded border border-base-300/60">
-      <button
-        className="flex items-center justify-between w-full px-2.5 py-1.5 hover:bg-base-200/50 transition-colors"
-        onClick={onToggle}
-      >
-        <span className="flex items-center gap-1.5">
-          <span className="text-[11px] font-bold text-warning uppercase tracking-wide">
-            {label}
-          </span>
-          {revision !== undefined && <AutoSaveIndicator revision={revision} />}
-        </span>
-        <svg
-          className={`w-3 h-3 text-base-content/50 transition-transform ${open ? 'rotate-180' : ''}`}
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fillRule="evenodd"
-            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-            clipRule="evenodd"
-          />
-        </svg>
-      </button>
-      {open && <div className="px-2.5 pb-2.5">{children}</div>}
-    </div>
-  );
-}

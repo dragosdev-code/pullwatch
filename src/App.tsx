@@ -18,7 +18,7 @@ import { useDebugMode } from './stores/debug';
 import { SettingsOverlay } from './components/settings/settings-overlay';
 import { TAB_IDS } from './constants/tabs';
 
-function App() {
+const App = () => {
   const error = useGlobalError();
   const isDebugMode = useDebugMode();
   const clearGlobalError = useClearGlobalError();
@@ -107,6 +107,6 @@ function App() {
       <SettingsOverlay position="right" />
     </div>
   );
-}
+};
 
 export default App;

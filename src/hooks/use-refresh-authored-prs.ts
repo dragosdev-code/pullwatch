@@ -5,7 +5,7 @@ import { queryKeys } from '../constants/query-keys';
 /**
  * Hook to manually refresh authored PRs from GitHub (force fetch).
  */
-export function useRefreshAuthoredPRs() {
+export const useRefreshAuthoredPRs = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -18,4 +18,4 @@ export function useRefreshAuthoredPRs() {
       console.error('Failed to refresh authored PRs:', error);
     },
   });
-}
+};
