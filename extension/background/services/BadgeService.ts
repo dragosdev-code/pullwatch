@@ -13,14 +13,13 @@ import {
 export class BadgeService implements IBadgeService {
   private debugService: IDebugService;
   private initialized = false;
+  private previousBadgeText: string | null = null;
+  private restoreTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(debugService: IDebugService) {
     this.debugService = debugService;
   }
 
-  /**
-   * Initializes the badge service.
-   */
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
@@ -28,9 +27,6 @@ export class BadgeService implements IBadgeService {
     this.debugService.log('[BadgeService] Badge service initialized');
   }
 
-  /**
-   * Updates the badge with a count or text.
-   */
   async updateBadge(countOrText: number | string, color?: string): Promise<void> {
     try {
       const badgeColor = color || BADGE_COLOR_ACTIVE;
@@ -46,11 +42,9 @@ export class BadgeService implements IBadgeService {
     }
   }
 
-  /**
-   * Sets the badge to loading state.
-   */
   async setLoadingBadge(): Promise<void> {
     try {
+      this.clearPendingRestore();
       await this.updateBadge(BADGE_TEXT_LOADING, BADGE_COLOR_INACTIVE);
       this.debugService.log('[BadgeService] Badge set to loading state');
     } catch (error) {
@@ -59,11 +53,9 @@ export class BadgeService implements IBadgeService {
     }
   }
 
-  /**
-   * Sets the badge to error state.
-   */
   async setErrorBadge(): Promise<void> {
     try {
+      this.clearPendingRestore();
       await this.updateBadge('!', BADGE_COLOR_INACTIVE);
       this.debugService.log('[BadgeService] Badge set to error state');
     } catch (error) {
@@ -72,11 +64,9 @@ export class BadgeService implements IBadgeService {
     }
   }
 
-  /**
-   * Sets the badge to default/inactive state.
-   */
   async setDefaultBadge(): Promise<void> {
     try {
+      this.clearPendingRestore();
       await this.updateBadge('', BADGE_COLOR_INACTIVE);
       this.debugService.log('[BadgeService] Badge set to default state');
     } catch (error) {
@@ -85,11 +75,9 @@ export class BadgeService implements IBadgeService {
     }
   }
 
-  /**
-   * Sets the badge to show PR count.
-   */
   async setPRCountBadge(count: number): Promise<void> {
     try {
+      this.clearPendingRestore();
       if (count === 0) {
         await this.setDefaultBadge();
         return;
@@ -106,13 +94,9 @@ export class BadgeService implements IBadgeService {
     }
   }
 
-  /**
-   * Gets the current badge text.
-   */
   private async getBadgeText(): Promise<string> {
     try {
       const result = await chrome.action.getBadgeText({});
-      this.debugService.log('[BadgeService] Current badge text:', result);
       return result;
     } catch (error) {
       this.debugService.error('[BadgeService] Error getting badge text:', error);
@@ -121,28 +105,10 @@ export class BadgeService implements IBadgeService {
   }
 
   /**
-   * Sets a custom badge with animation support.
-   */
-  async setAnimatedBadge(
-    states: Array<{ text: string; color?: string; duration: number }>
-  ): Promise<void> {
-    try {
-      this.debugService.log('[BadgeService] Starting animated badge sequence');
-
-      for (const state of states) {
-        await this.updateBadge(state.text, state.color);
-        await this.delay(state.duration);
-      }
-
-      this.debugService.log('[BadgeService] Animated badge sequence completed');
-    } catch (error) {
-      this.debugService.error('[BadgeService] Error setting animated badge:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Shows a temporary notification badge.
+   * Shows a temporary badge that auto-restores the previous text.
+   * Uses an instance field to avoid stale-closure bugs on rapid re-calls.
+   * If a "real" badge update (setPRCountBadge, setErrorBadge, etc.) occurs
+   * before the timer fires, the pending restore is cancelled (self-healing).
    */
   async showTemporaryBadge(
     text: string,
@@ -150,21 +116,31 @@ export class BadgeService implements IBadgeService {
     duration: number = 3000
   ): Promise<void> {
     try {
-      const currentText = await this.getBadgeText();
+      // Only capture the original text if no restore is already pending
+      if (this.previousBadgeText === null) {
+        this.previousBadgeText = await this.getBadgeText();
+      }
 
-      // Show temporary badge
+      // Clear any existing restore timer (handles rapid re-calls)
+      if (this.restoreTimer !== null) {
+        clearTimeout(this.restoreTimer);
+      }
+
       await this.updateBadge(text, color);
 
-      // Restore previous badge after duration
-      setTimeout(async () => {
+      this.restoreTimer = setTimeout(async () => {
         try {
-          await this.updateBadge(currentText);
-          this.debugService.log('[BadgeService] Temporary badge restored');
+          if (this.previousBadgeText !== null) {
+            await this.updateBadge(this.previousBadgeText);
+          }
         } catch (error) {
           this.debugService.error(
             '[BadgeService] Error restoring badge after temporary display:',
             error
           );
+        } finally {
+          this.previousBadgeText = null;
+          this.restoreTimer = null;
         }
       }, duration);
 
@@ -176,8 +152,19 @@ export class BadgeService implements IBadgeService {
   }
 
   /**
-   * Gets badge status information.
+   * Cancels any pending temporary badge restore. Called by intentional badge
+   * state changes (setPRCountBadge, setErrorBadge, etc.) which supersede
+   * the pending restore, and also acts as self-healing if the service worker
+   * was terminated before the setTimeout could fire.
    */
+  private clearPendingRestore(): void {
+    if (this.restoreTimer !== null) {
+      clearTimeout(this.restoreTimer);
+      this.restoreTimer = null;
+    }
+    this.previousBadgeText = null;
+  }
+
   async getBadgeStatus(): Promise<{
     text: string;
     color: string;
@@ -185,8 +172,6 @@ export class BadgeService implements IBadgeService {
   }> {
     try {
       const text = await this.getBadgeText();
-      // Note: Chrome API doesn't provide a direct way to get current badge color
-      // We'll track it internally or use a default
       const color = text ? BADGE_COLOR_ACTIVE : BADGE_COLOR_INACTIVE;
       const isVisible = text.length > 0;
 
@@ -199,17 +184,8 @@ export class BadgeService implements IBadgeService {
     }
   }
 
-  /**
-   * Helper method to create delays for animations.
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Disposes the badge service.
-   */
   async dispose(): Promise<void> {
+    this.clearPendingRestore();
     this.debugService.log('[BadgeService] Badge service disposed');
     this.initialized = false;
   }

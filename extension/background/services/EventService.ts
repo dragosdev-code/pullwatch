@@ -15,6 +15,11 @@ import {
   EVENT_OFFSCREEN_READY,
 } from '../../common/constants';
 
+type MessageHandler = (
+  message: RuntimeMessage,
+  sendResponse: (r: MessageResponse) => void
+) => Promise<void> | void;
+
 /**
  * EventService coordinates Chrome extension events and handles message routing.
  * Central hub for all extension events, messages, and service coordination.
@@ -23,10 +28,33 @@ export class EventService implements IEventService {
   private debugService: IDebugService;
   private serviceContainer: ServiceContainer;
   private initialized = false;
+  private readonly dispatchTable: Map<string, MessageHandler>;
 
   constructor(debugService: IDebugService, serviceContainer: ServiceContainer) {
     this.debugService = debugService;
     this.serviceContainer = serviceContainer;
+
+    this.dispatchTable = new Map<string, MessageHandler>([
+      ['getAssignedPRs', (m, r) => this.handleAssignedPRDataActions(m, r)],
+      ['fetchAssignedPRs', (m, r) => this.handleAssignedPRDataActions(m, r)],
+      ['getMergedPRs', (m, r) => this.handleMergedPRDataActions(m, r)],
+      ['fetchMergedPRs', (m, r) => this.handleMergedPRDataActions(m, r)],
+      ['getAuthoredPRs', (m, r) => this.handleAuthoredPRDataActions(m, r)],
+      ['fetchAuthoredPRs', (m, r) => this.handleAuthoredPRDataActions(m, r)],
+      ['saveSettings', (m, r) => this.handleSettingsActions(m, r)],
+      ['getSettings', (m, r) => this.handleSettingsActions(m, r)],
+      [EVENT_PLAY_SOUND, (m, r) => this.handleOffscreenActions(m, r)],
+      [EVENT_OFFSCREEN_READY, (m, r) => this.handleOffscreenActions(m, r)],
+      ['previewSound', (m, r) => this.handlePreviewSoundAction(m, r)],
+      ['devTest:fireNotification', (m, r) => this.handleDevTestActions(m, r)],
+      ['devTest:startLoop', (m, r) => this.handleDevTestActions(m, r)],
+      ['devTest:stopLoop', (m, r) => this.handleDevTestActions(m, r)],
+      ['devTest:getLooperState', (m, r) => this.handleDevTestActions(m, r)],
+      ['devTest:overrideAlarm', (m, r) => this.handleDevTestActions(m, r)],
+      ['devTest:restoreAlarm', (m, r) => this.handleDevTestActions(m, r)],
+      ['devTest:getAlarmState', (m, r) => this.handleDevTestActions(m, r)],
+      ['devTest:getScraperUrls', (m, r) => this.handleDevTestActions(m, r)],
+    ]);
   }
 
   /**
@@ -154,20 +182,28 @@ export class EventService implements IEventService {
 
   /**
    * Main message handler for all Chrome extension messages.
+   * Uses a Map-based dispatch table for O(1) action routing.
+   * Returns void -- main.ts owns the `return true` decision for the Chrome API.
    */
   handleMessage(
     message: RuntimeMessage,
-    sender: chrome.runtime.MessageSender,
+    _sender: chrome.runtime.MessageSender,
     sendResponse: (response: MessageResponse) => void
-  ): boolean {
-    this.debugService.log('[EventService] Received message:', message, 'from sender:', sender);
-
+  ): void {
     const action = message.action;
-    let unhandled = false;
+    const handler = this.dispatchTable.get(action);
 
-    // Wrap async calls to ensure errors are caught and sendResponse is called
-    const asyncWrapper = (fn: Promise<void>) => {
-      fn.catch((err) => {
+    if (!handler) {
+      this.debugService.warn('[EventService] Unhandled message action:', action);
+      sendResponse({ success: false, error: `Unknown action: ${action}` });
+      return;
+    }
+
+    const result = handler(message, sendResponse);
+
+    // Wrap any async handler result to catch unhandled rejections
+    if (result && typeof (result as Promise<void>).catch === 'function') {
+      (result as Promise<void>).catch((err) => {
         this.debugService.error(`[EventService] Error in async handler for action ${action}:`, err);
         try {
           sendResponse({ success: false, error: `Unhandled error in ${action} handler` });
@@ -175,59 +211,7 @@ export class EventService implements IEventService {
           this.debugService.error('[EventService] Failed to send error response:', e);
         }
       });
-    };
-
-    switch (action) {
-      case 'getAssignedPRs':
-      case 'fetchAssignedPRs':
-        asyncWrapper(this.handleAssignedPRDataActions(message, sendResponse));
-        break;
-      case 'getMergedPRs':
-      case 'fetchMergedPRs':
-        asyncWrapper(this.handleMergedPRDataActions(message, sendResponse));
-        break;
-      case 'getAuthoredPRs':
-      case 'fetchAuthoredPRs':
-        asyncWrapper(this.handleAuthoredPRDataActions(message, sendResponse));
-        break;
-
-      case 'saveSettings':
-      case 'getSettings':
-        asyncWrapper(this.handleSettingsActions(message, sendResponse));
-        break;
-
-      case EVENT_PLAY_SOUND:
-        this.handleOffscreenActions(message, sendResponse);
-        break;
-      case EVENT_OFFSCREEN_READY:
-        asyncWrapper(this.handleOffscreenActions(message, sendResponse));
-        break;
-
-      case 'previewSound':
-        asyncWrapper(this.handlePreviewSoundAction(message, sendResponse));
-        break;
-
-
-      case 'devTest:fireNotification':
-      case 'devTest:startLoop':
-      case 'devTest:stopLoop':
-      case 'devTest:getLooperState':
-      case 'devTest:overrideAlarm':
-      case 'devTest:restoreAlarm':
-      case 'devTest:getAlarmState':
-      case 'devTest:getScraperUrls':
-        asyncWrapper(this.handleDevTestActions(message, sendResponse));
-        break;
-
-      default:
-        unhandled = true;
-        this.debugService.warn('[EventService] Unhandled message action:', action);
-        sendResponse({ success: false, error: `Unknown action: ${action}` });
-        break;
     }
-
-    // Return true to indicate that sendResponse will be (or has been) called asynchronously
-    return !unhandled;
   }
 
   /**

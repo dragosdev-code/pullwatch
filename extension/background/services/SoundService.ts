@@ -58,6 +58,7 @@ export class SoundService implements ISoundService {
 
   /**
    * Ensures the offscreen document is ready for audio playback.
+   * Lock is acquired synchronously before any async work to prevent TOCTOU races.
    */
   async ensureOffscreenDocument(): Promise<void> {
     if (!chrome.offscreen) {
@@ -67,12 +68,6 @@ export class SoundService implements ISoundService {
       return Promise.reject(new Error('Offscreen API not available.'));
     }
 
-    // Check without creating a new promise if not necessary
-    if (await this.hasOffscreenDocument()) {
-      this.debugService.log('[SoundService] Offscreen document already exists.');
-      return Promise.resolve();
-    }
-
     if (this.creatingOffscreenDocument) {
       this.debugService.log(
         '[SoundService] Offscreen document creation already in progress. Waiting...'
@@ -80,38 +75,41 @@ export class SoundService implements ISoundService {
       return this.creatingOffscreenDocument;
     }
 
-    this.debugService.log('[SoundService] Creating offscreen document...');
-    this.creatingOffscreenDocument = (async () => {
-      try {
-        await chrome.offscreen.createDocument({
-          url: OFFSCREEN_DOCUMENT_PATH, // Path relative to the extension's root
-          reasons: [OFFSCREEN_REASON_AUDIO_PLAYBACK as chrome.offscreen.Reason],
-          justification: 'Playing notification sounds for new PRs',
-        });
-        this.debugService.log('[SoundService] Offscreen document created successfully.');
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        this.debugService.error('[SoundService] Error creating offscreen document:', errorMessage);
-        if (errorMessage.includes('Only a single offscreen document may be created')) {
-          this.debugService.warn(
-            '[SoundService] Attempted to create an offscreen document when one likely already exists or was being created.'
-          );
-          // Document might exist now due to a race condition, try checking again.
-          if (!(await this.hasOffscreenDocument())) {
-            // If it truly doesn't exist after the error, then it's a problem.
-            throw new Error(
-              'Failed to create offscreen document, and it does not exist after error.'
-            );
-          }
-        } else {
-          throw error; // Re-throw other errors
-        }
-      } finally {
-        this.creatingOffscreenDocument = null; // Clear the creation lock
-      }
-    })();
-
+    this.creatingOffscreenDocument = this.doEnsureOffscreenDocument()
+      .finally(() => { this.creatingOffscreenDocument = null; });
     return this.creatingOffscreenDocument;
+  }
+
+  private async doEnsureOffscreenDocument(): Promise<void> {
+    if (await this.hasOffscreenDocument()) {
+      this.debugService.log('[SoundService] Offscreen document already exists.');
+      return;
+    }
+
+    this.debugService.log('[SoundService] Creating offscreen document...');
+    try {
+      await chrome.offscreen.createDocument({
+        url: OFFSCREEN_DOCUMENT_PATH,
+        reasons: [OFFSCREEN_REASON_AUDIO_PLAYBACK as chrome.offscreen.Reason],
+        justification: 'Playing notification sounds for new PRs',
+      });
+      this.debugService.log('[SoundService] Offscreen document created successfully.');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.debugService.error('[SoundService] Error creating offscreen document:', errorMessage);
+      if (errorMessage.includes('Only a single offscreen document may be created')) {
+        this.debugService.warn(
+          '[SoundService] Offscreen document already exists (concurrent creation detected).'
+        );
+        if (!(await this.hasOffscreenDocument())) {
+          throw new Error(
+            'Failed to create offscreen document, and it does not exist after error.'
+          );
+        }
+      } else {
+        throw error;
+      }
+    }
   }
 
   /**

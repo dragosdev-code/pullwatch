@@ -69,87 +69,26 @@ export class PRService implements IPRService {
     );
 
     try {
+      const cached = await this.checkAssignedCache(forceRefresh, bypassCache);
+      if (cached) return cached;
+
       const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_ASSIGNED_PRS);
-
-      const isCacheValid =
-        storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
-
-      if (isCacheValid && !forceRefresh && !bypassCache) {
-        this.debugService.log('[PRService] Returning cached Assigned PRs');
-        return storedData.prs;
-      }
-
       const oldPRs = storedData?.prs || [];
-      this.debugService.log(`[PRService] Current stored PRs count: ${oldPRs.length}`);
-
       const oldPendingPRs = oldPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
-      this.debugService.log(
-        `[PRService] Current stored pending PRs count: ${oldPendingPRs.length}`
-      );
 
       const freshPendingPRsRaw = await this.gitHubService.fetchAssignedPRs();
       await this.delay(REQUEST_DELAY_MS);
       const freshReviewedPRsRaw = await this.gitHubService.fetchReviewedPRs();
-      this.debugService.log(
-        `[PRService] Fetched fresh pending PRs: ${freshPendingPRsRaw.length}, reviewed PRs: ${freshReviewedPRsRaw.length}`
+
+      const { allPRs, filteredPending, newPRs } = await this.mergeAndFilterAssignedPRs(
+        oldPendingPRs, freshPendingPRsRaw, freshReviewedPRsRaw
       );
 
-      const freshPendingPRs = freshPendingPRsRaw.map((pr) => ({
-        ...pr,
-        reviewStatus: 'pending' as const,
-      }));
-
-      const { newPRs, allPRsWithStatus: pendingPRsWithStatus } = this.comparePRs(
-        oldPendingPRs,
-        freshPendingPRs
-      );
-      this.debugService.log(`[PRService] New pending PRs detected: ${newPRs.length}`);
-
-      const pendingIds = new Set(pendingPRsWithStatus.map((pr) => pr.id || pr.url));
-
-      const freshReviewedPRs = freshReviewedPRsRaw
-        .filter((pr) => !pendingIds.has(pr.id || pr.url))
-        .filter((pr) => pr.type !== 'merged')
-        .map(
-          (pr): PullRequest => ({
-            ...pr,
-            reviewStatus: 'reviewed' as const,
-            isNew: false,
-          })
-        );
-
-      const settings = await this.storageService.getExtensionSettings();
-
-      const filteredPendingPRs = settings.assigned.showDraftsInList
-        ? pendingPRsWithStatus
-        : pendingPRsWithStatus.filter((pr) => pr.type !== 'draft');
-
-      const filteredReviewedPRs = settings.assigned.showDraftsInList
-        ? freshReviewedPRs
-        : freshReviewedPRs.filter((pr) => pr.type !== 'draft');
-
-      const allPRsWithStatus = [...filteredPendingPRs, ...filteredReviewedPRs];
-      this.debugService.log(
-        `[PRService] Total PRs to store (pending + reviewed): ${allPRsWithStatus.length}`
-      );
-
-      await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRsWithStatus);
-      await this.storageService.setLastFetchTime(Date.now());
-
-      await this.badgeService.setPRCountBadge(filteredPendingPRs.length);
-
-      if (newPRs.length > 0 && !forceRefresh) {
-        this.debugService.log(`[PRService] Showing notifications for ${newPRs.length} new PR(s)`);
-        await this.notificationService.showAssignedPRNotifications(newPRs);
-      } else if (newPRs.length === 0) {
-        this.debugService.log('[PRService] No new PRs detected, skipping notifications');
-      } else if (forceRefresh) {
-        this.debugService.log('[PRService] Force refresh detected, skipping notifications');
-      }
+      await this.persistAndNotifyAssigned(allPRs, filteredPending.length, newPRs, forceRefresh);
 
       this.rateLimitService.recordSuccess();
-      this.debugService.log(`[PRService] Successfully updated ${allPRsWithStatus.length} PRs`);
-      return allPRsWithStatus;
+      this.debugService.log(`[PRService] Successfully updated ${allPRs.length} PRs`);
+      return allPRs;
     } catch (error) {
       if (error instanceof RateLimitError) {
         this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
@@ -157,6 +96,86 @@ export class PRService implements IPRService {
       this.debugService.error('[PRService] Error fetching and updating PRs:', error);
       await this.badgeService.setErrorBadge();
       throw error;
+    }
+  }
+
+  /**
+   * Returns cached assigned PRs if the cache is valid, or null if a fresh fetch is needed.
+   */
+  private async checkAssignedCache(
+    forceRefresh: boolean,
+    bypassCache: boolean
+  ): Promise<PullRequest[] | null> {
+    const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_ASSIGNED_PRS);
+    const isCacheValid =
+      storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
+
+    if (isCacheValid && !forceRefresh && !bypassCache) {
+      this.debugService.log('[PRService] Returning cached Assigned PRs');
+      return storedData.prs;
+    }
+    return null;
+  }
+
+  /**
+   * Compares old pending PRs against fresh data, deduplicates reviewed PRs,
+   * and applies draft filtering based on user settings.
+   */
+  private async mergeAndFilterAssignedPRs(
+    oldPendingPRs: PullRequest[],
+    freshPendingRaw: PullRequest[],
+    freshReviewedRaw: PullRequest[]
+  ): Promise<{ allPRs: PullRequest[]; filteredPending: PullRequest[]; newPRs: PullRequest[] }> {
+    const freshPending = freshPendingRaw.map((pr) => ({
+      ...pr,
+      reviewStatus: 'pending' as const,
+    }));
+
+    const { newPRs, allPRsWithStatus: pendingPRsWithStatus } = this.comparePRs(
+      oldPendingPRs,
+      freshPending
+    );
+
+    const pendingIds = new Set(pendingPRsWithStatus.map((pr) => pr.id || pr.url));
+    const freshReviewed = freshReviewedRaw
+      .filter((pr) => !pendingIds.has(pr.id || pr.url))
+      .filter((pr) => pr.type !== 'merged')
+      .map((pr): PullRequest => ({ ...pr, reviewStatus: 'reviewed' as const, isNew: false }));
+
+    const settings = await this.storageService.getExtensionSettings();
+    const showDrafts = settings.assigned.showDraftsInList;
+
+    const filteredPending = showDrafts
+      ? pendingPRsWithStatus
+      : pendingPRsWithStatus.filter((pr) => pr.type !== 'draft');
+
+    const filteredReviewed = showDrafts
+      ? freshReviewed
+      : freshReviewed.filter((pr) => pr.type !== 'draft');
+
+    return {
+      allPRs: [...filteredPending, ...filteredReviewed],
+      filteredPending,
+      newPRs,
+    };
+  }
+
+  /**
+   * Persists assigned PRs to storage, updates the badge, and sends notifications for new PRs.
+   */
+  private async persistAndNotifyAssigned(
+    allPRs: PullRequest[],
+    filteredPendingCount: number,
+    newPRs: PullRequest[],
+    forceRefresh: boolean
+  ): Promise<void> {
+    await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRs);
+    await this.storageService.setLastFetchTime(Date.now());
+    await this.badgeService.setPRCountBadge(filteredPendingCount);
+
+    if (newPRs.length > 0 && !forceRefresh) {
+      this.debugService.log(`[PRService] Showing notifications for ${newPRs.length} new PR(s)`);
+      await this.notificationService.showAssignedPRNotifications(newPRs);
     }
   }
 
