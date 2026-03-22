@@ -3,6 +3,7 @@ import type { IDebugService } from '../interfaces/IDebugService';
 import type { ServiceContainer } from '../core/ServiceContainer';
 import type {
   RuntimeMessage,
+  RuntimeRequestMessage,
   MessageResponse,
   ExtensionSettings,
   PullRequest,
@@ -10,10 +11,19 @@ import type {
   DevTestNotificationOverrides,
 } from '../../common/types';
 import {
+  BROADCAST_ACTION,
+  type BroadcastAction,
+  DEV_TEST_ACTION,
   EVENT_FETCH_PRS,
-  EVENT_PLAY_SOUND,
   EVENT_OFFSCREEN_READY,
-} from '../../common/constants';
+  EVENT_PLAY_SOUND,
+  EVENT_SETTINGS_UPDATED,
+  isBroadcastAction,
+  PR_DATA_ACTION,
+  PREVIEW_SOUND_ACTION,
+  SETTINGS_ACTION,
+  type RequestRuntimeAction,
+} from '../../common/runtime-actions';
 
 type MessageHandler = (
   message: RuntimeMessage,
@@ -28,32 +38,32 @@ export class EventService implements IEventService {
   private debugService: IDebugService;
   private serviceContainer: ServiceContainer;
   private initialized = false;
-  private readonly dispatchTable: Map<string, MessageHandler>;
+  private readonly dispatchTable: Map<RequestRuntimeAction, MessageHandler>;
 
   constructor(debugService: IDebugService, serviceContainer: ServiceContainer) {
     this.debugService = debugService;
     this.serviceContainer = serviceContainer;
 
-    this.dispatchTable = new Map<string, MessageHandler>([
-      ['getAssignedPRs', (m, r) => this.handleAssignedPRDataActions(m, r)],
-      ['fetchAssignedPRs', (m, r) => this.handleAssignedPRDataActions(m, r)],
-      ['getMergedPRs', (m, r) => this.handleMergedPRDataActions(m, r)],
-      ['fetchMergedPRs', (m, r) => this.handleMergedPRDataActions(m, r)],
-      ['getAuthoredPRs', (m, r) => this.handleAuthoredPRDataActions(m, r)],
-      ['fetchAuthoredPRs', (m, r) => this.handleAuthoredPRDataActions(m, r)],
-      ['saveSettings', (m, r) => this.handleSettingsActions(m, r)],
-      ['getSettings', (m, r) => this.handleSettingsActions(m, r)],
+    this.dispatchTable = new Map<RequestRuntimeAction, MessageHandler>([
+      [PR_DATA_ACTION.getAssignedPRs, (m, r) => this.handleAssignedPRDataActions(m, r)],
+      [PR_DATA_ACTION.fetchAssignedPRs, (m, r) => this.handleAssignedPRDataActions(m, r)],
+      [PR_DATA_ACTION.getMergedPRs, (m, r) => this.handleMergedPRDataActions(m, r)],
+      [PR_DATA_ACTION.fetchMergedPRs, (m, r) => this.handleMergedPRDataActions(m, r)],
+      [PR_DATA_ACTION.getAuthoredPRs, (m, r) => this.handleAuthoredPRDataActions(m, r)],
+      [PR_DATA_ACTION.fetchAuthoredPRs, (m, r) => this.handleAuthoredPRDataActions(m, r)],
+      [SETTINGS_ACTION.saveSettings, (m, r) => this.handleSettingsActions(m, r)],
+      [SETTINGS_ACTION.getSettings, (m, r) => this.handleSettingsActions(m, r)],
       [EVENT_PLAY_SOUND, (m, r) => this.handleOffscreenActions(m, r)],
       [EVENT_OFFSCREEN_READY, (m, r) => this.handleOffscreenActions(m, r)],
-      ['previewSound', (m, r) => this.handlePreviewSoundAction(m, r)],
-      ['devTest:fireNotification', (m, r) => this.handleDevTestActions(m, r)],
-      ['devTest:startLoop', (m, r) => this.handleDevTestActions(m, r)],
-      ['devTest:stopLoop', (m, r) => this.handleDevTestActions(m, r)],
-      ['devTest:getLooperState', (m, r) => this.handleDevTestActions(m, r)],
-      ['devTest:overrideAlarm', (m, r) => this.handleDevTestActions(m, r)],
-      ['devTest:restoreAlarm', (m, r) => this.handleDevTestActions(m, r)],
-      ['devTest:getAlarmState', (m, r) => this.handleDevTestActions(m, r)],
-      ['devTest:getScraperUrls', (m, r) => this.handleDevTestActions(m, r)],
+      [PREVIEW_SOUND_ACTION.previewSound, (m, r) => this.handlePreviewSoundAction(m, r)],
+      [DEV_TEST_ACTION.fireNotification, (m, r) => this.handleDevTestActions(m, r)],
+      [DEV_TEST_ACTION.startLoop, (m, r) => this.handleDevTestActions(m, r)],
+      [DEV_TEST_ACTION.stopLoop, (m, r) => this.handleDevTestActions(m, r)],
+      [DEV_TEST_ACTION.getLooperState, (m, r) => this.handleDevTestActions(m, r)],
+      [DEV_TEST_ACTION.overrideAlarm, (m, r) => this.handleDevTestActions(m, r)],
+      [DEV_TEST_ACTION.restoreAlarm, (m, r) => this.handleDevTestActions(m, r)],
+      [DEV_TEST_ACTION.getAlarmState, (m, r) => this.handleDevTestActions(m, r)],
+      [DEV_TEST_ACTION.getScraperUrls, (m, r) => this.handleDevTestActions(m, r)],
     ]);
   }
 
@@ -191,6 +201,12 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): void {
     const action = message.action;
+    if (isBroadcastAction(action)) {
+      this.debugService.warn('[EventService] Unhandled message action:', action);
+      sendResponse({ success: false, error: `Unknown action: ${action}` });
+      return;
+    }
+
     const handler = this.dispatchTable.get(action);
 
     if (!handler) {
@@ -224,7 +240,7 @@ export class EventService implements IEventService {
     try {
       const prService = this.serviceContainer.getService('prService');
 
-      if (this.isMessageAction(message, 'getAssignedPRs')) {
+      if (this.isMessageAction(message, PR_DATA_ACTION.getAssignedPRs)) {
         this.debugService.log('[EventService] Getting stored assigned PRs and fetching fresh data');
 
         // 1. Get stored PRs immediately for fast response
@@ -241,10 +257,10 @@ export class EventService implements IEventService {
           category: 'assigned',
           fetchFn: () => prService.fetchAndUpdateAssignedPRs(),
           storedPRs,
-          broadcastAction: 'assignedPrDataUpdated',
+          broadcastAction: BROADCAST_ACTION.assignedPrDataUpdated,
           summarize: (prs) => prs.map((pr) => ({ id: pr.id, title: pr.title, reviewStatus: pr.reviewStatus })),
         });
-      } else if (this.isMessageAction(message, 'fetchAssignedPRs')) {
+      } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchAssignedPRs)) {
         // fetchAssignedPRs: Fetch fresh data from GitHub and update storage (manual refresh)
         this.debugService.log('[EventService] Manual refresh - fetching fresh assigned PRs from GitHub');
         const prs = await prService.fetchAndUpdateAssignedPRs(true); // force refresh
@@ -270,7 +286,7 @@ export class EventService implements IEventService {
     try {
       const prService = this.serviceContainer.getService('prService');
 
-      if (this.isMessageAction(message, 'getMergedPRs')) {
+      if (this.isMessageAction(message, PR_DATA_ACTION.getMergedPRs)) {
         this.debugService.log('[EventService] Getting stored merged PRs and fetching fresh data');
 
         // 1. Get stored merged PRs immediately for fast response
@@ -285,10 +301,10 @@ export class EventService implements IEventService {
           category: 'merged',
           fetchFn: () => prService.updateMergedPRs(),
           storedPRs,
-          broadcastAction: 'mergedPrDataUpdated',
+          broadcastAction: BROADCAST_ACTION.mergedPrDataUpdated,
           summarize: (prs) => prs.map((pr) => ({ id: pr.id, title: pr.title })),
         });
-      } else if (this.isMessageAction(message, 'fetchMergedPRs')) {
+      } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchMergedPRs)) {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
         );
@@ -310,7 +326,7 @@ export class EventService implements IEventService {
     category: string;
     fetchFn: () => Promise<PullRequest[]>;
     storedPRs: PullRequest[];
-    broadcastAction: string;
+    broadcastAction: BroadcastAction;
     summarize: (prs: PullRequest[]) => unknown[];
   }): Promise<void> {
     try {
@@ -343,7 +359,7 @@ export class EventService implements IEventService {
     try {
       const prService = this.serviceContainer.getService('prService');
 
-      if (this.isMessageAction(message, 'getAuthoredPRs')) {
+      if (this.isMessageAction(message, PR_DATA_ACTION.getAuthoredPRs)) {
         this.debugService.log('[EventService] Getting stored authored PRs and fetching fresh data');
 
         const storedPRs = await prService.getStoredAuthoredPRs();
@@ -354,10 +370,10 @@ export class EventService implements IEventService {
           category: 'authored',
           fetchFn: () => prService.updateAuthoredPRs(),
           storedPRs,
-          broadcastAction: 'authoredPrDataUpdated',
+          broadcastAction: BROADCAST_ACTION.authoredPrDataUpdated,
           summarize: (prs) => prs.map((pr) => ({ id: pr.id, title: pr.title })),
         });
-      } else if (this.isMessageAction(message, 'fetchAuthoredPRs')) {
+      } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchAuthoredPRs)) {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
         );
@@ -381,7 +397,7 @@ export class EventService implements IEventService {
     try {
       const storageService = this.serviceContainer.getService('storageService');
 
-      if (this.isMessageAction<Partial<ExtensionSettings>>(message, 'saveSettings')) {
+      if (this.isMessageAction<Partial<ExtensionSettings>>(message, SETTINGS_ACTION.saveSettings)) {
         if (message.payload) {
           await storageService.setExtensionSettings(message.payload);
           const settings = await storageService.getExtensionSettings();
@@ -393,7 +409,7 @@ export class EventService implements IEventService {
         } else {
           sendResponse({ success: false, error: 'No settings payload provided' });
         }
-      } else if (this.isMessageAction(message, 'getSettings')) {
+      } else if (this.isMessageAction(message, SETTINGS_ACTION.getSettings)) {
         const settings = await storageService.getExtensionSettings();
         sendResponse({ success: true, data: settings });
       }
@@ -409,7 +425,7 @@ export class EventService implements IEventService {
   private async broadcastSettingsUpdate(settings: ExtensionSettings): Promise<void> {
     try {
       await chrome.runtime.sendMessage({
-        action: 'settingsUpdated',
+        action: EVENT_SETTINGS_UPDATED,
         data: settings,
       });
       this.debugService.log('[EventService] Broadcasted settings update to all contexts');
@@ -475,7 +491,7 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      if (this.isMessageAction<{ sound: NotificationSound }>(message, 'previewSound')) {
+      if (this.isMessageAction<{ sound: NotificationSound }>(message, PREVIEW_SOUND_ACTION.previewSound)) {
         const { sound } = message.payload || { sound: 'ping' };
 
         this.debugService.log(`[EventService] Playing sound preview: ${sound}`);
@@ -508,44 +524,44 @@ export class EventService implements IEventService {
         this.serviceContainer.getService('devTestService');
 
       switch (message.action) {
-        case 'devTest:fireNotification': {
+        case DEV_TEST_ACTION.fireNotification: {
           const overrides = message.payload as DevTestNotificationOverrides | undefined;
           await devTestService.fireTestNotification(overrides);
           sendResponse({ success: true, data: 'Test notification fired' });
           break;
         }
-        case 'devTest:startLoop': {
+        case DEV_TEST_ACTION.startLoop: {
           const { intervalMs } = (message.payload as { intervalMs: number }) || { intervalMs: 3000 };
           const state = await devTestService.startNotificationLoop(intervalMs);
           sendResponse({ success: true, data: state });
           break;
         }
-        case 'devTest:stopLoop': {
+        case DEV_TEST_ACTION.stopLoop: {
           const state = await devTestService.stopNotificationLoop();
           sendResponse({ success: true, data: state });
           break;
         }
-        case 'devTest:getLooperState': {
+        case DEV_TEST_ACTION.getLooperState: {
           sendResponse({ success: true, data: devTestService.getLooperState() });
           break;
         }
-        case 'devTest:overrideAlarm': {
+        case DEV_TEST_ACTION.overrideAlarm: {
           const { intervalMs } = (message.payload as { intervalMs: number }) || { intervalMs: 30000 };
           const alarmState = await devTestService.overrideAlarmInterval(intervalMs);
           sendResponse({ success: true, data: alarmState });
           break;
         }
-        case 'devTest:restoreAlarm': {
+        case DEV_TEST_ACTION.restoreAlarm: {
           const alarmState = await devTestService.restoreAlarmInterval();
           sendResponse({ success: true, data: alarmState });
           break;
         }
-        case 'devTest:getAlarmState': {
+        case DEV_TEST_ACTION.getAlarmState: {
           const alarmState = await devTestService.getAlarmOverrideState();
           sendResponse({ success: true, data: alarmState });
           break;
         }
-        case 'devTest:getScraperUrls': {
+        case DEV_TEST_ACTION.getScraperUrls: {
           sendResponse({ success: true, data: devTestService.getScraperUrls() });
           break;
         }
@@ -561,10 +577,10 @@ export class EventService implements IEventService {
   /**
    * Type guard to check for a specific action in a message.
    */
-  private isMessageAction<T>(
+  private isMessageAction<TPayload>(
     message: RuntimeMessage,
-    action: string
-  ): message is RuntimeMessage<T> {
+    action: RequestRuntimeAction
+  ): message is RuntimeRequestMessage<TPayload> {
     return message.action === action;
   }
 

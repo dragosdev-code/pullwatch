@@ -1,6 +1,7 @@
 import type { IAlarmService } from '../interfaces/IAlarmService';
 import type { IDebugService } from '../interfaces/IDebugService';
-import { EVENT_FETCH_PRS, FETCH_INTERVAL_MS, DEV_TEST_MIN_ALARM_OVERRIDE_MS, STORAGE_KEY_ALARM_OVERRIDE } from '../../common/constants';
+import { FETCH_INTERVAL_MS, DEV_TEST_MIN_ALARM_OVERRIDE_MS, STORAGE_KEY_ALARM_OVERRIDE } from '../../common/constants';
+import { EVENT_FETCH_PRS } from '../../common/runtime-actions';
 
 interface AlarmOverrideState {
   overridden: boolean;

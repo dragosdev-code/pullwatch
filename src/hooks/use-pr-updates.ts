@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { chromeExtensionService } from '../services/chrome-extension-service';
 import type { PullRequest } from '../../extension/common/types';
+import { BROADCAST_ACTION } from '../../extension/common/runtime-actions';
 import { queryKeys } from '../constants/query-keys';
 
 /**
@@ -12,17 +13,17 @@ export const usePRUpdates = () => {
   return {
     setupListener: () => {
       return chromeExtensionService.onMessage((message) => {
-        if (message.action === 'assignedPrDataUpdated') {
+        if (message.action === BROADCAST_ACTION.assignedPrDataUpdated) {
           const updatedPRs = message.data as PullRequest[];
           console.log('Received assigned PR data update from background, updating cache');
 
           // Update the cache with fresh data
           queryClient.setQueryData(queryKeys.assignedPrs, updatedPRs);
-        } else if (message.action === 'mergedPrDataUpdated') {
+        } else if (message.action === BROADCAST_ACTION.mergedPrDataUpdated) {
           const updatedMerged = message.data as PullRequest[];
           console.log('Received merged PR data update from background, updating cache');
           queryClient.setQueryData(queryKeys.mergedPrs, updatedMerged);
-        } else if (message.action === 'authoredPrDataUpdated') {
+        } else if (message.action === BROADCAST_ACTION.authoredPrDataUpdated) {
           const updatedAuthored = message.data as PullRequest[];
           console.log('Received authored PR data update from background, updating cache');
           queryClient.setQueryData(queryKeys.authoredPrs, updatedAuthored);

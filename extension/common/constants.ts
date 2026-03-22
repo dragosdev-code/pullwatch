@@ -25,13 +25,6 @@ export const MIN_REFRESH_INTERVAL_MS = 30 * 1000; // 30 seconds
 export const STORAGE_KEY_RATE_LIMIT = 'rate_limit_state';
 export const RATE_LIMIT_MAX_BACKOFF_MS = 30 * 60 * 1000; // 30 minutes
 
-// Event Names (from background.js and requirements)
-export const EVENT_FETCH_PRS = 'fetchPRs';
-export const EVENT_PLAY_SOUND = 'playNotificationSound'; // From offscreen.js
-export const EVENT_OFFSCREEN_READY = 'offscreenReady'; // From offscreen.js
-export const EVENT_USER_LOGGED_IN = 'userLoggedIn'; // As per requirements
-export const EVENT_SETTINGS_UPDATED = 'settingsUpdated'; // Example
-
 // Offscreen Document
 export const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html'; // Updated path to be relative to dist root
 export const OFFSCREEN_REASON_AUDIO_PLAYBACK = 'AUDIO_PLAYBACK';

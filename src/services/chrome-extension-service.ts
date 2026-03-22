@@ -6,7 +6,16 @@ import type {
   DevTestLooperState,
   DevTestAlarmOverrideState,
   ScraperUrl,
+  RuntimeMessage,
 } from '../../extension/common/types';
+import {
+  DEV_TEST_ACTION,
+  EVENT_SETTINGS_UPDATED,
+  PR_DATA_ACTION,
+  PREVIEW_SOUND_ACTION,
+  SETTINGS_ACTION,
+  type RequestRuntimeAction,
+} from '../../extension/common/runtime-actions';
 
 /**
  * Service to handle Chrome extension communication.
@@ -27,7 +36,7 @@ export class ChromeExtensionService {
   /**
    * Sends a message to the background script and returns a promise.
    */
-  private sendMessage<T>(action: string, payload?: unknown): Promise<T> {
+  private sendMessage<T>(action: RequestRuntimeAction, payload?: unknown): Promise<T> {
     return new Promise((resolve, reject) => {
       if (!this.isExtensionContext()) {
         reject(new Error('Extension context not available'));
@@ -57,21 +66,21 @@ export class ChromeExtensionService {
    * This returns immediately with cached data.
    */
   async getStoredAssignedPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>('getAssignedPRs');
+    return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.getAssignedPRs);
   }
 
   /**
    * Gets stored merged PRs from the background script.
    */
   async getStoredMergedPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>('getMergedPRs');
+    return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.getMergedPRs);
   }
 
   /**
    * Gets stored authored PRs from the background script.
    */
   async getStoredAuthoredPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>('getAuthoredPRs');
+    return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.getAuthoredPRs);
   }
 
   /**
@@ -79,28 +88,28 @@ export class ChromeExtensionService {
    * This forces a network request to GitHub.
    */
   async fetchFreshAssignedPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>('fetchAssignedPRs');
+    return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.fetchAssignedPRs);
   }
 
   /**
    * Fetches fresh merged PRs from GitHub via the background script.
    */
   async fetchFreshMergedPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>('fetchMergedPRs');
+    return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.fetchMergedPRs);
   }
 
   /**
    * Fetches fresh authored PRs from GitHub via the background script.
    */
   async fetchFreshAuthoredPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>('fetchAuthoredPRs');
+    return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.fetchAuthoredPRs);
   }
 
   /**
    * Gets extension settings from Chrome storage (sync).
    */
   async getSettings(): Promise<ExtensionSettings> {
-    return this.sendMessage<ExtensionSettings>('getSettings');
+    return this.sendMessage<ExtensionSettings>(SETTINGS_ACTION.getSettings);
   }
 
   /**
@@ -108,7 +117,7 @@ export class ChromeExtensionService {
    * Returns the complete updated settings.
    */
   async saveSettings(settings: Partial<ExtensionSettings>): Promise<ExtensionSettings> {
-    return this.sendMessage<ExtensionSettings>('saveSettings', settings);
+    return this.sendMessage<ExtensionSettings>(SETTINGS_ACTION.saveSettings, settings);
   }
 
   /**
@@ -117,18 +126,18 @@ export class ChromeExtensionService {
    * @param sound - The sound type to preview ('ping', 'bell', or 'off')
    */
   async playSoundPreview(sound: NotificationSound): Promise<void> {
-    return this.sendMessage('previewSound', { sound });
+    return this.sendMessage(PREVIEW_SOUND_ACTION.previewSound, { sound });
   }
 
   /**
    * Sets up a listener for background script messages.
    */
-  onMessage(callback: (message: { action: string; data?: unknown }) => void): () => void {
+  onMessage(callback: (message: RuntimeMessage) => void): () => void {
     if (!this.isExtensionContext()) {
       return () => {}; // Return empty cleanup function
     }
 
-    const messageListener = (message: { action: string; data?: unknown }) => {
+    const messageListener = (message: RuntimeMessage) => {
       callback(message);
     };
 
@@ -149,8 +158,8 @@ export class ChromeExtensionService {
       return () => {};
     }
 
-    const messageListener = (message: { action: string; data?: unknown }) => {
-      if (message.action === 'settingsUpdated' && message.data) {
+    const messageListener = (message: RuntimeMessage) => {
+      if (message.action === EVENT_SETTINGS_UPDATED && 'data' in message && message.data) {
         callback(message.data as ExtensionSettings);
       }
     };
@@ -165,35 +174,35 @@ export class ChromeExtensionService {
   // ─── Dev Test Area ─────────────────────────────────────────────────────
 
   async devTestFireNotification(overrides?: DevTestNotificationOverrides): Promise<void> {
-    return this.sendMessage('devTest:fireNotification', overrides);
+    return this.sendMessage(DEV_TEST_ACTION.fireNotification, overrides);
   }
 
   async devTestStartLoop(intervalMs: number): Promise<DevTestLooperState> {
-    return this.sendMessage<DevTestLooperState>('devTest:startLoop', { intervalMs });
+    return this.sendMessage<DevTestLooperState>(DEV_TEST_ACTION.startLoop, { intervalMs });
   }
 
   async devTestStopLoop(): Promise<DevTestLooperState> {
-    return this.sendMessage<DevTestLooperState>('devTest:stopLoop');
+    return this.sendMessage<DevTestLooperState>(DEV_TEST_ACTION.stopLoop);
   }
 
   async devTestGetLooperState(): Promise<DevTestLooperState> {
-    return this.sendMessage<DevTestLooperState>('devTest:getLooperState');
+    return this.sendMessage<DevTestLooperState>(DEV_TEST_ACTION.getLooperState);
   }
 
   async devTestOverrideAlarm(intervalMs: number): Promise<DevTestAlarmOverrideState> {
-    return this.sendMessage<DevTestAlarmOverrideState>('devTest:overrideAlarm', { intervalMs });
+    return this.sendMessage<DevTestAlarmOverrideState>(DEV_TEST_ACTION.overrideAlarm, { intervalMs });
   }
 
   async devTestRestoreAlarm(): Promise<DevTestAlarmOverrideState> {
-    return this.sendMessage<DevTestAlarmOverrideState>('devTest:restoreAlarm');
+    return this.sendMessage<DevTestAlarmOverrideState>(DEV_TEST_ACTION.restoreAlarm);
   }
 
   async devTestGetAlarmState(): Promise<DevTestAlarmOverrideState> {
-    return this.sendMessage<DevTestAlarmOverrideState>('devTest:getAlarmState');
+    return this.sendMessage<DevTestAlarmOverrideState>(DEV_TEST_ACTION.getAlarmState);
   }
 
   async devTestGetScraperUrls(): Promise<ScraperUrl[]> {
-    return this.sendMessage<ScraperUrl[]>('devTest:getScraperUrls');
+    return this.sendMessage<ScraperUrl[]>(DEV_TEST_ACTION.getScraperUrls);
   }
 }
 

@@ -4,8 +4,8 @@ import type { NotificationSound } from '../../common/types';
 import {
   OFFSCREEN_DOCUMENT_PATH,
   OFFSCREEN_REASON_AUDIO_PLAYBACK,
-  EVENT_PLAY_SOUND,
 } from '../../common/constants';
+import { EVENT_PLAY_SOUND } from '../../common/runtime-actions';
 
 /**
  * SoundService handles audio playback through offscreen documents.

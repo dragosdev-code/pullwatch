@@ -1,5 +1,5 @@
 import { debugLog, debugError, debugWarn, initializeDebugTools } from '../debug/debugLogger';
-import { EVENT_PLAY_SOUND, EVENT_OFFSCREEN_READY } from '../common/constants';
+import { EVENT_OFFSCREEN_READY, EVENT_PLAY_SOUND } from '../common/runtime-actions';
 import type { RuntimeMessage, MessageResponse, NotificationSound } from '../common/types';
 import { SOUND_PRESETS, type SoundPreset } from '../common/sound-config';
 

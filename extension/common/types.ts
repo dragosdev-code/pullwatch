@@ -7,6 +7,9 @@ import type {
   STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
 } from './constants';
+import type { BroadcastAction, RequestRuntimeAction, RuntimeAction } from './runtime-actions';
+
+export type { BroadcastAction, RequestRuntimeAction, RuntimeAction };
 
 /**
  * Available notification sounds
@@ -117,11 +120,19 @@ export interface UserData {
   lastLogin?: string; // ISO date string
 }
 
-// Generic message structure for runtime communication
-export interface RuntimeMessage<T = unknown> {
-  action: string; // Corresponds to an EVENT_* from constants.ts
+/** Request-style runtime message (`payload`; used by popup, background, offscreen). */
+export type RuntimeRequestMessage<T = unknown> = {
+  action: RequestRuntimeAction;
   payload?: T;
-}
+};
+
+/** Background → UI broadcast (`data`, not `payload`). */
+export type RuntimeBroadcastMessage = {
+  action: BroadcastAction;
+  data: unknown;
+};
+
+export type RuntimeMessage = RuntimeRequestMessage | RuntimeBroadcastMessage;
 
 // Response structure for messages
 export interface MessageResponse<R = unknown, E = unknown> {
