@@ -28,7 +28,9 @@ export class PRService implements IPRService {
   private rateLimitService: IRateLimitService;
   private initialized = false;
   private assignedFetchInProgress: Promise<PullRequest[]> | null = null;
+  private assignedFetchOpts: { forceRefresh: boolean; bypassCache: boolean } | null = null;
   private mergedFetchInProgress: Promise<PullRequest[]> | null = null;
+  private mergedFetchOpts: { forceRefresh: boolean; bypassCache: boolean } | null = null;
   private authoredFetchInProgress: Promise<PullRequest[]> | null = null;
 
   constructor(deps: {
@@ -53,14 +55,47 @@ export class PRService implements IPRService {
     this.debugService.log('[PRService] PR service initialized');
   }
 
+  /**
+   * Loads assigned / review-requested PRs from GitHub, merges with the “reviewed” list,
+   * writes storage, updates the badge, and shows notifications for PRs that are new
+   * relative to the last stored **pending** set (skipped when {@link forceRefresh} is true).
+   *
+   * **Concurrent calls:** If another fetch is already in progress, this usually awaits the
+   * same promise. If this call needs **stricter** flags than the in-flight one (e.g. the
+   * alarm passes `bypassCache: true` while a popup started with cache allowed), this method
+   * waits for that run to finish, then starts a new fetch with the requested flags. That
+   * avoids attaching a cache-only result to a caller that must hit GitHub.
+   *
+   * @param forceRefresh - Bypass cache and suppress “new PR” notifications (manual refresh, install, startup).
+   * @param bypassCache - Ignore the short TTL cache and always refetch (periodic alarm).
+   * @returns The current assigned PR list after the effective fetch completes.
+   */
   async fetchAndUpdateAssignedPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
-    if (this.assignedFetchInProgress) {
-      this.debugService.log('[PRService] Assigned fetch already in progress, reusing');
+    while (true) {
+      if (this.assignedFetchInProgress && this.assignedFetchOpts) {
+        const o = this.assignedFetchOpts;
+        const needStricter =
+          (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
+        if (!needStricter) {
+          this.debugService.log('[PRService] Assigned fetch already in progress, reusing');
+          return this.assignedFetchInProgress;
+        }
+        this.debugService.log(
+          '[PRService] Assigned fetch in progress with weaker flags; awaiting then retrying'
+        );
+        await this.assignedFetchInProgress;
+        continue;
+      }
+
+      this.assignedFetchOpts = { forceRefresh, bypassCache };
+      this.assignedFetchInProgress = this.doFetchAndUpdateAssignedPRs(forceRefresh, bypassCache).finally(
+        () => {
+          this.assignedFetchInProgress = null;
+          this.assignedFetchOpts = null;
+        }
+      );
       return this.assignedFetchInProgress;
     }
-    this.assignedFetchInProgress = this.doFetchAndUpdateAssignedPRs(forceRefresh, bypassCache)
-      .finally(() => { this.assignedFetchInProgress = null; });
-    return this.assignedFetchInProgress;
   }
 
   private async doFetchAndUpdateAssignedPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
@@ -306,14 +341,42 @@ export class PRService implements IPRService {
     }
   }
 
+  /**
+   * Fetches your merged PRs from GitHub, compares them to the stored list, persists updates,
+   * and fires merged notifications for PRs that were not stored before (unless
+   * {@link forceRefresh} is true).
+   *
+   * Uses the same **stricter-flags / wait-then-retry** coordination as
+   * {@link fetchAndUpdateAssignedPRs} so a `bypassCache: true` alarm is not folded into an
+   * in-flight weaker fetch that would return cached merged data.
+   *
+   * @param forceRefresh - Bypass cache and suppress merged notifications (manual refresh).
+   * @param bypassCache - Ignore TTL cache and always refetch (periodic alarm).
+   */
   async updateMergedPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
-    if (this.mergedFetchInProgress) {
-      this.debugService.log('[PRService] Merged fetch already in progress, reusing');
+    while (true) {
+      if (this.mergedFetchInProgress && this.mergedFetchOpts) {
+        const o = this.mergedFetchOpts;
+        const needStricter =
+          (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
+        if (!needStricter) {
+          this.debugService.log('[PRService] Merged fetch already in progress, reusing');
+          return this.mergedFetchInProgress;
+        }
+        this.debugService.log(
+          '[PRService] Merged fetch in progress with weaker flags; awaiting then retrying'
+        );
+        await this.mergedFetchInProgress;
+        continue;
+      }
+
+      this.mergedFetchOpts = { forceRefresh, bypassCache };
+      this.mergedFetchInProgress = this.doUpdateMergedPRs(forceRefresh, bypassCache).finally(() => {
+        this.mergedFetchInProgress = null;
+        this.mergedFetchOpts = null;
+      });
       return this.mergedFetchInProgress;
     }
-    this.mergedFetchInProgress = this.doUpdateMergedPRs(forceRefresh, bypassCache)
-      .finally(() => { this.mergedFetchInProgress = null; });
-    return this.mergedFetchInProgress;
   }
 
   private async doUpdateMergedPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {

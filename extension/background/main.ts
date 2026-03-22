@@ -16,6 +16,14 @@ import type { RuntimeMessage, MessageResponse } from '../common/types';
  * - Start async init immediately, store the resulting Promise.
  * - Register all listeners synchronously.
  * - Inside each listener, await the init Promise before processing.
+ *
+ * ### Async `chrome.*` listeners (alarms, install, startup, notification click)
+ * These handlers are `async` and `await` both {@link initPromise} and the full
+ * {@link IEventService} handler. The listener therefore returns a Promise that stays
+ * pending until that work finishes, which keeps the MV3 service worker tied to the event.
+ * Scheduling only `initPromise.then(...)` and returning void ends the synchronous callback
+ * immediately; Chrome may idle the worker before fetches or `chrome.notifications` run.
+ * Having DevTools open on the service worker masks that by keeping the worker alive longer.
  */
 
 const serviceContainer = new ServiceContainer();
@@ -31,28 +39,50 @@ function getEventService(): IEventService {
 
 // ─── Synchronous listener registration ───────────────────────────────────────
 
-chrome.runtime.onInstalled.addListener((details) => {
-  initPromise
-    .then(() => getEventService().handleInstallation(details))
-    .catch((error) => console.error('[Main] Error in onInstalled:', error));
+/**
+ * Runs extension install/update setup (permissions, alarm, initial fetch) after shared init.
+ * @param details - Chrome install/update reason and previous version when applicable.
+ */
+chrome.runtime.onInstalled.addListener(async (details) => {
+  try {
+    await initPromise;
+    await getEventService().handleInstallation(details);
+  } catch (error) {
+    console.error('[Main] Error in onInstalled:', error);
+  }
 });
 
-chrome.runtime.onStartup.addListener(() => {
-  initPromise
-    .then(() => getEventService().handleStartup())
-    .catch((error) => console.error('[Main] Error in onStartup:', error));
+/** Restores permissions and the fetch alarm when the browser profile starts. */
+chrome.runtime.onStartup.addListener(async () => {
+  try {
+    await initPromise;
+    await getEventService().handleStartup();
+  } catch (error) {
+    console.error('[Main] Error in onStartup:', error);
+  }
 });
 
-chrome.alarms.onAlarm.addListener((alarm) => {
-  initPromise
-    .then(() => getEventService().handleAlarm(alarm))
-    .catch((error) => console.error('[Main] Error in onAlarm:', error));
+/**
+ * Periodic wake: refreshes assigned, merged, and authored PRs (respecting rate-limit backoff).
+ * @param alarm - Fired alarm; name is matched to the fetch PRs alarm in EventService.
+ */
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  try {
+    await initPromise;
+    await getEventService().handleAlarm(alarm);
+  } catch (error) {
+    console.error('[Main] Error in onAlarm:', error);
+  }
 });
 
-chrome.notifications.onClicked.addListener((notificationId) => {
-  initPromise
-    .then(() => getEventService().handleNotificationClick(notificationId))
-    .catch((error) => console.error('[Main] Error in onNotificationClick:', error));
+/** Routes notification clicks to the notification service (e.g. clear + future deep-link). */
+chrome.notifications.onClicked.addListener(async (notificationId) => {
+  try {
+    await initPromise;
+    await getEventService().handleNotificationClick(notificationId);
+  } catch (error) {
+    console.error('[Main] Error in onNotificationClick:', error);
+  }
 });
 
 chrome.runtime.onMessage.addListener(
