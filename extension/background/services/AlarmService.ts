@@ -44,6 +44,28 @@ export class AlarmService implements IAlarmService {
     await chrome.storage.local.set({ [STORAGE_KEY_ALARM_OVERRIDE]: state });
   }
 
+  private intervalMsToAlarmMinutes(intervalMs: number): number {
+    return intervalMs / (60 * 1000);
+  }
+
+  private clampDevOverrideIntervalMs(requestedMs: number): number {
+    return Math.max(requestedMs, DEV_TEST_MIN_ALARM_OVERRIDE_MS);
+  }
+
+  /**
+   * Effective PR-fetch cadence from persisted override state (single source of truth).
+   */
+  private resolveEffectiveFetchIntervalMs(state: AlarmOverrideState): number {
+    if (state.overridden && state.intervalMs != null) {
+      return state.intervalMs;
+    }
+    return FETCH_INTERVAL_MS;
+  }
+
+  private async getEffectiveFetchIntervalMs(): Promise<number> {
+    return this.resolveEffectiveFetchIntervalMs(await this.getOverrideState());
+  }
+
   /**
    * Sets up the fetch alarm for periodic PR fetching.
    */
@@ -58,7 +80,8 @@ export class AlarmService implements IAlarmService {
         return;
       }
 
-      const periodInMinutes = FETCH_INTERVAL_MS / (60 * 1000);
+      const intervalMs = await this.getEffectiveFetchIntervalMs();
+      const periodInMinutes = this.intervalMsToAlarmMinutes(intervalMs);
 
       await this.createAlarm(EVENT_FETCH_PRS, {
         periodInMinutes,
@@ -192,8 +215,8 @@ export class AlarmService implements IAlarmService {
    * Minimum interval is enforced to prevent abuse.
    */
   async overrideFetchAlarm(intervalMs: number): Promise<void> {
-    const safeInterval = Math.max(intervalMs, DEV_TEST_MIN_ALARM_OVERRIDE_MS);
-    const periodInMinutes = safeInterval / (60 * 1000);
+    const safeInterval = this.clampDevOverrideIntervalMs(intervalMs);
+    const periodInMinutes = this.intervalMsToAlarmMinutes(safeInterval);
 
     try {
       await this.clearAlarm(EVENT_FETCH_PRS);
@@ -215,16 +238,37 @@ export class AlarmService implements IAlarmService {
   async restoreFetchAlarm(): Promise<void> {
     try {
       await this.clearAlarm(EVENT_FETCH_PRS);
-
-      const periodInMinutes = FETCH_INTERVAL_MS / (60 * 1000);
-      await this.createAlarm(EVENT_FETCH_PRS, { periodInMinutes });
       await this.setOverrideState({ overridden: false, intervalMs: null });
+
+      const intervalMs = await this.getEffectiveFetchIntervalMs();
+      const periodInMinutes = this.intervalMsToAlarmMinutes(intervalMs);
+      await this.createAlarm(EVENT_FETCH_PRS, { periodInMinutes });
 
       this.debugService.log(
         `[AlarmService] Fetch alarm restored to production interval: ${periodInMinutes} min`
       );
     } catch (error) {
       this.debugService.error('[AlarmService] Error restoring fetch alarm:', error);
+      throw error;
+    }
+  }
+
+  async rescheduleFetchAlarmFromNow(): Promise<void> {
+    try {
+      const intervalMs = await this.getEffectiveFetchIntervalMs();
+      const periodInMinutes = this.intervalMsToAlarmMinutes(intervalMs);
+
+      await this.clearAlarm(EVENT_FETCH_PRS);
+      await this.createAlarm(EVENT_FETCH_PRS, {
+        delayInMinutes: periodInMinutes,
+        periodInMinutes,
+      });
+
+      this.debugService.log(
+        `[AlarmService] Fetch alarm rescheduled: next fire in ${periodInMinutes} min (manual refresh)`
+      );
+    } catch (error) {
+      this.debugService.error('[AlarmService] Error rescheduling fetch alarm:', error);
       throw error;
     }
   }
@@ -248,15 +292,17 @@ export class AlarmService implements IAlarmService {
       const allAlarms = await this.getAllAlarms();
       const fetchAlarm = await this.getAlarm(EVENT_FETCH_PRS);
       const overrideState = await this.getOverrideState();
+      const currentIntervalMs =
+        overrideState.overridden && overrideState.intervalMs == null
+          ? undefined
+          : this.resolveEffectiveFetchIntervalMs(overrideState);
 
       const status = {
         totalAlarms: allAlarms.length,
         fetchAlarmActive: !!fetchAlarm,
         nextScheduledTime: fetchAlarm?.scheduledTime,
         isOverridden: overrideState.overridden,
-        currentIntervalMs: overrideState.overridden
-          ? (overrideState.intervalMs ?? undefined)
-          : FETCH_INTERVAL_MS,
+        currentIntervalMs,
       };
 
       this.debugService.log('[AlarmService] Alarm status:', status);

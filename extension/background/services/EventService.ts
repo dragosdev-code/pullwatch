@@ -38,6 +38,8 @@ export class EventService implements IEventService {
   private debugService: IDebugService;
   private serviceContainer: ServiceContainer;
   private initialized = false;
+  /** Coalesces parallel manual refresh messages (assigned/merged/authored) into one alarm reset. */
+  private fetchAlarmPushBackInFlight: Promise<void> | null = null;
   private readonly dispatchTable: Map<RequestRuntimeAction, MessageHandler>;
 
   constructor(debugService: IDebugService, serviceContainer: ServiceContainer) {
@@ -263,6 +265,7 @@ export class EventService implements IEventService {
       } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchAssignedPRs)) {
         // fetchAssignedPRs: Fetch fresh data from GitHub and update storage (manual refresh)
         this.debugService.log('[EventService] Manual refresh - fetching fresh assigned PRs from GitHub');
+        await this.coalescedPushBackFetchAlarm();
         const prs = await prService.fetchAndUpdateAssignedPRs(true); // force refresh
         this.debugService.log(`[EventService] fetchAndUpdateAssignedPRs returned ${prs.length} PRs`);
 
@@ -308,6 +311,7 @@ export class EventService implements IEventService {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
         );
+        await this.coalescedPushBackFetchAlarm();
         const merged = await prService.updateMergedPRs(true); // force refresh
         this.debugService.log(`[EventService] updateMergedPRs returned ${merged.length} PRs`);
         sendResponse({ success: true, data: merged });
@@ -316,6 +320,21 @@ export class EventService implements IEventService {
       this.debugService.error('[EventService] Error handling merged PR data actions:', error);
       sendResponse({ success: false, error: 'Failed to handle merged PR action' });
     }
+  }
+
+  /**
+   * Ensures concurrent manual refresh handlers share one alarm reschedule (popup fires three messages).
+   */
+  private coalescedPushBackFetchAlarm(): Promise<void> {
+    if (this.fetchAlarmPushBackInFlight !== null) {
+      return this.fetchAlarmPushBackInFlight;
+    }
+    const alarmService = this.serviceContainer.getService('alarmService');
+    const pending = alarmService.rescheduleFetchAlarmFromNow().finally(() => {
+      this.fetchAlarmPushBackInFlight = null;
+    });
+    this.fetchAlarmPushBackInFlight = pending;
+    return pending;
   }
 
   /**
@@ -377,6 +396,7 @@ export class EventService implements IEventService {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
         );
+        await this.coalescedPushBackFetchAlarm();
         const authored = await prService.updateAuthoredPRs(true);
         sendResponse({ success: true, data: authored });
       }

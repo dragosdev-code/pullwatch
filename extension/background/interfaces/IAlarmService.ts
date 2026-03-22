@@ -36,6 +36,13 @@ export interface IAlarmService extends IService {
   restoreFetchAlarm(): Promise<void>;
 
   /**
+   * Clears and recreates the periodic fetch alarm so the next fire is a full
+   * interval from now (production or dev override). Use after manual refresh
+   * to avoid overlapping with the scheduled alarm.
+   */
+  rescheduleFetchAlarmFromNow(): Promise<void>;
+
+  /**
    * Returns whether the fetch alarm is currently overridden.
    */
   isFetchAlarmOverridden(): Promise<boolean>;
