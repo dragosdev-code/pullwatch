@@ -10,11 +10,7 @@ export interface PrAuthorRowProps {
   isFirst?: boolean;
 }
 
-export const PrAuthorRow = ({
-  authors,
-  isReviewed = false,
-  isFirst = false,
-}: PrAuthorRowProps) => {
+export const PrAuthorRow = ({ authors, isReviewed = false, isFirst = false }: PrAuthorRowProps) => {
   const list = authors.length > 0 ? authors : [{ login: UNKNOWN }];
   const primary = list[0];
   const rest = list.slice(1);
@@ -51,7 +47,9 @@ export const PrAuthorRow = ({
                   className={clsx(
                     'w-5 h-5 rounded-full inline-flex items-center justify-center text-[9px] font-bold ring-2',
                     ringClass,
-                    isReviewed ? 'bg-base-300 text-base-content/40' : 'bg-base-300 text-base-content/60'
+                    isReviewed
+                      ? 'bg-base-300 text-base-content/40'
+                      : 'bg-base-300 text-base-content/60'
                   )}
                   aria-hidden
                 >

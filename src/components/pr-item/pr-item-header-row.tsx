@@ -11,6 +11,8 @@ interface PrItemHeaderRowProps {
   isReviewed: boolean;
   showAuthorStatus: boolean;
   authorReviewStatus: PullRequest['authorReviewStatus'];
+  /** Keeps the PR row stacked above neighbors while the truncated-title tooltip finishes its CSS hide animation. */
+  onTruncatedTitleStackLiftChange?: (lifted: boolean) => void;
 }
 
 export const PrItemHeaderRow = ({
@@ -20,10 +22,16 @@ export const PrItemHeaderRow = ({
   isReviewed,
   showAuthorStatus,
   authorReviewStatus,
+  onTruncatedTitleStackLiftChange,
 }: PrItemHeaderRowProps) => (
   <div className="flex items-center gap-1 mb-1.5">
     <PRStatusIcon type={prType} reviewed={isReviewed} />
-    <PrItemTruncatedTitle title={title} isFirst={isFirst} isReviewed={isReviewed} />
+    <PrItemTruncatedTitle
+      title={title}
+      isFirst={isFirst}
+      isReviewed={isReviewed}
+      onStackLiftChange={onTruncatedTitleStackLiftChange}
+    />
     <div className="flex items-center gap-1 shrink-0">
       {isReviewed && (
         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-base-300 text-base-content/70 text-[11px] font-medium">

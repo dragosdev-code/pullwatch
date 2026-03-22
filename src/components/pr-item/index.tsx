@@ -1,5 +1,6 @@
 import { animated } from '@react-spring/web';
 import clsx from 'clsx';
+import { useCallback, useState } from 'react';
 import { PrItemFooterRow } from './pr-item-footer-row';
 import { PrItemHeaderRow } from './pr-item-header-row';
 import { PrItemRepoRow } from './pr-item-repo-row';
@@ -23,6 +24,10 @@ export const PRItem = ({
     onPrLinkActivated,
   });
   const slideSpring = usePrEntranceSpring(isNew);
+  const [titleTooltipStackLift, setTitleTooltipStackLift] = useState(false);
+  const handleTitleTooltipStackLiftChange = useCallback((lifted: boolean) => {
+    setTitleTooltipStackLift(lifted);
+  }, []);
 
   return (
     <animated.a
@@ -33,7 +38,8 @@ export const PRItem = ({
       style={isNew && !isReviewed ? slideSpring : {}}
       data-pr-id={pr.id}
       className={clsx(
-        'group block px-5 py-2 transition-all duration-200 cursor-pointer relative border-b border-base-200 hover:z-10',
+        'group block px-5 py-2 transition-[color,background-color,border-color,opacity,box-shadow] duration-200 cursor-pointer relative isolate border-b border-base-200',
+        titleTooltipStackLift ? 'z-10' : 'hover:z-10',
         isReviewed
           ? 'bg-base-200 text-base-content/70 opacity-90 border-l-2 hover:opacity-100'
           : 'bg-base-100 text-base-content border-l-2 hover:bg-base-200',
@@ -47,6 +53,7 @@ export const PRItem = ({
         isReviewed={isReviewed}
         showAuthorStatus={showAuthorStatus}
         authorReviewStatus={pr.authorReviewStatus}
+        onTruncatedTitleStackLiftChange={handleTitleTooltipStackLiftChange}
       />
       <PrItemRepoRow repoName={pr.repoName} number={pr.number} isReviewed={isReviewed} />
       <PrItemFooterRow
