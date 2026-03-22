@@ -1,7 +1,13 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { MIN_REFRESH_INTERVAL_MS } from '../../extension/common/constants';
 import type { PullRequest } from '../../extension/common/types';
+
+/** Upper bound for indeterminate fetch ring progress (ms) — actual completion snaps to 100%. */
+const FETCH_RING_ESTIMATED_MAX_MS = 7000;
+
+const THROTTLED_FLASH_MS = 1000;
+const FETCH_COMPLETE_FLASH_MS = 400;
 
 interface UseRateLimitedRefreshOptions {
   refreshPRsMutation: UseMutationResult<PullRequest[], Error, void, unknown>;
@@ -21,10 +27,22 @@ interface UseRateLimitedRefreshResult {
   isAnyLoading: boolean;
   /** Rate-limited refresh handler - triggers animation always, fetches only if enough time passed */
   handleRefresh: () => Promise<void>;
-  /** Time remaining until next refresh is allowed (in milliseconds) */
+  /** Time remaining until next refresh is allowed (in milliseconds), updates on tick */
   timeRemainingMs: number;
   /** Whether a refresh can be performed now (time limit has passed) */
   canRefresh: boolean;
+  /** True while the three manual refresh mutations are running */
+  manualFetchInProgress: boolean;
+  /** 0–1 progress for fetch ring (capped until done, then brief 1) */
+  fetchProgress01: number;
+  /** Elapsed seconds during fetch, for display */
+  fetchElapsedSeconds: number;
+  /** Duration of the last completed manual fetch (ms), 0 if none yet */
+  lastFetchDurationMs: number;
+  /** 0–1 = fraction of the 30s cooldown window already elapsed */
+  cooldownProgress01: number;
+  /** True briefly after a click that did not start a fetch (rate limited) */
+  lastInteractionWasThrottled: boolean;
 }
 
 /**
@@ -49,27 +67,77 @@ export const useRateLimitedRefresh = ({
   clearGlobalError,
   setGlobalError,
 }: UseRateLimitedRefreshOptions): UseRateLimitedRefreshResult => {
-  // Local state for controlling refresh animation independently from actual fetch
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const lastRefreshTimestampRef = useRef<number>(0);
+  const [lastAllowedRefreshAt, setLastAllowedRefreshAt] = useState(0);
+  const lastAllowedRefreshAtRef = useRef(0);
+  const [tickNow, setTickNow] = useState(() => Date.now());
+  const [lastInteractionWasThrottled, setLastInteractionWasThrottled] = useState(false);
+  const [fetchCompleteFlash, setFetchCompleteFlash] = useState(false);
+  const [lastFetchDurationMs, setLastFetchDurationMs] = useState(0);
 
-  const now = Date.now();
-  const timeSinceLastRefresh = now - lastRefreshTimestampRef.current;
+  const fetchStartedAtRef = useRef<number>(0);
+  const prevManualFetchPendingRef = useRef(false);
+
+  const manualFetchInProgress =
+    refreshPRsMutation.isPending ||
+    refreshMergedPRsMutation.isPending ||
+    refreshAuthoredPRsMutation.isPending;
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTickNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (manualFetchInProgress) {
+      if (!prevManualFetchPendingRef.current) {
+        fetchStartedAtRef.current = Date.now();
+      }
+      prevManualFetchPendingRef.current = true;
+    } else {
+      if (prevManualFetchPendingRef.current) {
+        const duration = Date.now() - fetchStartedAtRef.current;
+        setLastFetchDurationMs(duration);
+        setFetchCompleteFlash(true);
+        const t = window.setTimeout(() => setFetchCompleteFlash(false), FETCH_COMPLETE_FLASH_MS);
+        prevManualFetchPendingRef.current = false;
+        return () => window.clearTimeout(t);
+      }
+      prevManualFetchPendingRef.current = false;
+    }
+  }, [manualFetchInProgress]);
+
+  const timeSinceLastRefresh = tickNow - lastAllowedRefreshAt;
   const timeRemainingMs = Math.max(0, MIN_REFRESH_INTERVAL_MS - timeSinceLastRefresh);
-  const canRefresh = timeSinceLastRefresh >= MIN_REFRESH_INTERVAL_MS;
+  const canRefresh = lastAllowedRefreshAt === 0 || timeSinceLastRefresh >= MIN_REFRESH_INTERVAL_MS;
+
+  const cooldownProgress01 =
+    lastAllowedRefreshAt === 0
+      ? 0
+      : Math.min(1, Math.max(0, timeSinceLastRefresh / MIN_REFRESH_INTERVAL_MS));
+
+  let fetchProgress01 = 0;
+  let fetchElapsedSeconds = 0;
+  if (manualFetchInProgress && fetchStartedAtRef.current > 0) {
+    const elapsed = tickNow - fetchStartedAtRef.current;
+    fetchElapsedSeconds = elapsed / 1000;
+    fetchProgress01 = Math.min(0.94, elapsed / FETCH_RING_ESTIMATED_MAX_MS);
+  } else if (fetchCompleteFlash) {
+    fetchProgress01 = 1;
+  }
 
   const handleRefresh = useCallback(async () => {
     clearGlobalError();
 
-    // Always trigger the animation for UX feedback
     setIsRefreshing(true);
 
     const currentTime = Date.now();
-    const timeSinceLast = currentTime - lastRefreshTimestampRef.current;
+    const timeSinceLast = currentTime - lastAllowedRefreshAtRef.current;
 
-    // Only perform actual fetch if enough time has passed (30 seconds)
     if (timeSinceLast >= MIN_REFRESH_INTERVAL_MS) {
-      lastRefreshTimestampRef.current = currentTime;
+      setLastInteractionWasThrottled(false);
+      lastAllowedRefreshAtRef.current = currentTime;
+      setLastAllowedRefreshAt(currentTime);
       try {
         await Promise.all([
           refreshPRsMutation.mutateAsync(),
@@ -80,11 +148,12 @@ export const useRateLimitedRefresh = ({
         const errorMessage = err instanceof Error ? err.message : 'Failed to refresh PRs';
         setGlobalError(errorMessage);
       }
+    } else {
+      setLastInteractionWasThrottled(true);
+      window.setTimeout(() => setLastInteractionWasThrottled(false), THROTTLED_FLASH_MS);
     }
 
-    // Keep animation running briefly then turn it off
-    // If we're actually fetching, this will be extended by the mutation pending state
-    setTimeout(() => {
+    window.setTimeout(() => {
       setIsRefreshing(false);
     }, 1000);
   }, [
@@ -95,7 +164,6 @@ export const useRateLimitedRefresh = ({
     setGlobalError,
   ]);
 
-  // Combined loading state - true if animation is running or any mutation is pending
   const isAnyLoading =
     isRefreshing ||
     refreshPRsMutation.isPending ||
@@ -111,5 +179,11 @@ export const useRateLimitedRefresh = ({
     handleRefresh,
     timeRemainingMs,
     canRefresh,
+    manualFetchInProgress,
+    fetchProgress01,
+    fetchElapsedSeconds,
+    lastFetchDurationMs,
+    cooldownProgress01,
+    lastInteractionWasThrottled,
   };
 };

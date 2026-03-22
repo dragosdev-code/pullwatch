@@ -38,7 +38,17 @@ export const Header = ({ prCount }: HeaderProps) => {
     }
   };
 
-  const { isAnyLoading, handleRefresh } = useRateLimitedRefresh({
+  const {
+    handleRefresh,
+    manualFetchInProgress,
+    fetchProgress01,
+    fetchElapsedSeconds,
+    cooldownProgress01,
+    timeRemainingMs,
+    canRefresh,
+    lastInteractionWasThrottled,
+    lastFetchDurationMs,
+  } = useRateLimitedRefresh({
     refreshPRsMutation,
     refreshMergedPRsMutation,
     refreshAuthoredPRsMutation,
@@ -84,7 +94,17 @@ export const Header = ({ prCount }: HeaderProps) => {
         />
       </div>
 
-      <RefreshButton isLoading={isAnyLoading} onRefresh={handleRefresh} />
+      <RefreshButton
+        manualFetchInProgress={manualFetchInProgress}
+        onRefresh={handleRefresh}
+        fetchProgress01={fetchProgress01}
+        fetchElapsedSeconds={fetchElapsedSeconds}
+        cooldownProgress01={cooldownProgress01}
+        timeRemainingMs={timeRemainingMs}
+        canRefresh={canRefresh}
+        lastInteractionWasThrottled={lastInteractionWasThrottled}
+        lastFetchDurationMs={lastFetchDurationMs}
+      />
     </div>
   );
 };
