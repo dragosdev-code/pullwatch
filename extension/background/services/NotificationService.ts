@@ -131,6 +131,9 @@ export class NotificationService implements INotificationService {
           : `New PR Review Request (${prs.indexOf(pr) + 1}/${prs.length})`;
 
       const notificationId = `pr-${category}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const authors = pr.author;
+      const primaryLogin = authors[0]?.login ?? 'Unknown Author';
+      const contextSuffix = authors.length > 1 ? ` +${authors.length - 1}` : '';
 
       await this.createNotification(
         {
@@ -138,7 +141,7 @@ export class NotificationService implements INotificationService {
           iconUrl: localIconUrl,
           title,
           message: pr.title,
-          contextMessage: `${pr.repoName} by ${pr.author.login}`,
+          contextMessage: `${pr.repoName} by ${primaryLogin}${contextSuffix}`,
           requireInteraction: false,
           silent: true,
           priority: 2,

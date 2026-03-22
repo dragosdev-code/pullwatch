@@ -6,8 +6,8 @@ import type { IService } from './IService';
  */
 export interface IAvatarService extends IService {
   /**
-   * Enriches an array of PRs with base64-encoded author avatar data URLs.
-   * Deduplicates by author login and fetches all unique avatars in parallel.
+   * Enriches PR rows with base64 avatar data URLs, keyed by login across every
+   * person in each PR’s `author` array; deduplicates fetches globally.
    */
   enrichPRsWithAvatars(prs: PullRequest[]): Promise<PullRequest[]>;
 }

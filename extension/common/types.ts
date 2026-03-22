@@ -42,6 +42,12 @@ export interface AuthoredSettings {
   sound: NotificationSound;
 }
 
+/** Person shown on a PR row (assignees from AvatarStack when present; else opener heuristics). */
+export interface PullRequestAuthor {
+  login: string;
+  avatarUrl?: string;
+}
+
 // Represents the structure of a Pull Request
 export interface PullRequest {
   id: string; // Unique identifier, could be the URL or a combination of repo and number
@@ -49,10 +55,8 @@ export interface PullRequest {
   title: string;
   number: number | null;
   repoName: string;
-  author: {
-    login: string;
-    avatarUrl?: string;
-  };
+  /** Assignee stack when GitHub renders AvatarStack (“Assigned to …”); otherwise one opener-derived entry. */
+  author: PullRequestAuthor[];
   createdAt?: string; // ISO date string
   updatedAt?: string; // ISO date string
   labels?: string[];

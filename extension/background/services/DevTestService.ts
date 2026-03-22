@@ -188,7 +188,7 @@ export class DevTestService implements IDevTestService {
       title: 'Test PR: This is a Test Notification',
       number: 0,
       repoName: 'test/repo',
-      author: { login: 'test-author' },
+      author: [{ login: 'test-author' }],
       createdAt: new Date().toISOString(),
       isNew: true,
       type: 'open',

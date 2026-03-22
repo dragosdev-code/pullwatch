@@ -5,6 +5,7 @@ import clsx from 'clsx';
 import type { PullRequest } from '../../extension/common/types';
 import { useLinkBehavior } from '../hooks/use-link-behavior';
 import { PRStatusIcon } from './ui/pr-status-icon';
+import { PrAuthorRow } from './ui/pr-author-row';
 import { StatusBadge } from './ui/status-badge';
 import { CheckIcon, RepoIcon } from './ui/icons';
 
@@ -89,8 +90,6 @@ export const PRItem = ({
       return 'Unknown date';
     }
   };
-
-  const avatarInitial = pr.author.login.charAt(0).toUpperCase();
 
   return (
     <animated.a
@@ -187,33 +186,10 @@ export const PRItem = ({
         )}
       </div>
 
-      {/* Row 3: author avatar + name (left) + timestamp (right) */}
+      {/* Row 3: author(s) avatar stack + names (left) + timestamp (right) */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          {pr.author.avatarUrl ? (
-            <img
-              src={pr.author.avatarUrl}
-              alt={pr.author.login}
-              className="w-4 h-4 rounded-full object-cover shrink-0"
-            />
-          ) : (
-            <span
-              className={clsx(
-                'w-4 h-4 rounded-full shrink-0 inline-flex items-center justify-center text-[9px] font-bold bg-base-300',
-                isReviewed ? 'text-base-content/40' : 'text-base-content/60'
-              )}
-            >
-              {avatarInitial}
-            </span>
-          )}
-          <span
-            className={clsx(
-              'text-xs truncate ml-[2.5px]',
-              isReviewed ? 'text-base-content/40' : 'text-base-content/60'
-            )}
-          >
-            {pr.author.login}
-          </span>
+        <div className="min-w-0 flex-1 mr-1">
+          <PrAuthorRow authors={pr.author} isReviewed={isReviewed} isFirst={isFirst} />
         </div>
         <span
           className={clsx(

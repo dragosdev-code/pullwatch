@@ -23,9 +23,9 @@ export class AvatarService implements IAvatarService {
   }
 
   async enrichPRsWithAvatars(prs: PullRequest[]): Promise<PullRequest[]> {
-    const uniqueLogins = [...new Set(prs.map((pr) => pr.author.login))].filter(
-      (login) => login !== 'Unknown Author'
-    );
+    const uniqueLogins = [
+      ...new Set(prs.flatMap((pr) => pr.author.map((a) => a.login))),
+    ].filter((login) => login !== 'Unknown Author');
 
     const avatarEntries = await Promise.all(
       uniqueLogins.map(async (login) => {
@@ -39,12 +39,13 @@ export class AvatarService implements IAvatarService {
     );
 
     return prs.map((pr) => {
-      const avatarUrl = avatarMap.get(pr.author.login);
-      if (!avatarUrl) return pr;
-      return {
-        ...pr,
-        author: { ...pr.author, avatarUrl },
-      };
+      const nextAuthor = pr.author.map((a) => {
+        const fetched = avatarMap.get(a.login);
+        return fetched ? { ...a, avatarUrl: fetched } : a;
+      });
+      const changed = nextAuthor.some((a, i) => a.avatarUrl !== pr.author[i]?.avatarUrl);
+      if (!changed) return pr;
+      return { ...pr, author: nextAuthor };
     });
   }
 
