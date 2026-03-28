@@ -14,8 +14,9 @@ import {
   GITHUB_AUTHORED_DRAFT_URL_TEMPLATE,
   USER_AGENT,
   REQUEST_DELAY_MS,
+  GITHUB_FETCH_TIMEOUT_MS,
 } from '../../common/constants';
-import { RateLimitError } from '../../common/errors';
+import { RateLimitError, ParserBreakageError } from '../../common/errors';
 import { GitHubHTMLParser } from './GitHubHTMLParser';
 
 /**
@@ -72,49 +73,60 @@ export class GitHubService implements IGitHubService {
 
   /**
    * Shared GitHub fetch pipeline that retrieves and transforms HTML responses.
+   * Uses an AbortController to guarantee the request settles within
+   * {@link GITHUB_FETCH_TIMEOUT_MS}, preventing permanent deadlocks in
+   * PRService's deduplication locks when GitHub hangs.
    */
   private async fetchGitHubData<T>(
     url: string,
     context: string,
     transform: (html: string) => T | Promise<T>
   ): Promise<T> {
-    const response = await fetch(url, {
-      credentials: 'include',
-      headers: this.githubFetchHeaders,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GITHUB_FETCH_TIMEOUT_MS);
 
-    this.debugService.log(
-      `[GitHubService] ${context} response status:`,
-      response.status,
-      response.statusText
-    );
-    this.debugService.log(`[GitHubService] ${context} response URL:`, response.url);
+    try {
+      const response = await fetch(url, {
+        credentials: 'include',
+        headers: this.githubFetchHeaders,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error('AuthenticationError: Not logged in or insufficient permissions on GitHub.');
+      this.debugService.log(
+        `[GitHubService] ${context} response status:`,
+        response.status,
+        response.statusText
+      );
+      this.debugService.log(`[GitHubService] ${context} response URL:`, response.url);
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('AuthenticationError: Not logged in or insufficient permissions on GitHub.');
+        }
+        if (response.status === 429) {
+          const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+          throw new RateLimitError(context, retryAfter);
+        }
+        throw new Error(`GitHub ${context} request failed: ${response.status}`);
       }
-      if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
-        throw new RateLimitError(context, retryAfter);
+
+      const html = await response.text();
+      const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
+      const isLoginPage =
+        pageTitle.includes('Sign in to GitHub') ||
+        html.includes('name="login"') ||
+        response.url.includes('/login') ||
+        html.includes('action="/session"') ||
+        html.includes('class="auth-form"');
+
+      if (isLoginPage) {
+        throw new Error('NotLoggedIn: User is not logged in to GitHub.');
       }
-      throw new Error(`GitHub ${context} request failed: ${response.status}`);
+
+      return await transform(html);
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const html = await response.text();
-    const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
-    const isLoginPage =
-      pageTitle.includes('Sign in to GitHub') ||
-      html.includes('name="login"') ||
-      response.url.includes('/login') ||
-      html.includes('action="/session"') ||
-      html.includes('class="auth-form"');
-
-    if (isLoginPage) {
-      throw new Error('NotLoggedIn: User is not logged in to GitHub.');
-    }
-
-    return await transform(html);
   }
 
   /**
@@ -136,6 +148,7 @@ export class GitHubService implements IGitHubService {
       return await this.fetchPRs(this.mergedPRsURL, 'merged PR fetch');
     } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
+      if (error instanceof ParserBreakageError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchMergedPRs:',
         error instanceof Error ? error.message : error
@@ -157,6 +170,7 @@ export class GitHubService implements IGitHubService {
       return await this.fetchPRs(this.reviewRequestsURL, 'assigned PR fetch');
     } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
+      if (error instanceof ParserBreakageError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchAssignedPRs:',
         error instanceof Error ? error.message : error
@@ -185,6 +199,7 @@ export class GitHubService implements IGitHubService {
       return await this.fetchPRs(this.reviewedPRsURL, 'reviewed PR fetch');
     } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
+      if (error instanceof ParserBreakageError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchReviewedPRs:',
         error instanceof Error ? error.message : error
@@ -241,6 +256,7 @@ export class GitHubService implements IGitHubService {
       return allAuthoredPRs;
     } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
+      if (error instanceof ParserBreakageError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchAuthoredPRs:',
         error instanceof Error ? error.message : error
@@ -277,6 +293,7 @@ export class GitHubService implements IGitHubService {
       }));
     } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
+      if (error instanceof ParserBreakageError) throw error;
 
       this.debugService.error(
         `[GitHubService] Error fetching ${authorReviewStatus} PRs:`,

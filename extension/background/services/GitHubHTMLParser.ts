@@ -1,4 +1,5 @@
 import type { PullRequest, PullRequestAuthor } from '../../common/types';
+import { ParserBreakageError } from '../../common/errors';
 
 /**
  * Pure static utility for parsing GitHub PR listing pages via regex.
@@ -6,11 +7,42 @@ import type { PullRequest, PullRequestAuthor } from '../../common/types';
  */
 export class GitHubHTMLParser {
   /**
+   * Returns `true` when the HTML looks like a valid GitHub search-results
+   * page — even if that page contains zero results (e.g. the user genuinely
+   * has no PRs). Checks for structural markers that GitHub renders on every
+   * search/pulls listing regardless of result count.
+   */
+  private static isRecognizedGitHubPage(html: string): boolean {
+    // PR content (page has actual results)
+    if (/\/pull\/\d+/.test(html)) return true;
+    // Known PR-row selectors (container present even if we failed to extract rows)
+    if (/js-issue-row|Box-row|issue-list-item|data-hovercard-type="pull_request"/i.test(html)) return true;
+    // GitHub's empty-state component shown when a search yields 0 results
+    if (/class="[^"]*blankslate/i.test(html)) return true;
+    // "No results matched your search" text
+    if (/No results matched/i.test(html)) return true;
+    return false;
+  }
+
+  /**
    * Parses a GitHub search-results HTML page and returns an array of PRs.
    * @param html  Raw HTML string from a GitHub PR listing page.
    * @param baseURL  GitHub base URL used to make relative PR links absolute.
+   * @throws {ParserBreakageError} when the HTML is not recognizable as a
+   *         GitHub page at all (likely a redesign or an unexpected error page).
    */
   static parseFromHTML(html: string, baseURL: string): PullRequest[] {
+    // If the HTML has no /pull/ links, decide whether the page is a
+    // recognized-but-empty GitHub page or an unrecognizable page.
+    if (!/\/pull\/\d+/.test(html)) {
+      if (GitHubHTMLParser.isRecognizedGitHubPage(html)) {
+        // Valid GitHub page with genuinely 0 results — return empty normally.
+        return [];
+      }
+      // Page is not recognizable — signal parser breakage.
+      throw new ParserBreakageError('parseFromHTML');
+    }
+
     const prs: PullRequest[] = [];
 
     const prSelectors = [

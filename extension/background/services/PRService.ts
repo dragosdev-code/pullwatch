@@ -13,7 +13,7 @@ import {
   STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_MERGED_PRS,
 } from '../../common/constants';
-import { RateLimitError } from '../../common/errors';
+import { RateLimitError, ParserBreakageError } from '../../common/errors';
 
 /**
  * PRService handles pull request management and coordination between services.
@@ -103,12 +103,12 @@ export class PRService implements IPRService {
       `[PRService] Fetching and updating assigned PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`
     );
 
+    const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_ASSIGNED_PRS);
+    const oldPRs = storedData?.prs || [];
+
     try {
       const cached = await this.checkAssignedCache(forceRefresh, bypassCache);
       if (cached) return cached;
-
-      const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_ASSIGNED_PRS);
-      const oldPRs = storedData?.prs || [];
       const oldPendingPRs = oldPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
 
       const freshPendingPRsRaw = await this.gitHubService.fetchAssignedPRs();
@@ -125,6 +125,13 @@ export class PRService implements IPRService {
       this.debugService.log(`[PRService] Successfully updated ${allPRs.length} PRs`);
       return allPRs;
     } catch (error) {
+      if (error instanceof ParserBreakageError) {
+        this.debugService.warn(
+          `[PRService] ${error.message} — preserving ${oldPRs.length} stored assigned PRs.`
+        );
+        await this.badgeService.setErrorBadge();
+        return oldPRs;
+      }
       if (error instanceof RateLimitError) {
         this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
       }
@@ -310,8 +317,10 @@ export class PRService implements IPRService {
   private async doUpdateAuthoredPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
     this.debugService.log(`[PRService] Updating authored PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`);
 
+    const stored = await this.storageService.getStoredPRs(STORAGE_KEY_AUTHORED_PRS);
+    const oldPRs = stored?.prs || [];
+
     try {
-      const stored = await this.storageService.getStoredPRs(STORAGE_KEY_AUTHORED_PRS);
       const isCacheValid =
         stored && stored.timestamp && Date.now() - stored.timestamp < CACHE_TTL_MS;
 
@@ -333,6 +342,12 @@ export class PRService implements IPRService {
       );
       return freshAuthoredPRs;
     } catch (error) {
+      if (error instanceof ParserBreakageError) {
+        this.debugService.warn(
+          `[PRService] ${error.message} — preserving ${oldPRs.length} stored authored PRs.`
+        );
+        return oldPRs;
+      }
       if (error instanceof RateLimitError) {
         this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
       }
@@ -382,9 +397,10 @@ export class PRService implements IPRService {
   private async doUpdateMergedPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
     this.debugService.log(`[PRService] Updating merged PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`);
 
-    try {
-      const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_MERGED_PRS);
+    const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_MERGED_PRS);
+    const oldPRs = storedData?.prs || [];
 
+    try {
       const isCacheValid =
         storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
 
@@ -393,7 +409,6 @@ export class PRService implements IPRService {
         return storedData.prs;
       }
 
-      const oldPRs = storedData?.prs || [];
       this.debugService.log(`[PRService] Current stored merged PRs count: ${oldPRs.length}`);
 
       const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
@@ -422,6 +437,12 @@ export class PRService implements IPRService {
       this.debugService.log(`[PRService] Successfully updated ${mergedPRsWithStatus.length} merged PRs`);
       return mergedPRsWithStatus;
     } catch (error) {
+      if (error instanceof ParserBreakageError) {
+        this.debugService.warn(
+          `[PRService] ${error.message} — preserving ${oldPRs.length} stored merged PRs.`
+        );
+        return oldPRs;
+      }
       if (error instanceof RateLimitError) {
         this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
       }
