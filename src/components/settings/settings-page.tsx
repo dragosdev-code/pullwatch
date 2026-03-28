@@ -132,12 +132,12 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 flex flex-col gap-5">
-          {/* Assigned PRs */}
-          <SettingsSection title="Assigned PRs">
+          {/* To Review PRs */}
+          <SettingsSection title="To Review PRs">
             <ToggleField
               name="assigned.notificationsEnabled"
               label="Enable notifications"
-              description="Receive alerts for new PRs assigned to you."
+              description="Receive alerts for new PRs to review."
             />
 
             {/* Sub-group: only active when notifications are enabled */}
@@ -154,7 +154,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
               <ToggleField
                 name="assigned.showDraftsInList"
                 label="Show drafts in list"
-                description="Display draft PRs in the assigned PRs list."
+                description="Display draft PRs in the To Review list."
               />
             </div>
           </SettingsSection>

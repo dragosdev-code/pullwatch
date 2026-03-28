@@ -32,7 +32,7 @@ export const AssignedList = ({
   if (prs.length === 0) {
     return (
       <PRListEmptyState
-        message="No PRs assigned to you for review"
+        message="No PRs to review"
         subMessage="PRs requesting your review will appear here"
         hasEverLoaded={hasEverLoaded}
       />
