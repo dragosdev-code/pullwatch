@@ -83,10 +83,14 @@ export const useRateLimitedRefresh = ({
     refreshMergedPRsMutation.isPending ||
     refreshAuthoredPRsMutation.isPending;
 
+  // Only tick while a cooldown countdown or fetch-progress animation is active.
+  // When idle (no refresh triggered yet), the interval never starts — zero re-renders.
+  const needsTick = lastAllowedRefreshAt > 0 || manualFetchInProgress;
   useEffect(() => {
+    if (!needsTick) return;
     const id = window.setInterval(() => setTickNow(Date.now()), 250);
     return () => window.clearInterval(id);
-  }, []);
+  }, [needsTick]);
 
   useEffect(() => {
     if (manualFetchInProgress) {

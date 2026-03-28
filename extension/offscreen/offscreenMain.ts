@@ -13,6 +13,24 @@ interface WindowWithLegacyAudio extends Window {
   webkitAudioContext?: typeof AudioContext;
 }
 
+// Singleton AudioContext — reused across playbacks to avoid leaking native audio
+// resources. Chrome caps concurrent AudioContexts at ~6 per origin; creating one
+// per notification would exhaust the limit under rapid-fire scenarios.
+let sharedAudioContext: AudioContext | null = null;
+
+function getOrCreateAudioContext(): AudioContext {
+  if (sharedAudioContext && sharedAudioContext.state !== 'closed') {
+    return sharedAudioContext;
+  }
+  const globalWin = window as WindowWithLegacyAudio;
+  const Ctor = window.AudioContext || globalWin.webkitAudioContext;
+  if (!Ctor) {
+    throw new Error('AudioContext is not supported in this environment');
+  }
+  sharedAudioContext = new Ctor();
+  return sharedAudioContext;
+}
+
 /**
  * Calculates total playback duration for a sound preset in milliseconds.
  */
@@ -77,14 +95,7 @@ async function handlePlayNotificationSound(soundType: NotificationSound = 'ping'
 
     debugLog(`Attempting to play notification sound in offscreen document: ${soundType}`);
 
-    const globalWin = window as WindowWithLegacyAudio;
-    const AudioContextConstructor = window.AudioContext || globalWin.webkitAudioContext;
-
-    if (!AudioContextConstructor) {
-      debugError('AudioContext is not supported in this environment.');
-      return;
-    }
-    const audioContext = new AudioContextConstructor();
+    const audioContext = getOrCreateAudioContext();
     debugLog('Offscreen AudioContext state:', audioContext.state);
 
     if (audioContext.state === 'suspended') {
@@ -95,9 +106,6 @@ async function handlePlayNotificationSound(soundType: NotificationSound = 'ping'
 
     const durationMs = playNotificationSound(audioContext, soundType);
 
-    // Wait for the sound to finish before resolving.
-    // This keeps the sendResponse channel open, which in turn keeps the
-    // service worker alive until playback is complete.
     if (durationMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, durationMs));
       debugLog(`Offscreen sound playback completed: ${soundType}`);

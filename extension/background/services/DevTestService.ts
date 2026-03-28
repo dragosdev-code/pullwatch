@@ -118,6 +118,10 @@ export class DevTestService implements IDevTestService {
     }, safeInterval);
 
     this.debugService.log(`[DevTestService] Notification loop started — interval=${safeInterval}ms`);
+    this.debugService.warn(
+      '[DevTestService] Loop uses setInterval which is best-effort in MV3 — ' +
+      'it will silently stop if the service worker goes idle (~30s of inactivity).'
+    );
     return this.getLooperState();
   }
 

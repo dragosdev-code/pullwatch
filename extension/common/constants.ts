@@ -21,6 +21,9 @@ export const CACHE_TTL_MS = 60 * 1000; // 1 minute
 // Minimum time between manual refreshes to prevent rate limiting (30 seconds)
 export const MIN_REFRESH_INTERVAL_MS = 30 * 1000; // 30 seconds
 
+// GitHub fetch timeout — guarantees deduplication locks in PRService clear even if GitHub hangs
+export const GITHUB_FETCH_TIMEOUT_MS = 30_000;
+
 // Rate Limit
 export const STORAGE_KEY_RATE_LIMIT = 'rate_limit_state';
 export const RATE_LIMIT_MAX_BACKOFF_MS = 30 * 60 * 1000; // 30 minutes
