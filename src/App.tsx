@@ -42,10 +42,8 @@ const App = () => {
     [assignedPRs]
   );
 
-  const { assignedNewPrIds, mergedNewPrIds, markViewedIds, markViewedId } = usePrEntranceViewedState(
-    assignedPRs,
-    mergedPRs
-  );
+  const { assignedNewPrIds, mergedNewPrIds, markViewedIds, markViewedId } =
+    usePrEntranceViewedState(assignedPRs, mergedPRs);
 
   const tabs: Tab[] = useMemo(
     () => [

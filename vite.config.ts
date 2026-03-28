@@ -1,7 +1,9 @@
+/// <reference types="vitest/config" />
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 
 // https://vitejs.dev/config/
@@ -27,6 +29,12 @@ export default defineConfig(({ mode }) => {
           //   dest: ''
           // }
         ],
+      }),
+      mode === 'analyze' && visualizer({
+        filename: 'dist/stats.html',
+        gzipSize: true,
+        brotliSize: true,
+        template: 'treemap',
       }),
     ],
     resolve: {
@@ -63,12 +71,8 @@ export default defineConfig(({ mode }) => {
 
         // EXPLICIT MODULE HANDLING: No side effects, strict tree-shaking
         treeshake: {
-          // Enable aggressive tree-shaking
-          moduleSideEffects: false, // CRITICAL: No auto-executing code
-          // Only include explicitly imported/exported code
+          moduleSideEffects: false,
           propertyReadSideEffects: false,
-          // Remove unused exports
-          tryCatchDeoptimization: false,
         },
 
         output: {
@@ -114,6 +118,11 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       // Exclude extension-specific modules from dependency optimization
       exclude: ['@extension', '@common', '@background', '@offscreen', '@debug'],
+    },
+    test: {
+      globals: true,
+      environment: 'happy-dom',
+      include: ['src/**/*.{test,spec}.{ts,tsx}'],
     },
   };
 });
