@@ -284,8 +284,8 @@ export class GitHubHTMLParser {
     if (/aria-label="[^"]*Open Pull Request[^"]*"/i.test(html)) return 'open';
     if (/aria-label="[^"]*Merged Pull Request[^"]*"/i.test(html)) return 'merged';
 
-    // Fallback: SVG class names or textual badges
-    if (/octicon-git-pull-request-draft/i.test(html) || /(^|[^a-z])Draft([^a-z]|$)/i.test(html)) {
+    // Secondary: visual icon detection
+    if (/octicon-git-pull-request-draft/i.test(html) || /color-fg-draft/i.test(html)) {
       return 'draft';
     }
     if (/octicon-git-pull-request(?!-)/i.test(html) || /color-fg-open/i.test(html)) {
@@ -293,6 +293,7 @@ export class GitHubHTMLParser {
     }
     if (/octicon-git-merge/i.test(html)) return 'merged';
 
+    // Default fallback
     return 'open';
   }
 }

@@ -57,9 +57,19 @@ export class NotificationService implements INotificationService {
         ? prsArray
         : prsArray.filter((pr) => pr.type !== 'draft');
 
+      if (!settings.assigned.notifyOnDrafts) {
+        const skippedDrafts = prsArray.filter((pr) => pr.type === 'draft');
+        if (skippedDrafts.length > 0) {
+          this.debugService.log(
+            `[NotificationService] Skipped ${skippedDrafts.length} draft PR(s) (notifyOnDrafts=false):`,
+            skippedDrafts.map((pr) => `${pr.title} (${pr.url})`)
+          );
+        }
+      }
+
       if (filteredPRs.length === 0) {
         this.debugService.log(
-          '[NotificationService] All PRs are drafts and notifyOnDrafts is disabled, skipping'
+          '[NotificationService] All new PRs are drafts and notifyOnDrafts is disabled, skipping notifications'
         );
         return;
       }
