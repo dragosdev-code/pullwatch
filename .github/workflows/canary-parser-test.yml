@@ -26,7 +26,7 @@ jobs:
           cache: npm
 
       - name: Install npm dependencies
-        run: npm ci
+        run: npm install
 
       # ── Playwright browser caching ──────────────────────────────
       - name: Get Playwright version
