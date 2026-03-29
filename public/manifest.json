@@ -10,7 +10,7 @@
     "default_popup": "index.html"
   },
   "permissions": ["storage", "notifications", "alarms", "offscreen"],
-  "host_permissions": ["https://github.com/*", "https://avatars.githubusercontent.com/*"],
+  "host_permissions": ["https://github.com/*", "https://avatars.githubusercontent.com/*", "https://dragosdev-code.github.io/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

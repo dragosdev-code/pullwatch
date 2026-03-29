@@ -138,8 +138,11 @@ export class GitHubService implements IGitHubService {
 
   /**
    * Fetches a GitHub PR listing page and returns parsed + avatar-enriched PRs.
+   * Kicks off a non-blocking pattern refresh so the next cycle benefits from
+   * any remote config updates.
    */
   private async fetchPRs(url: string, context: string): Promise<PullRequest[]> {
+    this.patternRegistryService.refreshIfStale().catch(() => {});
     return this.fetchGitHubData(url, context, async (html) => {
       const prs = GitHubHTMLParser.parseFromHTML(html, this.baseURL, this.patternRegistryService.getPatterns());
       return this.avatarService.enrichPRsWithAvatars(prs);

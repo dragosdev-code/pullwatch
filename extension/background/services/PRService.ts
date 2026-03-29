@@ -12,7 +12,9 @@ import {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_MERGED_PRS,
+  STORAGE_KEY_PARSER_BREAKAGE,
 } from '../../common/constants';
+import { BROADCAST_ACTION } from '../../common/runtime-actions';
 import { RateLimitError, ParserBreakageError } from '../../common/errors';
 
 /**
@@ -27,6 +29,7 @@ export class PRService implements IPRService {
   private badgeService: IBadgeService;
   private rateLimitService: IRateLimitService;
   private initialized = false;
+  private parserBroken = false;
   private assignedFetchInProgress: Promise<PullRequest[]> | null = null;
   private assignedFetchOpts: { forceRefresh: boolean; bypassCache: boolean } | null = null;
   private mergedFetchInProgress: Promise<PullRequest[]> | null = null;
@@ -51,6 +54,8 @@ export class PRService implements IPRService {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
+    const stored = await chrome.storage.local.get(STORAGE_KEY_PARSER_BREAKAGE);
+    this.parserBroken = !!stored[STORAGE_KEY_PARSER_BREAKAGE];
     this.initialized = true;
     this.debugService.log('[PRService] PR service initialized');
   }
@@ -122,6 +127,7 @@ export class PRService implements IPRService {
       await this.persistAndNotifyAssigned(allPRs, filteredPending.length, newPRs, forceRefresh);
 
       this.rateLimitService.recordSuccess();
+      await this.clearParserBreakage();
       this.debugService.log(`[PRService] Successfully updated ${allPRs.length} PRs`);
       return allPRs;
     } catch (error) {
@@ -130,6 +136,7 @@ export class PRService implements IPRService {
           `[PRService] ${error.message} — preserving ${oldPRs.length} stored assigned PRs.`
         );
         await this.badgeService.setErrorBadge();
+        await this.signalParserBreakage(error.message);
         return oldPRs;
       }
       if (error instanceof RateLimitError) {
@@ -337,6 +344,7 @@ export class PRService implements IPRService {
       await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, freshAuthoredPRs);
 
       this.rateLimitService.recordSuccess();
+      await this.clearParserBreakage();
       this.debugService.log(
         `[PRService] Successfully updated ${freshAuthoredPRs.length} authored PRs`
       );
@@ -346,6 +354,7 @@ export class PRService implements IPRService {
         this.debugService.warn(
           `[PRService] ${error.message} — preserving ${oldPRs.length} stored authored PRs.`
         );
+        await this.signalParserBreakage(error.message);
         return oldPRs;
       }
       if (error instanceof RateLimitError) {
@@ -434,6 +443,7 @@ export class PRService implements IPRService {
       }
 
       this.rateLimitService.recordSuccess();
+      await this.clearParserBreakage();
       this.debugService.log(`[PRService] Successfully updated ${mergedPRsWithStatus.length} merged PRs`);
       return mergedPRsWithStatus;
     } catch (error) {
@@ -441,6 +451,7 @@ export class PRService implements IPRService {
         this.debugService.warn(
           `[PRService] ${error.message} — preserving ${oldPRs.length} stored merged PRs.`
         );
+        await this.signalParserBreakage(error.message);
         return oldPRs;
       }
       if (error instanceof RateLimitError) {
@@ -449,6 +460,27 @@ export class PRService implements IPRService {
       this.debugService.error('[PRService] Error updating merged PRs:', error);
       throw error;
     }
+  }
+
+  private async signalParserBreakage(context: string): Promise<void> {
+    if (this.parserBroken) return;
+    this.parserBroken = true;
+    const payload = { detected: true, timestamp: Date.now(), context };
+    await chrome.storage.local.set({ [STORAGE_KEY_PARSER_BREAKAGE]: payload });
+    chrome.runtime.sendMessage({
+      action: BROADCAST_ACTION.parserBreakageDetected,
+      data: payload,
+    }).catch(() => {});
+  }
+
+  private async clearParserBreakage(): Promise<void> {
+    if (!this.parserBroken) return;
+    this.parserBroken = false;
+    await chrome.storage.local.remove(STORAGE_KEY_PARSER_BREAKAGE);
+    chrome.runtime.sendMessage({
+      action: BROADCAST_ACTION.parserBreakageCleared,
+      data: null,
+    }).catch(() => {});
   }
 
   private delay(ms: number): Promise<void> {

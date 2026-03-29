@@ -47,6 +47,8 @@ export const BROADCAST_ACTION = {
   mergedPrDataUpdated: 'mergedPrDataUpdated',
   authoredPrDataUpdated: 'authoredPrDataUpdated',
   settingsUpdated: 'settingsUpdated',
+  parserBreakageDetected: 'parserBreakageDetected',
+  parserBreakageCleared: 'parserBreakageCleared',
 } as const;
 
 export const EVENT_SETTINGS_UPDATED = BROADCAST_ACTION.settingsUpdated;

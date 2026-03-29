@@ -8,6 +8,12 @@ export const STORAGE_KEY_LAST_FETCH = 'last_fetch_time';
 export const STORAGE_KEY_SETTINGS = 'settings'; // As per requirements
 export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
 export const STORAGE_KEY_PATTERN_REGISTRY = 'parser_pattern_registry';
+export const STORAGE_KEY_PARSER_BREAKAGE = 'parser_breakage';
+
+// Remote Pattern Registry
+export const REMOTE_PATTERNS_URL = 'https://dragosdev-code.github.io/pr-live-config/patterns.json';
+export const PATTERN_REFRESH_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+export const REMOTE_FETCH_TIMEOUT_MS = 10_000;
 
 // Fetch Intervals
 export const FETCH_INTERVAL_MINUTES = 3;

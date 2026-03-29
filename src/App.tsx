@@ -16,6 +16,7 @@ import { useStorageSync } from './hooks/use-storage-sync';
 import { useGlobalError, useClearGlobalError } from './stores/global-error';
 import { useDebugMode } from './stores/debug';
 import { SettingsOverlay } from './components/settings/settings-overlay';
+import { ParserBreakageBanner } from './components/parser-breakage-banner';
 import { TAB_IDS } from './constants/tabs';
 
 const App = () => {
@@ -73,6 +74,8 @@ const App = () => {
           </button>
         </div>
       )}
+
+      <ParserBreakageBanner />
 
       {isDebugMode && <DevTestArea />}
 
