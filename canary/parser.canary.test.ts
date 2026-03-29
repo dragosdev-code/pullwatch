@@ -299,16 +299,26 @@ describe.skipIf(!HAS_CREDENTIALS)('Tier 2: Authenticated @me URLs', () => {
       await otpInput.waitFor({ state: 'visible', timeout: 5_000 });
       console.log('  [login] OTP input (#otp) visible — filling code...');
 
-      await otpInput.fill(otpCode);
+      await otpInput.pressSequentially(otpCode, { delay: 100 });
       console.log('  [login] OTP code entered.');
 
-      console.log('  [login] Clicking the "Verify" submit button...');
-      const verifyButton = verifyForm.locator('button[type="submit"].btn-primary');
-      await verifyButton.click();
-      console.log('  [login] Verify button clicked.');
+      console.log('  [login] Waiting for GitHub to process the form...');
 
-      console.log('  [login] Waiting for post-verification navigation...');
-      await page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
+      try {
+        await page.waitForURL((url) => !url.toString().includes('verified-device'), {
+          timeout: 10_000,
+        });
+        console.log('  [login] Navigation completed successfully!');
+      } catch {
+        console.log('  [login] Did not auto-navigate, pressing Enter as fallback...');
+        await Promise.all([
+          page.waitForURL((url) => !url.toString().includes('verified-device'), {
+            timeout: 15_000,
+          }),
+          otpInput.press('Enter'),
+        ]);
+        console.log('  [login] Navigation completed after pressing Enter!');
+      }
 
       const postVerifyUrl = page.url();
       const postVerifyTitle = await page.title();
