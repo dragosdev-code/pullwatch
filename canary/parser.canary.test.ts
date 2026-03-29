@@ -291,19 +291,10 @@ describe.skipIf(!HAS_CREDENTIALS)('Tier 2: Authenticated @me URLs', () => {
       console.log('  [login] OTP input field found — filling code...');
 
       await otpInput.fill(otpCode);
-      console.log('  [login] OTP code entered');
+      console.log('  [login] OTP code entered.');
 
-      // GitHub often auto-submits when all 6 digits are entered,
-      // but click the submit button if it exists as a safety measure.
-      const verifyButton = page.locator(
-        'button[type="submit"], input[type="submit"], button:has-text("Verify")',
-      );
-      if (await verifyButton.isVisible({ timeout: 2_000 }).catch(() => false)) {
-        console.log('  [login] Verify/submit button found — clicking...');
-        await verifyButton.first().click();
-      } else {
-        console.log('  [login] No submit button visible — form likely auto-submitted.');
-      }
+      await otpInput.press('Enter');
+      console.log('  [login] Pressed Enter to submit the verification form.');
 
       console.log('  [login] Waiting for post-verification page to load...');
       await page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
