@@ -255,11 +255,13 @@ describe.skipIf(!HAS_CREDENTIALS)('Tier 2: Authenticated @me URLs', () => {
     console.log(`  [login] Post-login page title: "${postLoginTitle}"`);
     console.log(`  [login] Post-login HTML length: ${postLoginHtml.length} bytes`);
 
-    // Detect device verification / 2FA challenge
+    // Detect device verification challenge.
+    // GitHub renders a form at /sessions/verified-device with an #otp input
+    // and a heading "Device verification" inside .auth-form-header.
     const isDeviceVerification =
       postLoginUrl.includes('/sessions/') ||
       postLoginUrl.includes('/two-factor') ||
-      postLoginHtml.includes('Verify your account') ||
+      postLoginHtml.includes('id="device-verification-prompt"') ||
       postLoginHtml.includes('Device verification') ||
       postLoginHtml.includes('Two-factor authentication');
 
@@ -285,18 +287,27 @@ describe.skipIf(!HAS_CREDENTIALS)('Tier 2: Authenticated @me URLs', () => {
       const otpCode = await getGitHubVerificationCode();
       console.log(`  [login] Received OTP code: ${otpCode}`);
 
-      console.log('  [login] Looking for OTP input field on the page...');
-      const otpInput = page.locator('#otp, input[name="otp"]');
-      await otpInput.waitFor({ state: 'visible', timeout: 10_000 });
-      console.log('  [login] OTP input field found — filling code...');
+      // The verification form lives at form[action="/sessions/verified-device"]
+      // with an <input id="otp" name="otp" inputmode="numeric" pattern="([0-9]{6})|...">
+      // and a <button type="submit" class="btn-primary btn btn-block">Verify</button>
+      console.log('  [login] Waiting for the device verification form...');
+      const verifyForm = page.locator('form[action="/sessions/verified-device"]');
+      await verifyForm.waitFor({ state: 'visible', timeout: 10_000 });
+      console.log('  [login] Verification form found');
+
+      const otpInput = verifyForm.locator('input#otp');
+      await otpInput.waitFor({ state: 'visible', timeout: 5_000 });
+      console.log('  [login] OTP input (#otp) visible — filling code...');
 
       await otpInput.fill(otpCode);
       console.log('  [login] OTP code entered.');
 
-      await otpInput.press('Enter');
-      console.log('  [login] Pressed Enter to submit the verification form.');
+      console.log('  [login] Clicking the "Verify" submit button...');
+      const verifyButton = verifyForm.locator('button[type="submit"].btn-primary');
+      await verifyButton.click();
+      console.log('  [login] Verify button clicked.');
 
-      console.log('  [login] Waiting for post-verification page to load...');
+      console.log('  [login] Waiting for post-verification navigation...');
       await page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
 
       const postVerifyUrl = page.url();
@@ -304,7 +315,7 @@ describe.skipIf(!HAS_CREDENTIALS)('Tier 2: Authenticated @me URLs', () => {
       console.log(`  [login] Post-verification URL: ${postVerifyUrl}`);
       console.log(`  [login] Post-verification page title: "${postVerifyTitle}"`);
 
-      // If we're still stuck on a verification/login page, bail out
+      // If we're still stuck on the verification/login page, bail out
       if (postVerifyUrl.includes('/sessions/') || postVerifyUrl.includes('/login')) {
         console.error(
           '  ✗ [login] Still on verification/login page after OTP submission.\n' +
