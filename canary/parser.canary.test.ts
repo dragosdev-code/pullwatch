@@ -231,172 +231,162 @@ describe.skipIf(!HAS_CREDENTIALS)('Tier 2: Authenticated @me URLs', () => {
     page = await context.newPage();
     console.log('  [pw] New page opened');
 
-    // ── Step A: Try to reuse cached session ──────────────────────────
-    if (hasCachedState) {
-      console.log('  [state] Validating cached session — navigating to https://github.com ...');
-      await page.goto('https://github.com', {
-        waitUntil: 'domcontentloaded',
-        timeout: 30_000,
-      });
+    // ── Validate session via redirect behavior ─────────────────────────
+    // If cookies are valid, GitHub redirects /login → / or /dashboard.
+    // If expired or missing, we stay on /login. No fragile DOM checks.
+    let isCachedLogin = false;
 
-      const currentUrl = page.url();
-      console.log(`  [state] Landed on: ${currentUrl}`);
-
-      const hasLoginField = await page.locator('#login_field').isVisible({ timeout: 2_000 }).catch(() => false);
-      const hasUserNav = await page.locator('[aria-label="Open user navigation menu"]').isVisible({ timeout: 2_000 }).catch(() => false);
-
-      console.log(`  [state] Login field visible: ${hasLoginField}`);
-      console.log(`  [state] User nav menu visible: ${hasUserNav}`);
-
-      if (hasUserNav && !hasLoginField) {
-        loginSucceeded = true;
-        console.log('  ✓ [state] Cached session is VALID — skipping fresh login');
-        console.log('── Tier 2: beforeAll — Using cached session ──\n');
-        return;
-      }
-
-      console.log('  [state] Cached session EXPIRED or INVALID — proceeding with fresh login');
-    }
-
-    // ── Step B: Full login flow (username/password + optional Gmail OTP) ──
-    console.log('  [login] Navigating to https://github.com/login ...');
+    console.log('  [state] Validating session — navigating to https://github.com/login ...');
     await page.goto('https://github.com/login', {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
-    console.log(`  [login] Page loaded — URL: ${page.url()}`);
 
-    console.log('  [login] Waiting for #login_field selector...');
-    await page.waitForSelector('#login_field', { timeout: 10_000 });
-    console.log('  [login] Login form found');
+    if (page.url() !== 'https://github.com/login') {
+      console.log(`  ✓ [state] Cached session VALID — redirected to: ${page.url()}`);
+      isCachedLogin = true;
+      loginSucceeded = true;
+      console.log('── Tier 2: beforeAll — Using cached session ──\n');
+    } else {
+      console.log('  [state] Cached session EXPIRED or missing — on login page');
+    }
 
-    console.log(`  [login] Filling username: ${CANARY_USERNAME}`);
-    await page.fill('#login_field', CANARY_USERNAME);
+    // ── Fresh login flow (only if cache failed) ──────────────────────
+    if (!isCachedLogin) {
+      console.log('  [login] Proceeding with fresh login flow...');
 
-    console.log('  [login] Filling password: ****');
-    await page.fill('#password', CANARY_PASSWORD);
+      console.log('  [login] Waiting for #login_field selector...');
+      await page.waitForSelector('#login_field', { timeout: 10_000 });
+      console.log('  [login] Login form found');
 
-    console.log('  [login] Clicking submit button...');
-    await page.click('input[type="submit"], input[name="commit"]');
+      console.log(`  [login] Filling username: ${CANARY_USERNAME}`);
+      await page.fill('#login_field', CANARY_USERNAME);
 
-    console.log('  [login] Waiting for post-login page to load...');
-    await page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
+      console.log('  [login] Filling password: ****');
+      await page.fill('#password', CANARY_PASSWORD);
 
-    const postLoginUrl = page.url();
-    const postLoginTitle = await page.title();
-    const postLoginHtml = await page.content();
+      console.log('  [login] Clicking submit button...');
+      await page.click('input[type="submit"], input[name="commit"]');
 
-    console.log(`  [login] Post-login URL: ${postLoginUrl}`);
-    console.log(`  [login] Post-login page title: "${postLoginTitle}"`);
-    console.log(`  [login] Post-login HTML length: ${postLoginHtml.length} bytes`);
+      console.log('  [login] Waiting for post-login page to load...');
+      await page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
 
-    // Detect device verification challenge.
-    // GitHub renders a form at /sessions/verified-device with an #otp input
-    // and a heading "Device verification" inside .auth-form-header.
-    const isDeviceVerification =
-      postLoginUrl.includes('/sessions/') ||
-      postLoginUrl.includes('/two-factor') ||
-      postLoginHtml.includes('id="device-verification-prompt"') ||
-      postLoginHtml.includes('Device verification') ||
-      postLoginHtml.includes('Two-factor authentication');
+      const postLoginUrl = page.url();
+      const postLoginTitle = await page.title();
+      const postLoginHtml = await page.content();
 
-    if (isDeviceVerification) {
-      console.log(
-        '\n  ⚠ [login] DEVICE VERIFICATION DETECTED\n' +
-          `    Post-login URL: ${postLoginUrl}\n` +
-          `    Page title: "${postLoginTitle}"`,
-      );
+      console.log(`  [login] Post-login URL: ${postLoginUrl}`);
+      console.log(`  [login] Post-login page title: "${postLoginTitle}"`);
+      console.log(`  [login] Post-login HTML length: ${postLoginHtml.length} bytes`);
 
-      if (!HAS_GMAIL_SECRETS) {
-        console.warn(
-          '  [login] GMAIL secrets not configured — cannot auto-resolve device verification.\n' +
-            '    Tier 2 tests will be skipped.\n' +
-            '    Action: Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN secrets,\n' +
-            '    or manually approve the device from the canary bot email.\n',
+      // Detect device verification challenge.
+      // GitHub renders a form at /sessions/verified-device with an #otp input
+      // and a heading "Device verification" inside .auth-form-header.
+      const isDeviceVerification =
+        postLoginUrl.includes('/sessions/') ||
+        postLoginUrl.includes('/two-factor') ||
+        postLoginHtml.includes('id="device-verification-prompt"') ||
+        postLoginHtml.includes('Device verification') ||
+        postLoginHtml.includes('Two-factor authentication');
+
+      if (isDeviceVerification) {
+        console.log(
+          '\n  ⚠ [login] DEVICE VERIFICATION DETECTED\n' +
+            `    Post-login URL: ${postLoginUrl}\n` +
+            `    Page title: "${postLoginTitle}"`,
         );
-        return;
+
+        if (!HAS_GMAIL_SECRETS) {
+          console.warn(
+            '  [login] GMAIL secrets not configured — cannot auto-resolve device verification.\n' +
+              '    Tier 2 tests will be skipped.\n' +
+              '    Action: Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN secrets,\n' +
+              '    or manually approve the device from the canary bot email.\n',
+          );
+          return;
+        }
+
+        console.log('  [login] Gmail secrets available — starting OTP extraction via Gmail API...');
+
+        const otpCode = await getGitHubVerificationCode();
+        console.log(`  [login] Received OTP code: ${otpCode}`);
+
+        // The verification form lives at form[action="/sessions/verified-device"]
+        // with an <input id="otp" name="otp" inputmode="numeric" pattern="([0-9]{6})|...">
+        // and a <button type="submit" class="btn-primary btn btn-block">Verify</button>
+        console.log('  [login] Waiting for the device verification form...');
+        const verifyForm = page.locator('form[action="/sessions/verified-device"]');
+        await verifyForm.waitFor({ state: 'visible', timeout: 10_000 });
+        console.log('  [login] Verification form found');
+
+        const otpInput = verifyForm.locator('input#otp');
+        await otpInput.waitFor({ state: 'visible', timeout: 5_000 });
+        console.log('  [login] OTP input (#otp) visible — filling code...');
+
+        await otpInput.pressSequentially(otpCode, { delay: 100 });
+        console.log('  [login] OTP code entered.');
+
+        console.log('  [login] Waiting for GitHub to process the form...');
+
+        try {
+          await page.waitForURL((url) => !url.toString().includes('verified-device'), {
+            timeout: 10_000,
+          });
+          console.log('  [login] Navigation completed successfully!');
+        } catch {
+          console.log('  [login] Did not auto-navigate, pressing Enter as fallback...');
+          await Promise.all([
+            page.waitForURL((url) => !url.toString().includes('verified-device'), {
+              timeout: 15_000,
+            }),
+            otpInput.press('Enter'),
+          ]);
+          console.log('  [login] Navigation completed after pressing Enter!');
+        }
+
+        const postVerifyUrl = page.url();
+        const postVerifyTitle = await page.title();
+        console.log(`  [login] Post-verification URL: ${postVerifyUrl}`);
+        console.log(`  [login] Post-verification page title: "${postVerifyTitle}"`);
+
+        // If we're still stuck on the verification/login page, bail out
+        if (postVerifyUrl.includes('/sessions/') || postVerifyUrl.includes('/login')) {
+          console.error(
+            '  ✗ [login] Still on verification/login page after OTP submission.\n' +
+              `    URL: ${postVerifyUrl}\n` +
+              '    The OTP may have been invalid or expired. Tier 2 tests will be skipped.\n',
+          );
+          return;
+        }
+
+        console.log('  ✓ [login] Device verification passed via Gmail OTP');
       }
 
-      console.log('  [login] Gmail secrets available — starting OTP extraction via Gmail API...');
+      // Detect incorrect credentials
+      const isLoginError =
+        postLoginUrl.includes('/login') ||
+        postLoginHtml.includes('Incorrect username or password');
 
-      const otpCode = await getGitHubVerificationCode();
-      console.log(`  [login] Received OTP code: ${otpCode}`);
-
-      // The verification form lives at form[action="/sessions/verified-device"]
-      // with an <input id="otp" name="otp" inputmode="numeric" pattern="([0-9]{6})|...">
-      // and a <button type="submit" class="btn-primary btn btn-block">Verify</button>
-      console.log('  [login] Waiting for the device verification form...');
-      const verifyForm = page.locator('form[action="/sessions/verified-device"]');
-      await verifyForm.waitFor({ state: 'visible', timeout: 10_000 });
-      console.log('  [login] Verification form found');
-
-      const otpInput = verifyForm.locator('input#otp');
-      await otpInput.waitFor({ state: 'visible', timeout: 5_000 });
-      console.log('  [login] OTP input (#otp) visible — filling code...');
-
-      await otpInput.pressSequentially(otpCode, { delay: 100 });
-      console.log('  [login] OTP code entered.');
-
-      console.log('  [login] Waiting for GitHub to process the form...');
-
-      try {
-        await page.waitForURL((url) => !url.toString().includes('verified-device'), {
-          timeout: 10_000,
-        });
-        console.log('  [login] Navigation completed successfully!');
-      } catch {
-        console.log('  [login] Did not auto-navigate, pressing Enter as fallback...');
-        await Promise.all([
-          page.waitForURL((url) => !url.toString().includes('verified-device'), {
-            timeout: 15_000,
-          }),
-          otpInput.press('Enter'),
-        ]);
-        console.log('  [login] Navigation completed after pressing Enter!');
-      }
-
-      const postVerifyUrl = page.url();
-      const postVerifyTitle = await page.title();
-      console.log(`  [login] Post-verification URL: ${postVerifyUrl}`);
-      console.log(`  [login] Post-verification page title: "${postVerifyTitle}"`);
-
-      // If we're still stuck on the verification/login page, bail out
-      if (postVerifyUrl.includes('/sessions/') || postVerifyUrl.includes('/login')) {
+      if (isLoginError) {
         console.error(
-          '  ✗ [login] Still on verification/login page after OTP submission.\n' +
-            `    URL: ${postVerifyUrl}\n` +
-            '    The OTP may have been invalid or expired. Tier 2 tests will be skipped.\n',
+          '\n  ✗ [login] LOGIN FAILED — incorrect username or password\n' +
+            `    Post-login URL: ${postLoginUrl}\n` +
+            `    Page title: "${postLoginTitle}"\n` +
+            '    Action: Verify GH_CANARY_USERNAME and GH_CANARY_PASSWORD secrets.\n',
         );
         return;
       }
 
-      console.log('  ✓ [login] Device verification passed via Gmail OTP');
+      loginSucceeded = true;
+      console.log(`  ✓ [login] Successfully logged in as @${CANARY_USERNAME} (fresh login)`);
+
+      // Save session state for future runs
+      console.log(`  [state] Saving session cookies to ${STATE_FILE}...`);
+      await context.storageState({ path: STATE_FILE });
+      console.log(`  [state] Session state saved`);
+
+      console.log('── Tier 2: beforeAll — Fresh login complete ──\n');
     }
-
-    // Detect incorrect credentials
-    const isLoginError =
-      postLoginUrl.includes('/login') ||
-      postLoginHtml.includes('Incorrect username or password');
-
-    if (isLoginError) {
-      console.error(
-        '\n  ✗ [login] LOGIN FAILED — incorrect username or password\n' +
-          `    Post-login URL: ${postLoginUrl}\n` +
-          `    Page title: "${postLoginTitle}"\n` +
-          '    Action: Verify GH_CANARY_USERNAME and GH_CANARY_PASSWORD secrets.\n',
-      );
-      return;
-    }
-
-    loginSucceeded = true;
-    console.log(`  ✓ [login] Successfully logged in as @${CANARY_USERNAME} (fresh login)`);
-
-    // Save session state for future runs
-    console.log(`  [state] Saving session cookies to ${STATE_FILE}...`);
-    await context.storageState({ path: STATE_FILE });
-    console.log(`  [state] Session state saved`);
-
-    console.log('── Tier 2: beforeAll — Fresh login complete ──\n');
   });
 
   for (const target of AUTH_TARGETS) {
