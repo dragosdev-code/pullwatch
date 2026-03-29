@@ -1,9 +1,11 @@
 import type { PullRequest, PullRequestAuthor } from '../../common/types';
+import type { CompiledPatterns } from '../../common/pattern-types';
 import { ParserBreakageError } from '../../common/errors';
 
 /**
- * Pure static utility for parsing GitHub PR listing pages via regex.
- * No dependencies, no state, no lifecycle -- easy to unit test.
+ * Pure static utility for parsing GitHub PR listing pages.
+ * All regex patterns are injected via {@link CompiledPatterns} — the parser
+ * itself contains zero hardcoded selectors.
  */
 export class GitHubHTMLParser {
   /**
@@ -12,54 +14,38 @@ export class GitHubHTMLParser {
    * has no PRs). Checks for structural markers that GitHub renders on every
    * search/pulls listing regardless of result count.
    */
-  private static isRecognizedGitHubPage(html: string): boolean {
-    // PR content (page has actual results)
-    if (/\/pull\/\d+/.test(html)) return true;
-    // Known PR-row selectors (container present even if we failed to extract rows)
-    if (/js-issue-row|Box-row|issue-list-item|data-hovercard-type="pull_request"/i.test(html)) return true;
-    // GitHub's empty-state component shown when a search yields 0 results
-    if (/class="[^"]*blankslate/i.test(html)) return true;
-    // "No results matched your search" text
-    if (/No results matched/i.test(html)) return true;
+  private static isRecognizedGitHubPage(html: string, patterns: CompiledPatterns): boolean {
+    const p = patterns.pageRecognition;
+    if (p.hasPRContent.compiled.test(html)) return true;
+    if (p.knownSelectors.compiled.test(html)) return true;
+    if (p.emptyState.compiled.test(html)) return true;
+    if (p.noResults.compiled.test(html)) return true;
     return false;
   }
 
   /**
    * Parses a GitHub search-results HTML page and returns an array of PRs.
-   * @param html  Raw HTML string from a GitHub PR listing page.
-   * @param baseURL  GitHub base URL used to make relative PR links absolute.
+   * @param html      Raw HTML string from a GitHub PR listing page.
+   * @param baseURL   GitHub base URL used to make relative PR links absolute.
+   * @param patterns  Compiled pattern set driving all extraction logic.
    * @throws {ParserBreakageError} when the HTML is not recognizable as a
    *         GitHub page at all (likely a redesign or an unexpected error page).
    */
-  static parseFromHTML(html: string, baseURL: string): PullRequest[] {
-    // If the HTML has no /pull/ links, decide whether the page is a
-    // recognized-but-empty GitHub page or an unrecognizable page.
-    if (!/\/pull\/\d+/.test(html)) {
-      if (GitHubHTMLParser.isRecognizedGitHubPage(html)) {
-        // Valid GitHub page with genuinely 0 results — return empty normally.
+  static parseFromHTML(html: string, baseURL: string, patterns: CompiledPatterns): PullRequest[] {
+    if (!patterns.pageRecognition.hasPRContent.compiled.test(html)) {
+      if (GitHubHTMLParser.isRecognizedGitHubPage(html, patterns)) {
         return [];
       }
-      // Page is not recognizable — signal parser breakage.
       throw new ParserBreakageError('parseFromHTML');
     }
 
     const prs: PullRequest[] = [];
-
-    const prSelectors = [
-      'js-issue-row',
-      'Box-row',
-      'issue-list-item',
-      'data-hovercard-type="pull_request"',
-    ];
-
     let prElements: RegExpMatchArray[] = [];
 
-    for (const selector of prSelectors) {
-      let pattern: RegExp;
-      if (selector === 'data-hovercard-type="pull_request"') {
-        pattern = new RegExp(`<[^>]*${selector}[^>]*>(.*?)</[^>]*>`, 'gis');
-      } else if (selector === 'js-issue-row') {
-        const blocks = GitHubHTMLParser.extractJsIssueRowBlocks(html);
+    // ── Try each PR row selector in priority order ───────────────────
+    for (const selector of patterns.prRowSelectors) {
+      if (selector.type === 'balanced-div') {
+        const blocks = GitHubHTMLParser.extractBalancedDivBlocks(html, selector.compiled);
         if (blocks.length > 0) {
           prElements = blocks.map((block) => {
             const synthetic = [block] as unknown as RegExpMatchArray;
@@ -69,31 +55,26 @@ export class GitHubHTMLParser {
           break;
         }
         continue;
-      } else {
-        pattern = new RegExp(`<[^>]*class="[^"]*${selector}[^"]*"[^>]*>(.*?)</[^>]*>`, 'gis');
       }
 
-      const matches = [...html.matchAll(pattern)];
+      const matches = [...html.matchAll(selector.compiled)];
       if (matches.length > 0) {
         prElements = matches;
         break;
       }
     }
 
+    // ── Fallback: scan for PR links, then extract their containers ───
     if (prElements.length === 0) {
-      const prLinkPattern = /<a[^>]*href="[^"]*\/pull\/\d+[^"]*"[^>]*>([^<]*)<\/a>/gi;
-      const allLinks = [...html.matchAll(prLinkPattern)];
-
+      const allLinks = [...html.matchAll(patterns.prRowFallback.linkScan.compiled)];
       if (allLinks.length > 0) {
-        const containerPattern =
-          /<(?:div|article|li|tr)[^>]*>.*?<a[^>]*href="([^"]*\/pull\/\d+)[^"]*"[^>]*>([^<]*)<\/a>.*?<\/(?:div|article|li|tr)>/gi;
-        prElements = [...html.matchAll(containerPattern)];
+        prElements = [...html.matchAll(patterns.prRowFallback.containerExtract.compiled)];
       }
     }
 
     for (const element of prElements) {
       try {
-        const pr = GitHubHTMLParser.extractPRData(element, baseURL);
+        const pr = GitHubHTMLParser.extractPRData(element, baseURL, patterns);
         if (pr) prs.push(pr);
       } catch {
         // Skip elements that fail to parse
@@ -109,24 +90,23 @@ export class GitHubHTMLParser {
   /**
    * Extracts structured PR data from a single regex-matched HTML element.
    */
-  static extractPRData(element: RegExpMatchArray, baseURL: string): PullRequest | null {
+  static extractPRData(
+    element: RegExpMatchArray,
+    baseURL: string,
+    patterns: CompiledPatterns,
+  ): PullRequest | null {
     const elementHtml = element[0];
 
     // ── URL + Title ──────────────────────────────────────────────────
     let prUrl = '';
     let title = '';
 
-    const prLinkPatterns = [
-      /<a[^>]*href="([^"]*\/pull\/\d+)"[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*>([^<]+)<\/a>/i,
-      /<a[^>]*href="([^"]*\/pull\/\d+)"[^>]*>([^<]+)<\/a>/i,
-      /<a[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*href="([^"]*\/pull\/\d+)"[^>]*>([^<]+)<\/a>/i,
-    ];
-
-    for (const pattern of prLinkPatterns) {
-      const match = elementHtml.match(pattern);
-      if (match?.[1] && match[2]) {
-        prUrl = match[1];
-        title = match[2].trim().replace(/\s+/g, ' ');
+    for (const p of patterns.prLink) {
+      const match = elementHtml.match(p.compiled);
+      const g = p.captureGroups!;
+      if (match?.[g.url] && match[g.title]) {
+        prUrl = match[g.url];
+        title = match[g.title].trim().replace(/\s+/g, ' ');
         break;
       }
     }
@@ -136,36 +116,34 @@ export class GitHubHTMLParser {
     const url = prUrl.startsWith('http') ? prUrl : `${baseURL}${prUrl}`;
 
     // ── PR Number ────────────────────────────────────────────────────
-    const numberMatch = prUrl.match(/\/pull\/(\d+)/);
-    let number = numberMatch ? parseInt(numberMatch[1], 10) : null;
+    const numUrl = patterns.prNumber.fromUrl;
+    const numberMatch = prUrl.match(numUrl.compiled);
+    let number = numberMatch ? parseInt(numberMatch[numUrl.captureGroups!.number], 10) : null;
     if (number === null) {
-      const spanMatch = elementHtml.match(/#(\d+)\s+opened/);
-      if (spanMatch) number = parseInt(spanMatch[1], 10);
+      const numEl = patterns.prNumber.fromElement;
+      const spanMatch = elementHtml.match(numEl.compiled);
+      if (spanMatch) number = parseInt(spanMatch[numEl.captureGroups!.number], 10);
     }
 
     // ── Repository Name ──────────────────────────────────────────────
-    const repoNameMatch = prUrl.match(/\/([^/]+\/[^/]+)\/pull/);
-    const repoName = repoNameMatch ? repoNameMatch[1] : 'Unknown Repo';
+    const repoP = patterns.repoName;
+    const repoNameMatch = prUrl.match(repoP.compiled);
+    const repoName = repoNameMatch ? repoNameMatch[repoP.captureGroups!.repoName] : 'Unknown Repo';
 
     // ── Author(s): assignee AvatarStack when present, else opener heuristics ──
-    const fromStack = GitHubHTMLParser.extractAssigneesFromAvatarStack(elementHtml);
+    const fromStack = GitHubHTMLParser.extractAssigneesFromAvatarStack(elementHtml, patterns);
     let author: PullRequestAuthor[];
 
     if (fromStack && fromStack.length > 0) {
       author = fromStack;
     } else {
       let authorLogin = 'Unknown Author';
-      const authorPatterns = [
-        /<a[^>]*href="[^"]*\/([^"/?]+)"[^>]*title="[^"]*"[^>]*>([^<]+)<\/a>/i,
-        /<a[^>]*class="[^"]*author[^"]*"[^>]*>([^<]+)<\/a>/i,
-        /<a[^>]*data-hovercard-type="user"[^>]*data-hovercard-url="[^"]*\/users\/([^"/]+)\/[^"]*"[^>]*>/i,
-        /opened[^<]*by[^<]*<a[^>]*>([^<]+)<\/a>/i,
-      ];
-
-      for (const pattern of authorPatterns) {
-        const match = elementHtml.match(pattern);
-        if (match?.[1] || match?.[2]) {
-          authorLogin = (match[1] || match[2]).trim();
+      for (const p of patterns.author) {
+        const match = elementHtml.match(p.compiled);
+        const g = p.captureGroups!;
+        const login = match?.[g.login] || (g.loginAlt ? match?.[g.loginAlt] : undefined);
+        if (login) {
+          authorLogin = login.trim();
           break;
         }
       }
@@ -174,22 +152,16 @@ export class GitHubHTMLParser {
 
     // ── Creation Time ────────────────────────────────────────────────
     let createdAt = new Date().toISOString();
-    const timePatterns = [
-      /<relative-time[^>]+datetime="([^"]+)"/i,
-      /<time[^>]+datetime="([^"]+)"/i,
-      /datetime="([^"]+)"/i,
-    ];
-
-    for (const pattern of timePatterns) {
-      const match = elementHtml.match(pattern);
-      if (match?.[1]) {
-        createdAt = match[1];
+    for (const p of patterns.timestamp) {
+      const match = elementHtml.match(p.compiled);
+      if (match?.[p.captureGroups!.datetime]) {
+        createdAt = match[p.captureGroups!.datetime];
         break;
       }
     }
 
     // ── PR Type (draft / open / merged) ──────────────────────────────
-    const prType = GitHubHTMLParser.detectPRType(elementHtml);
+    const prType = GitHubHTMLParser.detectPRType(elementHtml, patterns);
 
     return {
       id: url,
@@ -205,14 +177,15 @@ export class GitHubHTMLParser {
   }
 
   /**
-   * Returns full HTML for each `js-issue-row` root by balancing nested &lt;div&gt; tags.
-   * A naive `.*?</div>` match stops at the first inner close tag and drops assignee AvatarStack markup.
+   * Returns full HTML for each balanced-div block whose opening tag matches
+   * {@link openingPattern}. Balances nested &lt;div&gt; tags so we capture
+   * the complete subtree instead of stopping at the first inner close tag.
    */
-  private static extractJsIssueRowBlocks(html: string): string[] {
+  private static extractBalancedDivBlocks(html: string, openingPattern: RegExp): string[] {
     const blocks: string[] = [];
-    const openRe = /<div\b[^>]*\bclass="[^"]*\bjs-issue-row\b[^"]*"[^>]*>/gi;
+    openingPattern.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = openRe.exec(html)) !== null) {
+    while ((m = openingPattern.exec(html)) !== null) {
       const start = m.index;
       let i = m.index + m[0].length;
       let depth = 1;
@@ -241,25 +214,26 @@ export class GitHubHTMLParser {
   }
 
   /**
-   * Parses GitHub assignee avatar stacks (“Assigned to …”) inside a PR row.
+   * Parses GitHub assignee avatar stacks ("Assigned to …") inside a PR row.
    */
-  static extractAssigneesFromAvatarStack(elementHtml: string): PullRequestAuthor[] | null {
-    const openTag = elementHtml.match(
-      /<div\b(?=[^>]*\bclass="[^"]*\bAvatarStack-body\b[^"]*")(?=[^>]*\baria-label="Assigned to[^"]*")[^>]*>/i
-    );
+  static extractAssigneesFromAvatarStack(
+    elementHtml: string,
+    patterns: CompiledPatterns,
+  ): PullRequestAuthor[] | null {
+    const av = patterns.assigneeAvatar;
+    const openTag = elementHtml.match(av.stackContainer.compiled);
     if (!openTag || openTag.index === undefined) return null;
 
     const afterOpen = elementHtml.slice(openTag.index + openTag[0].length);
-    const closeIdx = afterOpen.search(/<\/div>/i);
+    const closeIdx = afterOpen.search(av.closeTag.compiled);
     if (closeIdx === -1) return null;
 
     const inner = afterOpen.slice(0, closeIdx);
-    const anchorRe = /<a\b[^>]*class="[^"]*\bavatar-user\b[^"]*"[^>]*>[\s\S]*?<\/a>/gi;
     const authors: PullRequestAuthor[] = [];
     const seen = new Set<string>();
 
-    for (const m of inner.matchAll(anchorRe)) {
-      const parsed = GitHubHTMLParser.parseAssigneeAnchor(m[0]);
+    for (const m of inner.matchAll(av.anchorSelector.compiled)) {
+      const parsed = GitHubHTMLParser.parseAssigneeAnchor(m[0], patterns);
       if (!parsed) continue;
       const key = parsed.login.toLowerCase();
       if (seen.has(key)) continue;
@@ -270,15 +244,21 @@ export class GitHubHTMLParser {
     return authors.length > 0 ? authors : null;
   }
 
-  private static parseAssigneeAnchor(anchorHtml: string): PullRequestAuthor | null {
+  private static parseAssigneeAnchor(
+    anchorHtml: string,
+    patterns: CompiledPatterns,
+  ): PullRequestAuthor | null {
+    const av = patterns.assigneeAvatar;
     let login = '';
 
-    const hrefMatch = anchorHtml.match(/\bhref="([^"]+)"/i);
-    if (hrefMatch?.[1]) {
-      const href = hrefMatch[1];
-      const encoded = href.match(/assignee%3A([^&"+]+)/i);
-      const plain = href.match(/assignee:([^&"+]+)/i);
-      const raw = encoded?.[1] ?? plain?.[1];
+    const hrefMatch = anchorHtml.match(av.hrefExtract.compiled);
+    if (hrefMatch?.[av.hrefExtract.captureGroups!.href]) {
+      const href = hrefMatch[av.hrefExtract.captureGroups!.href];
+      const encoded = href.match(av.loginFromHrefEncoded.compiled);
+      const plain = href.match(av.loginFromHrefPlain.compiled);
+      const raw =
+        encoded?.[av.loginFromHrefEncoded.captureGroups!.login] ??
+        plain?.[av.loginFromHrefPlain.captureGroups!.login];
       if (raw) {
         try {
           login = decodeURIComponent(raw).trim();
@@ -289,43 +269,34 @@ export class GitHubHTMLParser {
     }
 
     if (!login) {
-      const altMatch = anchorHtml.match(/\balt="@([^"]+)"/i);
-      if (altMatch?.[1]) login = altMatch[1].trim();
+      const altMatch = anchorHtml.match(av.loginFromAlt.compiled);
+      if (altMatch?.[av.loginFromAlt.captureGroups!.login]) {
+        login = altMatch[av.loginFromAlt.captureGroups!.login].trim();
+      }
     }
 
     if (!login) {
-      const ariaMatch = anchorHtml.match(
-        /\baria-label="([^"]+?)(?:'|&#39;|\u2019)s assigned issues"/i
-      );
-      if (ariaMatch?.[1]) login = ariaMatch[1].trim();
+      const ariaMatch = anchorHtml.match(av.loginFromAria.compiled);
+      if (ariaMatch?.[av.loginFromAria.captureGroups!.login]) {
+        login = ariaMatch[av.loginFromAria.captureGroups!.login].trim();
+      }
     }
 
     if (!login) return null;
 
-    const imgMatch = anchorHtml.match(
-      /<img[^>]*class="[^"]*\bfrom-avatar\b[^"]*"[^>]*\bsrc="([^"]+)"/i
-    );
-    const avatarUrl = imgMatch?.[1]?.replace(/&amp;/g, '&');
+    const imgMatch = anchorHtml.match(av.avatarImg.compiled);
+    const avatarUrl = imgMatch?.[av.avatarImg.captureGroups!.src]?.replace(/&amp;/g, '&');
 
     return avatarUrl ? { login, avatarUrl } : { login };
   }
 
-  private static detectPRType(html: string): 'draft' | 'open' | 'merged' {
-    // Primary: aria-label based detection
-    if (/aria-label="[^"]*Draft Pull Request[^"]*"/i.test(html)) return 'draft';
-    if (/aria-label="[^"]*Open Pull Request[^"]*"/i.test(html)) return 'open';
-    if (/aria-label="[^"]*Merged Pull Request[^"]*"/i.test(html)) return 'merged';
-
-    // Secondary: visual icon detection
-    if (/octicon-git-pull-request-draft/i.test(html) || /color-fg-draft/i.test(html)) {
-      return 'draft';
+  private static detectPRType(
+    html: string,
+    patterns: CompiledPatterns,
+  ): 'draft' | 'open' | 'merged' {
+    for (const entry of patterns.prType) {
+      if (entry.compiled.test(html)) return entry.type;
     }
-    if (/octicon-git-pull-request(?!-)/i.test(html) || /color-fg-open/i.test(html)) {
-      return 'open';
-    }
-    if (/octicon-git-merge/i.test(html)) return 'merged';
-
-    // Default fallback
     return 'open';
   }
 }

@@ -18,6 +18,7 @@ import {
 } from '../../common/constants';
 import { RateLimitError, ParserBreakageError } from '../../common/errors';
 import { GitHubHTMLParser } from './GitHubHTMLParser';
+import { DEFAULT_COMPILED_PATTERNS } from '../../common/default-patterns';
 
 /**
  * GitHubService handles GitHub HTTP operations for fetching pull requests.
@@ -134,7 +135,7 @@ export class GitHubService implements IGitHubService {
    */
   private async fetchPRs(url: string, context: string): Promise<PullRequest[]> {
     return this.fetchGitHubData(url, context, async (html) => {
-      const prs = GitHubHTMLParser.parseFromHTML(html, this.baseURL);
+      const prs = GitHubHTMLParser.parseFromHTML(html, this.baseURL, DEFAULT_COMPILED_PATTERNS);
       return this.avatarService.enrichPRsWithAvatars(prs);
     });
   }
