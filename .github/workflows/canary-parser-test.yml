@@ -1,0 +1,83 @@
+name: Parser Canary Tests
+
+on:
+  schedule:
+    # Run at :17 past every hour (offset avoids the GitHub cron stampede at :00)
+    - cron: '17 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: canary-parser
+  cancel-in-progress: true
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # ── Playwright browser caching ──────────────────────────────
+      - name: Get Playwright version
+        id: pw-version
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw-version.outputs.version }}
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+
+      - name: Install Playwright OS dependencies (cached browsers)
+        run: npx playwright install-deps chromium
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+
+      # ── Run canary tests ────────────────────────────────────────
+      - name: Run canary parser tests
+        run: npm run canary:test
+        env:
+          GH_CANARY_PAT: ${{ secrets.GH_CANARY_PAT }}
+
+      # ── Discord alert on failure ────────────────────────────────
+      - name: Alert via Discord webhook
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+
+          cat <<EOF | curl -sf -X POST "$DISCORD_WEBHOOK_URL" -H "Content-Type: application/json" -d @-
+          {
+            "content": "@here **Parser Canary FAILED. GitHub may have changed their DOM.**",
+            "embeds": [
+              {
+                "title": "Canary Test Failure",
+                "url": "${RUN_URL}",
+                "color": 16711680,
+                "description": "The hourly parser canary detected a possible GitHub DOM change. Inspect the run log and update \`patterns.json\` if needed.",
+                "fields": [
+                  { "name": "Branch", "value": "\`${{ github.ref_name }}\`", "inline": true },
+                  { "name": "Run", "value": "\`#${{ github.run_number }}\`", "inline": true },
+                  { "name": "Time (UTC)", "value": "\`${TIMESTAMP}\`", "inline": true }
+                ]
+              }
+            ]
+          }
+          EOF

@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "canary:test": "vitest run --config vitest.canary.config.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -28,6 +29,7 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/chrome": "^0.0.326",
     "@types/node": "^22.15.29",
     "@types/react": "^19.1.2",
@@ -38,6 +40,7 @@
     "daisyui": "^5.0.43",
     "happy-dom": "^20.8.9",
     "oxlint": "^1.57.0",
+    "playwright": "^1.58.2",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "~5.8.3",
     "vite": "^8.0.3",
