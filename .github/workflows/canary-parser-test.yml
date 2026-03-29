@@ -53,6 +53,8 @@ jobs:
         run: npm run canary:test
         env:
           GH_CANARY_PAT: ${{ secrets.GH_CANARY_PAT }}
+          GH_CANARY_USERNAME: ${{ secrets.GH_CANARY_USERNAME }}
+          GH_CANARY_PASSWORD: ${{ secrets.GH_CANARY_PASSWORD }}
 
       # ── Discord alert on failure ────────────────────────────────
       - name: Alert via Discord webhook
