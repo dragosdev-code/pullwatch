@@ -1,62 +1,57 @@
 /**
  * Parser Canary Tests — Hourly synthetic monitor.
  *
- * Uses Playwright to navigate live GitHub PR search pages, then runs
- * GitHubHTMLParser.parseFromHTML() against the rendered HTML and asserts
- * the extracted PR data is structurally valid.
+ * Fetches live GitHub PR listing pages via HTTP (matching how the extension's
+ * service worker fetches HTML), then runs GitHubHTMLParser.parseFromHTML()
+ * against the response and asserts the extracted PR data is structurally valid.
  *
- * Strategy:
- *   - Primary targets use PUBLIC repo search URLs (always have PRs,
- *     no auth needed) to validate that the parser handles GitHub's
- *     current DOM structure.
- *   - Optional authenticated targets (via GH_CANARY_PAT) test the
- *     exact URLs the extension uses. These are informational — they
- *     don't require results since the canary bot may have no PRs.
- *
- * Environment variables:
- *   GH_CANARY_PAT  — (optional) GitHub PAT for authenticated page tests
+ * Uses repo-specific PR listing pages (publicly accessible, no auth needed)
+ * with the same HTML structure the extension parses in production.
  */
 
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { GitHubHTMLParser } from '../extension/background/services/GitHubHTMLParser';
 import { DEFAULT_COMPILED_PATTERNS } from '../extension/common/default-patterns';
 import type { PullRequest } from '../extension/common/types';
 
 const GITHUB_BASE = 'https://github.com';
 
-const REALISTIC_UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const BROWSER_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept:
+    'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Cache-Control': 'no-cache',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Sec-Fetch-User': '?1',
+};
 
 interface CanaryTarget {
   label: string;
   url: string;
-  /** When true, the parser MUST return at least 1 PR or the test fails. */
   requireResults: boolean;
 }
 
 /**
- * Public search URLs that always have PRs (no auth needed).
- * These use the same global `/pulls?q=` format the extension uses,
- * so the HTML structure is identical to the authenticated experience.
+ * Repo-specific PR listing pages — publicly accessible, always have PRs,
+ * and use the same HTML structure as the global /pulls?q= search.
  */
-const PUBLIC_TARGETS: CanaryTarget[] = [
+const CANARY_TARGETS: CanaryTarget[] = [
   {
-    label: 'Public: Open PRs (facebook/react)',
-    url: `${GITHUB_BASE}/pulls?q=is%3Aopen+is%3Apr+repo%3Afacebook%2Freact`,
+    label: 'Open PRs (facebook/react)',
+    url: `${GITHUB_BASE}/facebook/react/pulls`,
     requireResults: true,
   },
   {
-    label: 'Public: Merged PRs (microsoft/vscode)',
-    url: `${GITHUB_BASE}/pulls?q=is%3Apr+is%3Amerged+repo%3Amicrosoft%2Fvscode`,
+    label: 'Open PRs (microsoft/vscode)',
+    url: `${GITHUB_BASE}/microsoft/vscode/pulls`,
     requireResults: true,
   },
 ];
 
-/**
- * Validates structural integrity of a single extracted PR.
- * Throws vitest assertion errors on any invalid field.
- */
 function assertPRValid(pr: PullRequest, label: string): void {
   expect(pr.url, `[${label}] PR url`).toMatch(/\/pull\/\d+/);
   expect(pr.title, `[${label}] PR title`).toBeTruthy();
@@ -74,55 +69,54 @@ function assertPRValid(pr: PullRequest, label: string): void {
   expect(['draft', 'open', 'merged'], `[${label}] PR type`).toContain(pr.type);
 }
 
+async function fetchGitHubHTML(url: string): Promise<{ html: string; status: number }> {
+  const resp = await fetch(url, {
+    headers: BROWSER_HEADERS,
+    redirect: 'follow',
+  });
+  const html = await resp.text();
+  return { html, status: resp.status };
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('Parser Canary — Live GitHub HTML', () => {
-  let browser: Browser;
-  let context: BrowserContext;
-  let page: Page;
-
-  beforeAll(async () => {
-    browser = await chromium.launch({ headless: true });
-
-    context = await browser.newContext({
-      userAgent: REALISTIC_UA,
-      viewport: { width: 1920, height: 1080 },
-      locale: 'en-US',
-      timezoneId: 'America/New_York',
-    });
-
-    page = await context.newPage();
-  });
-
-  // ── Public targets (parser structural validation) ──────────────────
-
-  for (const target of PUBLIC_TARGETS) {
+  for (const target of CANARY_TARGETS) {
     it(`should parse: ${target.label}`, async () => {
-      await page.goto(target.url, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30_000,
-      });
+      const { html, status } = await fetchGitHubHTML(target.url);
 
-      await page.waitForTimeout(2_000);
+      console.log(`  → ${target.label}: HTTP ${status}, ${html.length} bytes`);
 
-      const html = await page.content();
+      expect(status, `[${target.label}] HTTP status`).toBe(200);
 
       let prs: PullRequest[];
       try {
         prs = GitHubHTMLParser.parseFromHTML(html, GITHUB_BASE, DEFAULT_COMPILED_PATTERNS);
       } catch (error) {
-        const snippet = html.slice(0, 3000);
-        console.error(`\n=== HTML SNIPPET (first 3000 chars) for "${target.label}" ===\n${snippet}\n===\n`);
+        const snippet = html.slice(0, 5000);
+        console.error(
+          `\n=== HTML SNIPPET (first 5000 chars) for "${target.label}" ===\n` +
+            `${snippet}\n===\n`,
+        );
         throw error;
       }
 
       console.log(`  → ${target.label}: ${prs.length} PR(s) extracted`);
 
+      // If we expected results but got 0, dump HTML to help debug
+      if (target.requireResults && prs.length === 0) {
+        const snippet = html.slice(0, 5000);
+        console.error(
+          `\n=== 0 PRs extracted — HTML SNIPPET (first 5000 chars) for "${target.label}" ===\n` +
+            `${snippet}\n===\n`,
+        );
+      }
+
       if (target.requireResults) {
         expect(
           prs.length,
           `Expected at least 1 PR from "${target.label}" — got 0. ` +
-            'The parser is likely broken due to a GitHub DOM change.'
+            'The parser is likely broken due to a GitHub DOM change.',
         ).toBeGreaterThan(0);
       }
 
@@ -137,17 +131,10 @@ describe('Parser Canary — Live GitHub HTML', () => {
         if (!anyAvatarUrl) {
           console.warn(
             `  ⚠ No avatarUrl found across ${prs.length} PRs in "${target.label}". ` +
-              'This may indicate a parser regression for avatar stacks.'
+              'This may indicate a parser regression for avatar stacks.',
           );
         }
       }
     });
   }
-
-  // ── Teardown ─────────────────────────────────────────────────────────
-
-  afterAll(async () => {
-    await context?.close();
-    await browser?.close();
-  });
 });
