@@ -13,9 +13,13 @@
  * Environment variables:
  *   GH_CANARY_USERNAME  — (Tier 2) GitHub username for the canary bot
  *   GH_CANARY_PASSWORD  — (Tier 2) GitHub password for the canary bot
+ *   GMAIL_CLIENT_ID     — (Tier 2) Google OAuth2 client ID for device verification bypass
+ *   GMAIL_CLIENT_SECRET  — (Tier 2) Google OAuth2 client secret
+ *   GMAIL_REFRESH_TOKEN  — (Tier 2) Google OAuth2 refresh token for the canary bot's Gmail
  */
 
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { getGitHubVerificationCode } from './utils/gmail-fetcher';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { GitHubHTMLParser } from '../extension/background/services/GitHubHTMLParser';
 import { DEFAULT_COMPILED_PATTERNS } from '../extension/common/default-patterns';
@@ -184,9 +188,15 @@ const AUTH_TARGETS: CanaryTarget[] = [
   },
 ];
 
+const HAS_GMAIL_SECRETS =
+  (process.env.GMAIL_CLIENT_ID ?? '').length > 0 &&
+  (process.env.GMAIL_CLIENT_SECRET ?? '').length > 0 &&
+  (process.env.GMAIL_REFRESH_TOKEN ?? '').length > 0;
+
 console.log(`\n[env] GH_CANARY_USERNAME present: ${CANARY_USERNAME.length > 0}`);
 console.log(`[env] GH_CANARY_PASSWORD present: ${CANARY_PASSWORD.length > 0}`);
-console.log(`[env] HAS_CREDENTIALS: ${HAS_CREDENTIALS} → Tier 2 will ${HAS_CREDENTIALS ? 'RUN' : 'SKIP'}\n`);
+console.log(`[env] HAS_CREDENTIALS: ${HAS_CREDENTIALS} → Tier 2 will ${HAS_CREDENTIALS ? 'RUN' : 'SKIP'}`);
+console.log(`[env] GMAIL secrets present: ${HAS_GMAIL_SECRETS} → Device verification bypass ${HAS_GMAIL_SECRETS ? 'ENABLED' : 'DISABLED'}\n`);
 
 describe.skipIf(!HAS_CREDENTIALS)('Tier 2: Authenticated @me URLs', () => {
   let browser: Browser;
@@ -254,14 +264,66 @@ describe.skipIf(!HAS_CREDENTIALS)('Tier 2: Authenticated @me URLs', () => {
       postLoginHtml.includes('Two-factor authentication');
 
     if (isDeviceVerification) {
-      console.warn(
-        '\n  ⚠ [login] DEVICE VERIFICATION or 2FA DETECTED\n' +
+      console.log(
+        '\n  ⚠ [login] DEVICE VERIFICATION DETECTED\n' +
           `    Post-login URL: ${postLoginUrl}\n` +
-          `    Page title: "${postLoginTitle}"\n` +
-          '    Tier 2 tests will be skipped.\n' +
-          '    Action: Check the canary bot email to approve this device.\n',
+          `    Page title: "${postLoginTitle}"`,
       );
-      return;
+
+      if (!HAS_GMAIL_SECRETS) {
+        console.warn(
+          '  [login] GMAIL secrets not configured — cannot auto-resolve device verification.\n' +
+            '    Tier 2 tests will be skipped.\n' +
+            '    Action: Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN secrets,\n' +
+            '    or manually approve the device from the canary bot email.\n',
+        );
+        return;
+      }
+
+      console.log('  [login] Gmail secrets available — starting OTP extraction via Gmail API...');
+
+      const otpCode = await getGitHubVerificationCode();
+      console.log(`  [login] Received OTP code: ${otpCode}`);
+
+      console.log('  [login] Looking for OTP input field on the page...');
+      const otpInput = page.locator('#otp, input[name="otp"]');
+      await otpInput.waitFor({ state: 'visible', timeout: 10_000 });
+      console.log('  [login] OTP input field found — filling code...');
+
+      await otpInput.fill(otpCode);
+      console.log('  [login] OTP code entered');
+
+      // GitHub often auto-submits when all 6 digits are entered,
+      // but click the submit button if it exists as a safety measure.
+      const verifyButton = page.locator(
+        'button[type="submit"], input[type="submit"], button:has-text("Verify")',
+      );
+      if (await verifyButton.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        console.log('  [login] Verify/submit button found — clicking...');
+        await verifyButton.first().click();
+      } else {
+        console.log('  [login] No submit button visible — form likely auto-submitted.');
+      }
+
+      console.log('  [login] Waiting for post-verification page to load...');
+      await page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
+
+      const postVerifyUrl = page.url();
+      const postVerifyTitle = await page.title();
+      console.log(`  [login] Post-verification URL: ${postVerifyUrl}`);
+      console.log(`  [login] Post-verification page title: "${postVerifyTitle}"`);
+
+      // If we're still stuck on a verification/login page, bail out
+      if (postVerifyUrl.includes('/sessions/') || postVerifyUrl.includes('/login')) {
+        console.error(
+          '  ✗ [login] Still on verification/login page after OTP submission.\n' +
+            `    URL: ${postVerifyUrl}\n` +
+            '    The OTP may have been invalid or expired. Tier 2 tests will be skipped.\n',
+        );
+        return;
+      }
+
+      console.log('  ✓ [login] Device verification passed via Gmail OTP');
     }
 
     // Detect incorrect credentials
