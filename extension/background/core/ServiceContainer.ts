@@ -10,6 +10,7 @@ import { GitHubService } from '../services/GitHubService';
 import { SoundService } from '../services/SoundService';
 import { EventService } from '../services/EventService';
 import { DevTestService } from '../services/DevTestService';
+import { PatternRegistryService } from '../services/PatternRegistryService';
 import { RateLimitService } from '../services/RateLimitService';
 import { GITHUB_BASE_URL } from '../../common/constants';
 import type { IService } from '../interfaces/IService';
@@ -49,8 +50,16 @@ export class ServiceContainer {
       new AvatarService(this.getService('debugService'), GITHUB_BASE_URL)
     );
     this.registerService(
+      'patternRegistryService',
+      new PatternRegistryService(this.getService('debugService'))
+    );
+    this.registerService(
       'gitHubService',
-      new GitHubService(this.getService('debugService'), this.getService('avatarService'))
+      new GitHubService(
+        this.getService('debugService'),
+        this.getService('avatarService'),
+        this.getService('patternRegistryService'),
+      )
     );
     this.registerService('rateLimitService', new RateLimitService(this.getService('debugService')));
 

@@ -1,6 +1,7 @@
 import type { IGitHubService } from '../interfaces/IGitHubService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type { IAvatarService } from '../interfaces/IAvatarService';
+import type { IPatternRegistryService } from '../interfaces/IPatternRegistryService';
 import type { PullRequest } from '../../common/types';
 import {
   GITHUB_BASE_URL,
@@ -18,7 +19,6 @@ import {
 } from '../../common/constants';
 import { RateLimitError, ParserBreakageError } from '../../common/errors';
 import { GitHubHTMLParser } from './GitHubHTMLParser';
-import { DEFAULT_COMPILED_PATTERNS } from '../../common/default-patterns';
 
 /**
  * GitHubService handles GitHub HTTP operations for fetching pull requests.
@@ -27,6 +27,7 @@ import { DEFAULT_COMPILED_PATTERNS } from '../../common/default-patterns';
 export class GitHubService implements IGitHubService {
   private debugService: IDebugService;
   private avatarService: IAvatarService;
+  private patternRegistryService: IPatternRegistryService;
   private initialized = false;
   private baseURL: string;
   private reviewRequestsURL: string;
@@ -38,9 +39,14 @@ export class GitHubService implements IGitHubService {
   private authoredCommentedURL: string;
   private authoredDraftURL: string;
 
-  constructor(debugService: IDebugService, avatarService: IAvatarService) {
+  constructor(
+    debugService: IDebugService,
+    avatarService: IAvatarService,
+    patternRegistryService: IPatternRegistryService,
+  ) {
     this.debugService = debugService;
     this.avatarService = avatarService;
+    this.patternRegistryService = patternRegistryService;
     this.baseURL = GITHUB_BASE_URL;
     this.reviewRequestsURL = GITHUB_REVIEW_REQUESTS_URL_TEMPLATE(this.baseURL);
     this.mergedPRsURL = GITHUB_MERGED_PRS_URL_TEMPLATE(this.baseURL);
@@ -135,7 +141,7 @@ export class GitHubService implements IGitHubService {
    */
   private async fetchPRs(url: string, context: string): Promise<PullRequest[]> {
     return this.fetchGitHubData(url, context, async (html) => {
-      const prs = GitHubHTMLParser.parseFromHTML(html, this.baseURL, DEFAULT_COMPILED_PATTERNS);
+      const prs = GitHubHTMLParser.parseFromHTML(html, this.baseURL, this.patternRegistryService.getPatterns());
       return this.avatarService.enrichPRsWithAvatars(prs);
     });
   }

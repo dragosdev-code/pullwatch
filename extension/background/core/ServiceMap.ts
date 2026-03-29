@@ -10,6 +10,7 @@ import type { IPermissionService } from '../interfaces/IPermissionService';
 import type { IPRService } from '../interfaces/IPRService';
 import type { IRateLimitService } from '../interfaces/IRateLimitService';
 import type { ISoundService } from '../interfaces/ISoundService';
+import type { IPatternRegistryService } from '../interfaces/IPatternRegistryService';
 import type { IStorageService } from '../interfaces/IStorageService';
 
 /**
@@ -25,6 +26,7 @@ export interface ServiceMap {
   badgeService: IBadgeService;
   soundService: ISoundService;
   eventService: IEventService;
+  patternRegistryService: IPatternRegistryService;
   gitHubService: IGitHubService;
   rateLimitService: IRateLimitService;
   notificationService: INotificationService;

@@ -7,6 +7,7 @@ export const STORAGE_KEY_AUTHORED_PRS = 'github_authored_prs';
 export const STORAGE_KEY_LAST_FETCH = 'last_fetch_time';
 export const STORAGE_KEY_SETTINGS = 'settings'; // As per requirements
 export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
+export const STORAGE_KEY_PATTERN_REGISTRY = 'parser_pattern_registry';
 
 // Fetch Intervals
 export const FETCH_INTERVAL_MINUTES = 3;
