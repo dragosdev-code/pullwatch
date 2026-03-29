@@ -18,12 +18,15 @@
  *   GMAIL_REFRESH_TOKEN  — (Tier 2) Google OAuth2 refresh token for the canary bot's Gmail
  */
 
+import fs from 'node:fs';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { getGitHubVerificationCode } from './utils/gmail-fetcher';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { GitHubHTMLParser } from '../extension/background/services/GitHubHTMLParser';
 import { DEFAULT_COMPILED_PATTERNS } from '../extension/common/default-patterns';
 import type { PullRequest } from '../extension/common/types';
+
+const STATE_FILE = 'playwright-state.json';
 
 const GITHUB_BASE = 'https://github.com';
 
@@ -205,25 +208,57 @@ describe.skipIf(!HAS_CREDENTIALS)('Tier 2: Authenticated @me URLs', () => {
   let loginSucceeded = false;
 
   beforeAll(async () => {
-    console.log('\n── Tier 2: beforeAll — Starting Playwright login flow ──');
+    console.log('\n── Tier 2: beforeAll — Starting Playwright session ──');
+
+    const hasCachedState = fs.existsSync(STATE_FILE);
+    console.log(`  [state] ${STATE_FILE} exists: ${hasCachedState}`);
 
     console.log('  [pw] Launching Chromium (headless)...');
     browser = await chromium.launch({ headless: true });
     console.log('  [pw] Chromium launched');
 
-    console.log('  [pw] Creating browser context (UA, viewport 1920x1080, locale en-US)...');
-    context = await browser.newContext({
+    const contextOptions = {
       userAgent: REALISTIC_UA,
-      viewport: { width: 1920, height: 1080 },
+      viewport: { width: 1920, height: 1080 } as const,
       locale: 'en-US',
       timezoneId: 'America/New_York',
-    });
+      ...(hasCachedState ? { storageState: STATE_FILE } : {}),
+    };
+    console.log(`  [pw] Creating browser context (storageState: ${hasCachedState ? 'CACHED' : 'NONE'})...`);
+    context = await browser.newContext(contextOptions);
     console.log('  [pw] Browser context created');
 
     page = await context.newPage();
     console.log('  [pw] New page opened');
 
-    // ── GitHub login flow ──────────────────────────────────────────
+    // ── Step A: Try to reuse cached session ──────────────────────────
+    if (hasCachedState) {
+      console.log('  [state] Validating cached session — navigating to https://github.com ...');
+      await page.goto('https://github.com', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30_000,
+      });
+
+      const currentUrl = page.url();
+      console.log(`  [state] Landed on: ${currentUrl}`);
+
+      const hasLoginField = await page.locator('#login_field').isVisible({ timeout: 2_000 }).catch(() => false);
+      const hasUserNav = await page.locator('[aria-label="Open user navigation menu"]').isVisible({ timeout: 2_000 }).catch(() => false);
+
+      console.log(`  [state] Login field visible: ${hasLoginField}`);
+      console.log(`  [state] User nav menu visible: ${hasUserNav}`);
+
+      if (hasUserNav && !hasLoginField) {
+        loginSucceeded = true;
+        console.log('  ✓ [state] Cached session is VALID — skipping fresh login');
+        console.log('── Tier 2: beforeAll — Using cached session ──\n');
+        return;
+      }
+
+      console.log('  [state] Cached session EXPIRED or INVALID — proceeding with fresh login');
+    }
+
+    // ── Step B: Full login flow (username/password + optional Gmail OTP) ──
     console.log('  [login] Navigating to https://github.com/login ...');
     await page.goto('https://github.com/login', {
       waitUntil: 'domcontentloaded',
@@ -354,8 +389,14 @@ describe.skipIf(!HAS_CREDENTIALS)('Tier 2: Authenticated @me URLs', () => {
     }
 
     loginSucceeded = true;
-    console.log(`  ✓ [login] Successfully logged in as @${CANARY_USERNAME}`);
-    console.log('── Tier 2: beforeAll — Login complete ──\n');
+    console.log(`  ✓ [login] Successfully logged in as @${CANARY_USERNAME} (fresh login)`);
+
+    // Save session state for future runs
+    console.log(`  [state] Saving session cookies to ${STATE_FILE}...`);
+    await context.storageState({ path: STATE_FILE });
+    console.log(`  [state] Session state saved`);
+
+    console.log('── Tier 2: beforeAll — Fresh login complete ──\n');
   });
 
   for (const target of AUTH_TARGETS) {

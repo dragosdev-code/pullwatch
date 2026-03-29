@@ -48,6 +48,16 @@ jobs:
         run: npx playwright install-deps chromium
         if: steps.pw-cache.outputs.cache-hit == 'true'
 
+      # ── Playwright session state caching ─────────────────────────
+      - name: Restore Playwright session state
+        uses: actions/cache@v4
+        id: pw-state
+        with:
+          path: playwright-state.json
+          key: playwright-state-${{ github.run_id }}
+          restore-keys: |
+            playwright-state-
+
       # ── Run canary tests ────────────────────────────────────────
       - name: Run canary parser tests
         run: npm run canary:test
