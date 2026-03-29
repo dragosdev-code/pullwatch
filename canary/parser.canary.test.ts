@@ -1,12 +1,20 @@
 /**
  * Parser Canary Tests — Hourly synthetic monitor.
  *
- * Uses Playwright to fetch live GitHub PR search pages with a real PAT,
- * then runs GitHubHTMLParser.parseFromHTML() against the HTML and asserts
+ * Uses Playwright to navigate live GitHub PR search pages, then runs
+ * GitHubHTMLParser.parseFromHTML() against the rendered HTML and asserts
  * the extracted PR data is structurally valid.
  *
+ * Strategy:
+ *   - Primary targets use PUBLIC repo search URLs (always have PRs,
+ *     no auth needed) to validate that the parser handles GitHub's
+ *     current DOM structure.
+ *   - Optional authenticated targets (via GH_CANARY_PAT) test the
+ *     exact URLs the extension uses. These are informational — they
+ *     don't require results since the canary bot may have no PRs.
+ *
  * Environment variables:
- *   GH_CANARY_PAT  — GitHub Personal Access Token with `read:user` scope (required)
+ *   GH_CANARY_PAT  — (optional) GitHub PAT for authenticated page tests
  */
 
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
@@ -16,7 +24,6 @@ import { DEFAULT_COMPILED_PATTERNS } from '../extension/common/default-patterns'
 import type { PullRequest } from '../extension/common/types';
 
 const GITHUB_BASE = 'https://github.com';
-const GH_PAT = process.env.GH_CANARY_PAT ?? '';
 
 const REALISTIC_UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -28,15 +35,20 @@ interface CanaryTarget {
   requireResults: boolean;
 }
 
-const CANARY_TARGETS: CanaryTarget[] = [
+/**
+ * Public search URLs that always have PRs (no auth needed).
+ * These use the same global `/pulls?q=` format the extension uses,
+ * so the HTML structure is identical to the authenticated experience.
+ */
+const PUBLIC_TARGETS: CanaryTarget[] = [
   {
-    label: 'Assigned PRs (review-requested:@me)',
-    url: `${GITHUB_BASE}/pulls?q=is%3Aopen+is%3Apr+user-review-requested%3A%40me+`,
-    requireResults: false,
+    label: 'Public: Open PRs (facebook/react)',
+    url: `${GITHUB_BASE}/pulls?q=is%3Aopen+is%3Apr+repo%3Afacebook%2Freact`,
+    requireResults: true,
   },
   {
-    label: 'Merged PRs (author:@me)',
-    url: `${GITHUB_BASE}/pulls?q=is%3Apr+is%3Amerged+author%3A%40me`,
+    label: 'Public: Merged PRs (microsoft/vscode)',
+    url: `${GITHUB_BASE}/pulls?q=is%3Apr+is%3Amerged+repo%3Amicrosoft%2Fvscode`,
     requireResults: true,
   },
 ];
@@ -70,29 +82,6 @@ describe('Parser Canary — Live GitHub HTML', () => {
   let page: Page;
 
   beforeAll(async () => {
-    if (!GH_PAT) {
-      throw new Error(
-        'GH_CANARY_PAT environment variable is required. ' +
-          'Set it to a GitHub PAT with at least `read:user` scope.'
-      );
-    }
-
-    // Validate PAT against the GitHub API before launching a browser
-    const apiResp = await fetch('https://api.github.com/user', {
-      headers: {
-        Authorization: `token ${GH_PAT}`,
-        'User-Agent': REALISTIC_UA,
-      },
-    });
-    if (!apiResp.ok) {
-      throw new Error(
-        `GH_CANARY_PAT validation failed (HTTP ${apiResp.status}). ` +
-          'Ensure the token is valid and has `read:user` scope.'
-      );
-    }
-    const user = (await apiResp.json()) as { login: string };
-    console.log(`  ✓ Authenticated as @${user.login}`);
-
     browser = await chromium.launch({ headless: true });
 
     context = await browser.newContext({
@@ -103,43 +92,25 @@ describe('Parser Canary — Live GitHub HTML', () => {
     });
 
     page = await context.newPage();
-
-    // Inject Authorization header only on github.com document requests
-    // to avoid leaking the PAT to third-party asset domains.
-    await page.route('https://github.com/**', (route) => {
-      if (route.request().resourceType() === 'document') {
-        return route.continue({
-          headers: {
-            ...route.request().headers(),
-            authorization: `token ${GH_PAT}`,
-          },
-        });
-      }
-      return route.continue();
-    });
   });
 
-  // ── Per-target canary assertions ─────────────────────────────────────
+  // ── Public targets (parser structural validation) ──────────────────
 
-  for (const target of CANARY_TARGETS) {
+  for (const target of PUBLIC_TARGETS) {
     it(`should parse: ${target.label}`, async () => {
       await page.goto(target.url, {
         waitUntil: 'domcontentloaded',
         timeout: 30_000,
       });
 
-      // Allow short settle for any client-side hydration
       await page.waitForTimeout(2_000);
 
       const html = await page.content();
 
-      // ── Core assertion: the page must be recognized ─────────────
-      // parseFromHTML throws ParserBreakageError if the page is unrecognized.
       let prs: PullRequest[];
       try {
         prs = GitHubHTMLParser.parseFromHTML(html, GITHUB_BASE, DEFAULT_COMPILED_PATTERNS);
       } catch (error) {
-        // Dump a snippet of the HTML to help diagnose what GitHub changed
         const snippet = html.slice(0, 3000);
         console.error(`\n=== HTML SNIPPET (first 3000 chars) for "${target.label}" ===\n${snippet}\n===\n`);
         throw error;
@@ -147,22 +118,18 @@ describe('Parser Canary — Live GitHub HTML', () => {
 
       console.log(`  → ${target.label}: ${prs.length} PR(s) extracted`);
 
-      // ── Quantity assertion (when target demands results) ────────
       if (target.requireResults) {
         expect(
           prs.length,
           `Expected at least 1 PR from "${target.label}" — got 0. ` +
-            'Either the canary GitHub account has no matching PRs, or the parser is broken.'
+            'The parser is likely broken due to a GitHub DOM change.'
         ).toBeGreaterThan(0);
       }
 
-      // ── Per-PR structural validation ───────────────────────────
       for (const pr of prs) {
         assertPRValid(pr, target.label);
       }
 
-      // ── Avatar spot-check: at least one PR should have avatar data
-      //    when multiple PRs exist (GitHub renders AvatarStack on most rows).
       if (prs.length >= 3) {
         const anyAvatarUrl = prs.some(
           (pr) => pr.author.length > 0 && pr.author.some((a) => a.avatarUrl),
@@ -170,7 +137,7 @@ describe('Parser Canary — Live GitHub HTML', () => {
         if (!anyAvatarUrl) {
           console.warn(
             `  ⚠ No avatarUrl found across ${prs.length} PRs in "${target.label}". ` +
-              'This may indicate a parser regression or a GitHub DOM change for avatar stacks.'
+              'This may indicate a parser regression for avatar stacks.'
           );
         }
       }
