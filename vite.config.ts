@@ -20,7 +20,10 @@ export default defineConfig(({ mode }) => {
         targets: [
           {
             src: 'extension/offscreen/offscreen.html',
-            dest: '.', // This will place it in dist/extension/offscreen/offscreen.html
+            // v4 preserves directory structure by default; stripBase flattens to dist/offscreen.html
+            // so it matches OFFSCREEN_DOCUMENT_PATH ('offscreen.html') in constants.
+            dest: '.',
+            rename: { stripBase: true },
           },
           // If manifest.json is not automatically copied from public/ to dist/ (it usually is),
           // you can add it here too, though Vite's default behavior should handle it.
