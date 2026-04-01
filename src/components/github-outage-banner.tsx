@@ -11,10 +11,11 @@ export const GitHubOutageBanner = () => {
       <ExclamationTriangleIcon className="w-4 h-4 text-warning shrink-0 mt-px" />
       <div className="min-w-0">
         <p className="text-xs font-medium text-warning leading-snug">
-          GitHub is temporarily unavailable
+          Couldn't refresh PR data from GitHub
         </p>
         <p className="text-[10px] text-warning/70 leading-snug mt-0.5">
-          Showing cached data. This usually resolves on its own within minutes.
+          Showing cached pull requests. GitHub may be slow, rate-limited, or having a partial outage
+          for the APIs this extension uses — usually back to normal within a few minutes.
         </p>
       </div>
     </div>
