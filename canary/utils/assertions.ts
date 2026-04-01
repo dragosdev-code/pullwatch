@@ -33,6 +33,25 @@ export function assertPRValid(pr: PullRequest, label: string): void {
   expect(pr.author[0].login, `[${label}] first author login`).toBeTruthy();
 
   expect(['draft', 'open', 'merged'], `[${label}] PR type`).toContain(pr.type);
+
+  // id mirrors url in the parser (id = url), but we check it separately
+  // because downstream code uses id as the deduplication key in storage.
+  expect(pr.id, `[${label}] PR id`).toBeTruthy();
+  expect(pr.id, `[${label}] PR id matches pull URL`).toMatch(/\/pull\/\d+/);
+
+  // createdAt is always set by the parser — either extracted from a
+  // <relative-time> element or defaulted to Date.now(). A broken timestamp
+  // regex could silently produce a malformed string that passes truthy
+  // checks but breaks date sorting downstream.
+  expect(pr.createdAt, `[${label}] createdAt present`).toBeTruthy();
+  expect(
+    Number.isNaN(new Date(pr.createdAt!).getTime()),
+    `[${label}] createdAt is a valid date ("${pr.createdAt}")`,
+  ).toBe(false);
+
+  // The parser hardcodes isNew to false; if this ever becomes undefined
+  // it means the return shape changed and storage hydration will break.
+  expect(pr.isNew, `[${label}] isNew is false`).toBe(false);
 }
 
 /**
@@ -68,6 +87,20 @@ export function parseAndAssert(
       `  [parse] Sample PR #${first.number}: "${first.title}" ` +
         `(${first.type}) by ${first.author[0]?.login ?? '?'} in ${first.repoName}`,
     );
+
+    // Dump the full shape so CI logs show exactly what the parser produced.
+    // Avatar data URIs from authenticated pages can be multi-KB base64
+    // strings, so we truncate them to keep output scannable.
+    const redactedPR = {
+      ...first,
+      author: first.author.map((a) => ({
+        ...a,
+        avatarUrl: a.avatarUrl
+          ? a.avatarUrl.slice(0, 60) + (a.avatarUrl.length > 60 ? '...[truncated]' : '')
+          : undefined,
+      })),
+    };
+    console.log(`  [structure] First PR shape:\n${JSON.stringify(redactedPR, null, 2)}`);
   }
 
   if (target.requireResults && prs.length === 0) {
