@@ -49,6 +49,8 @@ export const BROADCAST_ACTION = {
   settingsUpdated: 'settingsUpdated',
   parserBreakageDetected: 'parserBreakageDetected',
   parserBreakageCleared: 'parserBreakageCleared',
+  githubOutageDetected: 'githubOutageDetected',
+  githubOutageCleared: 'githubOutageCleared',
 } as const;
 
 export const EVENT_SETTINGS_UPDATED = BROADCAST_ACTION.settingsUpdated;

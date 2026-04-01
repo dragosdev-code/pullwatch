@@ -22,5 +22,9 @@ export default defineConfig({
     hookTimeout: 60_000,
     pool: 'forks',
     reporters: ['verbose'],
+    // One retry filters out single-request flakes (e.g. brief GitHub 502)
+    // without masking real DOM-change breakage. Higher values would delay
+    // legitimate alerts by minutes, defeating the "early warning" goal.
+    retry: 1,
   },
 });

@@ -17,6 +17,7 @@ import { useGlobalError, useClearGlobalError } from './stores/global-error';
 import { useDebugMode } from './stores/debug';
 import { SettingsOverlay } from './components/settings/settings-overlay';
 import { ParserBreakageBanner } from './components/parser-breakage-banner';
+import { GitHubOutageBanner } from './components/github-outage-banner';
 import { TAB_IDS } from './constants/tabs';
 
 const App = () => {
@@ -76,6 +77,7 @@ const App = () => {
       )}
 
       <ParserBreakageBanner />
+      <GitHubOutageBanner />
 
       {isDebugMode && <DevTestArea />}
 

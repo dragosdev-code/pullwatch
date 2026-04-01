@@ -9,6 +9,7 @@ export const STORAGE_KEY_SETTINGS = 'settings'; // As per requirements
 export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
 export const STORAGE_KEY_PATTERN_REGISTRY = 'parser_pattern_registry';
 export const STORAGE_KEY_PARSER_BREAKAGE = 'parser_breakage';
+export const STORAGE_KEY_GITHUB_OUTAGE = 'github_outage';
 
 // Remote Pattern Registry
 export const REMOTE_PATTERNS_URL = 'https://dragosdev-code.github.io/pr-live-config/patterns.json';

@@ -54,6 +54,27 @@ export function assertPRValid(pr: PullRequest, label: string): void {
   expect(pr.isNew, `[${label}] isNew is false`).toBe(false);
 }
 
+const GITHUB_STATUS_API = 'https://www.githubstatus.com/api/v2/status.json';
+
+/**
+ * Checks GitHub's public status API to determine whether GitHub is
+ * currently reporting degraded performance or an active incident.
+ * Used to disambiguate "0 PRs parsed" caused by a partial GitHub
+ * outage from an actual DOM change that broke the parser.
+ */
+async function isGitHubDegraded(): Promise<boolean> {
+  try {
+    const resp = await fetch(GITHUB_STATUS_API);
+    if (!resp.ok) return false;
+    const data = await resp.json();
+    // indicator is "none" when all systems operational, anything else
+    // (minor, major, critical) signals degraded service.
+    return data?.status?.indicator !== 'none';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Runs the production parser against raw HTML, logs diagnostics, and
  * asserts structural correctness on every extracted PR.
@@ -61,11 +82,15 @@ export function assertPRValid(pr: PullRequest, label: string): void {
  * When the parser throws or returns zero results on a required target,
  * the first 5 000 chars of HTML are dumped to stderr — enough context
  * to diagnose whether GitHub changed the DOM or served an error page.
+ *
+ * When zero PRs are found on a required target, checks the GitHub
+ * Status API so the failure message (and downstream Discord alert)
+ * points at the right cause.
  */
-export function parseAndAssert(
+export async function parseAndAssert(
   html: string,
   target: CanaryTarget,
-): PullRequest[] {
+): Promise<PullRequest[]> {
   console.log(`  [parse] Running GitHubHTMLParser.parseFromHTML() for "${target.label}"...`);
 
   let prs: PullRequest[];
@@ -108,13 +133,26 @@ export function parseAndAssert(
     console.error(
       `\n=== 0 PRs — HTML SNIPPET (first 5000 chars) for "${target.label}" ===\n${snippet}\n===\n`,
     );
-  }
 
-  if (target.requireResults) {
+    // GitHub can return HTTP 200 with a valid-looking page shell but no PR
+    // content during partial outages (e.g., SSR failure on their end). This
+    // looks identical to a DOM change from the parser's perspective. Checking
+    // the status API disambiguates so the failure message (and downstream
+    // Discord alert) points at the right cause.
+    const degraded = await isGitHubDegraded();
+    if (degraded) {
+      console.warn(
+        `  [status] GitHub Status API reports degraded service — this failure is likely a GitHub outage, NOT a DOM change.`,
+      );
+    }
+
+    const reason = degraded
+      ? 'GitHub is reporting degraded status — this is likely a transient GitHub outage, not a DOM change.'
+      : 'The parser is likely broken due to a GitHub DOM change.';
+
     expect(
       prs.length,
-      `Expected at least 1 PR from "${target.label}" — got 0. ` +
-        'The parser is likely broken due to a GitHub DOM change.',
+      `Expected at least 1 PR from "${target.label}" — got 0. ${reason}`,
     ).toBeGreaterThan(0);
   }
 

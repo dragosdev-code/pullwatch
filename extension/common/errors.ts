@@ -19,3 +19,23 @@ export class ParserBreakageError extends Error {
     this.name = 'ParserBreakageError';
   }
 }
+
+/**
+ * Thrown when GitHub returns a transient HTTP error (5xx, network timeout,
+ * DNS failure, etc.) that is NOT caused by a DOM/parser change or by the
+ * user's auth state. The distinction matters because the extension should
+ * keep showing stale cached data and display an "outage" banner rather
+ * than the "parser broken" banner — the two require different user action
+ * (wait vs. update the extension).
+ */
+export class GitHubOutageError extends Error {
+  public readonly httpStatus: number | null;
+
+  constructor(context: string, httpStatus: number | null = null) {
+    super(
+      `GitHub temporarily unavailable during ${context}${httpStatus ? ` (HTTP ${httpStatus})` : ''}`,
+    );
+    this.name = 'GitHubOutageError';
+    this.httpStatus = httpStatus;
+  }
+}

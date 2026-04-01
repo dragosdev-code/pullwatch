@@ -17,8 +17,27 @@ import {
   REQUEST_DELAY_MS,
   GITHUB_FETCH_TIMEOUT_MS,
 } from '../../common/constants';
-import { RateLimitError, ParserBreakageError } from '../../common/errors';
+import { RateLimitError, ParserBreakageError, GitHubOutageError } from '../../common/errors';
 import { GitHubHTMLParser } from './GitHubHTMLParser';
+
+// 5xx and Cloudflare edge errors (520-530) signal GitHub infrastructure
+// problems, not content/DOM changes. Classifying them separately lets
+// PRService preserve cached data and show an "outage" banner instead of
+// the misleading "parser broken" banner.
+const TRANSIENT_STATUS_CODES = new Set([
+  500, 502, 503, 504,
+  520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530,
+]);
+
+function isTransientStatus(status: number): boolean {
+  return TRANSIENT_STATUS_CODES.has(status);
+}
+
+// GitHub outages either resolve in seconds (blip) or last minutes/hours
+// (real incident). One retry catches the blip without delaying the error
+// signal for real incidents — the next alarm tick handles those.
+const TRANSIENT_RETRY_DELAY_MS = 3_000;
+const TRANSIENT_MAX_RETRIES = 1;
 
 /**
  * GitHubService handles GitHub HTTP operations for fetching pull requests.
@@ -83,57 +102,112 @@ export class GitHubService implements IGitHubService {
    * Uses an AbortController to guarantee the request settles within
    * {@link GITHUB_FETCH_TIMEOUT_MS}, preventing permanent deadlocks in
    * PRService's deduplication locks when GitHub hangs.
+   *
+   * Retries once on transient errors (5xx, network failures) before giving up,
+   * so brief GitHub blips don't immediately surface as errors to the user.
    */
   private async fetchGitHubData<T>(
     url: string,
     context: string,
     transform: (html: string) => T | Promise<T>
   ): Promise<T> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), GITHUB_FETCH_TIMEOUT_MS);
+    let lastError: unknown;
 
-    try {
-      const response = await fetch(url, {
-        credentials: 'include',
-        headers: this.githubFetchHeaders,
-        signal: controller.signal,
-      });
+    for (let attempt = 0; attempt <= TRANSIENT_MAX_RETRIES; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), GITHUB_FETCH_TIMEOUT_MS);
 
-      this.debugService.log(
-        `[GitHubService] ${context} response status:`,
-        response.status,
-        response.statusText
-      );
-      this.debugService.log(`[GitHubService] ${context} response URL:`, response.url);
+      try {
+        const response = await fetch(url, {
+          credentials: 'include',
+          headers: this.githubFetchHeaders,
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new Error('AuthenticationError: Not logged in or insufficient permissions on GitHub.');
+        this.debugService.log(
+          `[GitHubService] ${context} response status:`,
+          response.status,
+          response.statusText
+        );
+        this.debugService.log(`[GitHubService] ${context} response URL:`, response.url);
+
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('AuthenticationError: Not logged in or insufficient permissions on GitHub.');
+          }
+          if (response.status === 429) {
+            const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+            throw new RateLimitError(context, retryAfter);
+          }
+          if (isTransientStatus(response.status)) {
+            if (attempt < TRANSIENT_MAX_RETRIES) {
+              this.debugService.warn(
+                `[GitHubService] Transient HTTP ${response.status} during ${context} — retrying in ${TRANSIENT_RETRY_DELAY_MS}ms`,
+              );
+              await this.delay(TRANSIENT_RETRY_DELAY_MS);
+              continue;
+            }
+            throw new GitHubOutageError(context, response.status);
+          }
+          throw new Error(`GitHub ${context} request failed: ${response.status}`);
         }
-        if (response.status === 429) {
-          const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
-          throw new RateLimitError(context, retryAfter);
+
+        const html = await response.text();
+        const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
+        const isLoginPage =
+          pageTitle.includes('Sign in to GitHub') ||
+          html.includes('name="login"') ||
+          response.url.includes('/login') ||
+          html.includes('action="/session"') ||
+          html.includes('class="auth-form"');
+
+        if (isLoginPage) {
+          throw new Error('NotLoggedIn: User is not logged in to GitHub.');
         }
-        throw new Error(`GitHub ${context} request failed: ${response.status}`);
+
+        return await transform(html);
+      } catch (error) {
+        lastError = error;
+
+        // Auth, rate-limit, parser, and outage errors are already classified
+        // — bubble them immediately without retrying.
+        if (
+          error instanceof RateLimitError ||
+          error instanceof ParserBreakageError ||
+          error instanceof GitHubOutageError ||
+          (error instanceof Error &&
+            (error.message.startsWith('AuthenticationError') ||
+              error.message.startsWith('NotLoggedIn')))
+        ) {
+          throw error;
+        }
+
+        // Network-level failures (AbortError from timeout, TypeError from
+        // DNS/connection reset) are never the user's fault or a DOM change,
+        // so classify them as outage to preserve cached data in the popup.
+        const isNetworkFailure =
+          (error instanceof DOMException && error.name === 'AbortError') ||
+          error instanceof TypeError;
+
+        if (isNetworkFailure && attempt < TRANSIENT_MAX_RETRIES) {
+          this.debugService.warn(
+            `[GitHubService] Network error during ${context} — retrying in ${TRANSIENT_RETRY_DELAY_MS}ms`,
+          );
+          await this.delay(TRANSIENT_RETRY_DELAY_MS);
+          continue;
+        }
+
+        if (isNetworkFailure) {
+          throw new GitHubOutageError(context);
+        }
+
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      const html = await response.text();
-      const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
-      const isLoginPage =
-        pageTitle.includes('Sign in to GitHub') ||
-        html.includes('name="login"') ||
-        response.url.includes('/login') ||
-        html.includes('action="/session"') ||
-        html.includes('class="auth-form"');
-
-      if (isLoginPage) {
-        throw new Error('NotLoggedIn: User is not logged in to GitHub.');
-      }
-
-      return await transform(html);
-    } finally {
-      clearTimeout(timeoutId);
     }
+
+    throw lastError;
   }
 
   /**
@@ -159,6 +233,7 @@ export class GitHubService implements IGitHubService {
     } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
       if (error instanceof ParserBreakageError) throw error;
+      if (error instanceof GitHubOutageError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchMergedPRs:',
         error instanceof Error ? error.message : error
@@ -181,6 +256,7 @@ export class GitHubService implements IGitHubService {
     } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
       if (error instanceof ParserBreakageError) throw error;
+      if (error instanceof GitHubOutageError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchAssignedPRs:',
         error instanceof Error ? error.message : error
@@ -210,6 +286,7 @@ export class GitHubService implements IGitHubService {
     } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
       if (error instanceof ParserBreakageError) throw error;
+      if (error instanceof GitHubOutageError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchReviewedPRs:',
         error instanceof Error ? error.message : error
@@ -267,6 +344,7 @@ export class GitHubService implements IGitHubService {
     } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
       if (error instanceof ParserBreakageError) throw error;
+      if (error instanceof GitHubOutageError) throw error;
       this.debugService.error(
         '[GitHubService] Error in fetchAuthoredPRs:',
         error instanceof Error ? error.message : error
@@ -304,6 +382,7 @@ export class GitHubService implements IGitHubService {
     } catch (error: unknown) {
       if (error instanceof RateLimitError) throw error;
       if (error instanceof ParserBreakageError) throw error;
+      if (error instanceof GitHubOutageError) throw error;
 
       this.debugService.error(
         `[GitHubService] Error fetching ${authorReviewStatus} PRs:`,
