@@ -4,7 +4,14 @@ on:
   schedule:
     # Run at :17 past every hour (offset avoids the GitHub cron stampede at :00)
     - cron: '17 * * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force_fresh_login:
+        description: >-
+          Delete cached session state before running, forcing a full
+          login + device verification flow (useful for testing the OTP path).
+        type: boolean
+        default: false
 
 concurrency:
   group: canary-parser
@@ -50,6 +57,7 @@ jobs:
 
       # ── Playwright session state caching ─────────────────────────
       - name: Restore Playwright session state
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.force_fresh_login == true) }}
         uses: actions/cache@v4
         id: pw-state
         with:
@@ -57,6 +65,10 @@ jobs:
           key: playwright-state-${{ github.run_id }}
           restore-keys: |
             playwright-state-
+
+      - name: Delete cached session state (force fresh login)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_fresh_login == true }}
+        run: rm -f playwright-state.json
 
       # ── Run canary tests ────────────────────────────────────────
       - name: Run canary parser tests
