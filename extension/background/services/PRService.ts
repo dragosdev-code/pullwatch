@@ -15,6 +15,7 @@ import {
   STORAGE_KEY_MERGED_PRS,
 } from '../../common/constants';
 import { RateLimitError, ParserBreakageError, GitHubOutageError } from '../../common/errors';
+import { delay } from '../../common/utils';
 
 /**
  * PRService handles pull request management and coordination between services.
@@ -116,7 +117,7 @@ export class PRService implements IPRService {
       const oldPendingPRs = oldPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
 
       const freshPendingPRsRaw = await this.gitHubService.fetchAssignedPRs();
-      await this.delay(REQUEST_DELAY_MS);
+      await delay(REQUEST_DELAY_MS);
       const freshReviewedPRsRaw = await this.gitHubService.fetchReviewedPRs();
 
       const { allPRs, filteredPending, newPRs } = await this.mergeAndFilterAssignedPRs(
@@ -487,10 +488,6 @@ export class PRService implements IPRService {
       this.debugService.error('[PRService] Error updating merged PRs:', error);
       throw error;
     }
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   async dispose(): Promise<void> {

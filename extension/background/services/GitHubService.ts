@@ -19,6 +19,7 @@ import {
 } from '../../common/constants';
 import { RateLimitError, ParserBreakageError, GitHubOutageError } from '../../common/errors';
 import { GitHubHTMLParser } from './GitHubHTMLParser';
+import { delay } from '../../common/utils';
 
 // 5xx and Cloudflare edge errors (520-530) signal GitHub infrastructure
 // problems, not content/DOM changes. Classifying them separately lets
@@ -144,7 +145,7 @@ export class GitHubService implements IGitHubService {
               this.debugService.warn(
                 `[GitHubService] Transient HTTP ${response.status} during ${context} — retrying in ${TRANSIENT_RETRY_DELAY_MS}ms`,
               );
-              await this.delay(TRANSIENT_RETRY_DELAY_MS);
+              await delay(TRANSIENT_RETRY_DELAY_MS);
               continue;
             }
             throw new GitHubOutageError(context, response.status);
@@ -193,7 +194,7 @@ export class GitHubService implements IGitHubService {
           this.debugService.warn(
             `[GitHubService] Network error during ${context} — retrying in ${TRANSIENT_RETRY_DELAY_MS}ms`,
           );
-          await this.delay(TRANSIENT_RETRY_DELAY_MS);
+          await delay(TRANSIENT_RETRY_DELAY_MS);
           continue;
         }
 
@@ -329,7 +330,7 @@ export class GitHubService implements IGitHubService {
         const { url, status } = fetchSequence[i];
         resultsByStatus[status] = await this.fetchFromURL(url, status);
         if (i < fetchSequence.length - 1) {
-          await this.delay(REQUEST_DELAY_MS);
+          await delay(REQUEST_DELAY_MS);
         }
       }
 
@@ -361,10 +362,6 @@ export class GitHubService implements IGitHubService {
         }`
       );
     }
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async fetchFromURL(
