@@ -210,6 +210,13 @@ export class NotificationService implements INotificationService {
       const id = notificationId
         ? await chrome.notifications.create(notificationId, options)
         : await chrome.notifications.create(options);
+
+      if (!id) {
+        this.debugService.warn(
+          '[NotificationService] chrome.notifications.create returned empty ID — notification may have been silently dropped'
+        );
+      }
+
       this.debugService.log(
         `[NotificationService] Created notification: ${id} - ${options.title}`
       );

@@ -35,31 +35,42 @@ export class BackgroundManager {
   }
 
   /**
-   * Performs initial setup tasks like permission checks and alarms.
+   * Performs infrastructure setup: permissions, alarms, and badge.
+   *
+   * WHY this method must NOT fetch or seed PR data:
+   *
+   * MV3 service workers terminate after ~30 s of inactivity. Every time
+   * Chrome wakes the worker (alarm, message, etc.) the module-level code in
+   * main.ts runs from scratch — creating a **new** BackgroundManager whose
+   * `this.initialized` is `false`. That means this method executes on
+   * **every** wake, not just on install or browser startup.
+   *
+   * Fetching PRs here with `forceRefresh=true` would write the latest data
+   * to chrome.storage.local while suppressing notifications. The alarm
+   * handler that runs moments later would then compare fresh GitHub data
+   * against that just-seeded storage — finding zero new PRs and never
+   * firing a notification (the badge updates correctly because it is
+   * unconditional, but the desktop alert is silently lost).
+   *
+   * Initial PR seeding belongs exclusively in the `onInstalled` (install /
+   * update) and `onStartup` (browser profile start) handlers in
+   * EventService. Those Chrome events only fire on true lifecycle
+   * transitions, not on routine alarm-triggered wakes, so they do not
+   * interfere with the alarm handler's new-PR detection.
    */
   private async performInitialSetup(): Promise<void> {
     const permissionService = this.serviceContainer.getService('permissionService');
     const alarmService = this.serviceContainer.getService('alarmService');
-    const prService = this.serviceContainer.getService('prService');
     const badgeService = this.serviceContainer.getService('badgeService');
 
     try {
-      // Check permissions
       await permissionService.checkAllPermissions();
-
-      // Setup alarms
       await alarmService.setupFetchAlarm();
-
-      // Set initial badge state
       await badgeService.setDefaultBadge();
-
-      // Perform initial PR fetch
-      await prService.fetchAndUpdateAssignedPRs(true);
 
       this.debugLog('[BackgroundManager] Initial setup completed');
     } catch (error) {
       this.debugError('[BackgroundManager] Error during initial setup:', error);
-      // Don't re-throw as this is non-critical for basic functionality
     }
   }
 

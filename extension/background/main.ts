@@ -6,24 +6,48 @@ import type { RuntimeMessage, MessageResponse } from '../common/types';
 /**
  * Main entry point for the background service worker.
  *
- * CRITICAL: All Chrome event listeners MUST be registered synchronously during
- * the first execution tick of the service worker script. Chrome uses synchronous
- * listener registration to decide which events can wake the worker. Listeners
- * registered after an `await` are invisible to Chrome's wake-up mechanism and
- * will cause events (alarms, messages, etc.) to be silently dropped.
+ * ### MV3 Service Worker Lifecycle — why this matters
  *
- * Pattern used: "Initialization Gate"
+ * Chrome terminates MV3 service workers after ~30 s of inactivity. When an
+ * event (alarm, message, etc.) later wakes the worker, this entire file
+ * executes **from scratch**: new ServiceContainer, new BackgroundManager,
+ * new `initPromise`. There is no persistent `initialized` flag between
+ * wakes — every in-memory variable is gone.
+ *
+ * Opening DevTools on the service worker **masks** this: Chrome keeps the
+ * worker alive indefinitely, so the objects created below persist and
+ * `BackgroundManager.initialized` stays `true` after the first run.
+ * Without DevTools, each wake is a clean slate.
+ *
+ * ### Which Chrome events fire on which wake types
+ *
+ * - `onInstalled`  — fires only on extension install or update.
+ * - `onStartup`    — fires only when the browser profile starts.
+ * - `onAlarm`      — fires on each alarm tick (routine wake).
+ * - `onMessage`    — fires when any extension context sends a message.
+ *
+ * A routine alarm wake does NOT fire `onInstalled` or `onStartup`. This
+ * means `performInitialSetup` (called via `initPromise`) is the only code
+ * guaranteed to run before every event handler. It must restrict itself to
+ * idempotent infrastructure work (permissions, alarms, badge) and must NOT
+ * fetch or seed PR data — see BackgroundManager.performInitialSetup for
+ * the full explanation.
+ *
+ * ### Pattern: "Initialization Gate"
+ *
  * - Start async init immediately, store the resulting Promise.
- * - Register all listeners synchronously.
- * - Inside each listener, await the init Promise before processing.
+ * - Register all listeners synchronously (required by Chrome's wake-up
+ *   mechanism — listeners registered after an `await` are invisible).
+ * - Inside each listener, `await initPromise` before processing.
  *
  * ### Async `chrome.*` listeners (alarms, install, startup, notification click)
- * These handlers are `async` and `await` both {@link initPromise} and the full
- * {@link IEventService} handler. The listener therefore returns a Promise that stays
- * pending until that work finishes, which keeps the MV3 service worker tied to the event.
- * Scheduling only `initPromise.then(...)` and returning void ends the synchronous callback
- * immediately; Chrome may idle the worker before fetches or `chrome.notifications` run.
- * Having DevTools open on the service worker masks that by keeping the worker alive longer.
+ *
+ * These handlers are `async` and `await` both {@link initPromise} and the
+ * full {@link IEventService} handler. The returned Promise keeps the MV3
+ * service worker alive until the work finishes. Scheduling only
+ * `initPromise.then(...)` and returning void would end the synchronous
+ * callback immediately; Chrome may idle the worker before fetches or
+ * `chrome.notifications` run.
  */
 
 const serviceContainer = new ServiceContainer();

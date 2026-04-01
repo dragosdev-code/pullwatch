@@ -222,7 +222,16 @@ export class PRService implements IPRService {
   }
 
   /**
-   * Persists assigned PRs to storage, updates the badge, and sends notifications for new PRs.
+   * Sends notifications for new assigned PRs, then persists the full list and
+   * updates the badge.
+   *
+   * WHY notify before persist: If the MV3 service worker is terminated
+   * mid-execution (or an error is thrown after storage writes), the new PR
+   * would be marked as "seen" in chrome.storage.local without the user ever
+   * receiving a notification. On the next alarm wake, comparePRs would skip
+   * it because it is already in the stored list. By notifying first, a
+   * worst-case crash causes a duplicate notification on the next tick (safe)
+   * rather than a silently lost one (not safe).
    */
   private async persistAndNotifyAssigned(
     allPRs: PullRequest[],
@@ -230,19 +239,27 @@ export class PRService implements IPRService {
     newPRs: PullRequest[],
     forceRefresh: boolean
   ): Promise<void> {
-    await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRs);
-    await this.storageService.setLastFetchTime(Date.now());
-    await this.badgeService.setPRCountBadge(filteredPendingCount);
-
     if (newPRs.length > 0 && !forceRefresh) {
       this.debugService.log(`[PRService] Showing notifications for ${newPRs.length} new PR(s)`);
       await this.notificationService.showAssignedPRNotifications(newPRs);
     }
+
+    await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRs);
+    await this.storageService.setLastFetchTime(Date.now());
+    await this.badgeService.setPRCountBadge(filteredPendingCount);
   }
 
   /**
    * Compares old and new PR lists to identify new PRs.
    * Only considers PRs as "new" if they weren't in the old list (not when PRs are missing).
+   *
+   * INVARIANT: `oldPRs` must come from the **previous** alarm tick's
+   * persisted storage — never from a fetch performed in the same wake cycle.
+   * If any code writes fresh GitHub data to storage before the alarm handler
+   * calls this method, `oldPRs` will already contain the genuinely new PR
+   * and the comparison will produce `newPRs = []`, silently swallowing the
+   * notification. See BackgroundManager.performInitialSetup for the full
+   * explanation of why per-wake PR seeding is forbidden.
    */
   public comparePRs(
     oldPRs: PullRequest[],
@@ -449,8 +466,10 @@ export class PRService implements IPRService {
       );
       this.debugService.log(`[PRService] Newly merged PRs detected: ${newPRs.length}`);
 
-      await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, mergedPRsWithStatus);
-
+      // WHY notify before persist: same rationale as persistAndNotifyAssigned.
+      // If the worker dies after storage is written but before the notification
+      // fires, the merged PR is permanently marked as "seen" with no alert.
+      // Notifying first means the worst case is a duplicate on the next tick.
       if (newPRs.length > 0 && !forceRefresh) {
         this.debugService.log(
           `[PRService] Triggering merged PR notifications for ${newPRs.length} PR(s)`
@@ -461,6 +480,8 @@ export class PRService implements IPRService {
       } else if (forceRefresh) {
         this.debugService.log('[PRService] Force refresh detected, skipping merged notifications');
       }
+
+      await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, mergedPRsWithStatus);
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
