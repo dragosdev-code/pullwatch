@@ -12,6 +12,7 @@ import type { IRateLimitService } from '../interfaces/IRateLimitService';
 import type { ISoundService } from '../interfaces/ISoundService';
 import type { IPatternRegistryService } from '../interfaces/IPatternRegistryService';
 import type { IStorageService } from '../interfaces/IStorageService';
+import type { IHealthStatusService } from '../interfaces/IHealthStatusService';
 
 /**
  * Typed registry mapping service keys to their interface types.
@@ -26,6 +27,7 @@ export interface ServiceMap {
   badgeService: IBadgeService;
   soundService: ISoundService;
   eventService: IEventService;
+  healthStatusService: IHealthStatusService;
   patternRegistryService: IPatternRegistryService;
   gitHubService: IGitHubService;
   rateLimitService: IRateLimitService;

@@ -5,6 +5,7 @@ import type { IGitHubService } from '../interfaces/IGitHubService';
 import type { INotificationService } from '../interfaces/INotificationService';
 import type { IBadgeService } from '../interfaces/IBadgeService';
 import type { IRateLimitService } from '../interfaces/IRateLimitService';
+import type { IHealthStatusService } from '../interfaces/IHealthStatusService';
 import type { PullRequest } from '../../common/types';
 import {
   CACHE_TTL_MS,
@@ -12,10 +13,7 @@ import {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_MERGED_PRS,
-  STORAGE_KEY_PARSER_BREAKAGE,
-  STORAGE_KEY_GITHUB_OUTAGE,
 } from '../../common/constants';
-import { BROADCAST_ACTION } from '../../common/runtime-actions';
 import { RateLimitError, ParserBreakageError, GitHubOutageError } from '../../common/errors';
 
 /**
@@ -29,9 +27,8 @@ export class PRService implements IPRService {
   private notificationService: INotificationService;
   private badgeService: IBadgeService;
   private rateLimitService: IRateLimitService;
+  private healthStatusService: IHealthStatusService;
   private initialized = false;
-  private parserBroken = false;
-  private githubOutage = false;
   private assignedFetchInProgress: Promise<PullRequest[]> | null = null;
   private assignedFetchOpts: { forceRefresh: boolean; bypassCache: boolean } | null = null;
   private mergedFetchInProgress: Promise<PullRequest[]> | null = null;
@@ -45,6 +42,7 @@ export class PRService implements IPRService {
     notificationService: INotificationService;
     badgeService: IBadgeService;
     rateLimitService: IRateLimitService;
+    healthStatusService: IHealthStatusService;
   }) {
     this.debugService = deps.debugService;
     this.storageService = deps.storageService;
@@ -52,13 +50,11 @@ export class PRService implements IPRService {
     this.notificationService = deps.notificationService;
     this.badgeService = deps.badgeService;
     this.rateLimitService = deps.rateLimitService;
+    this.healthStatusService = deps.healthStatusService;
   }
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    const stored = await chrome.storage.local.get([STORAGE_KEY_PARSER_BREAKAGE, STORAGE_KEY_GITHUB_OUTAGE]);
-    this.parserBroken = !!stored[STORAGE_KEY_PARSER_BREAKAGE];
-    this.githubOutage = !!stored[STORAGE_KEY_GITHUB_OUTAGE];
     this.initialized = true;
     this.debugService.log('[PRService] PR service initialized');
   }
@@ -130,8 +126,8 @@ export class PRService implements IPRService {
       await this.persistAndNotifyAssigned(allPRs, filteredPending.length, newPRs, forceRefresh);
 
       this.rateLimitService.recordSuccess();
-      await this.clearParserBreakage();
-      await this.clearGitHubOutage();
+      await this.healthStatusService.clearParserBreakage();
+      await this.healthStatusService.clearGitHubOutage();
       this.debugService.log(`[PRService] Successfully updated ${allPRs.length} PRs`);
       return allPRs;
     } catch (error) {
@@ -140,7 +136,7 @@ export class PRService implements IPRService {
           `[PRService] ${error.message} — preserving ${oldPRs.length} stored assigned PRs.`
         );
         await this.badgeService.setErrorBadge();
-        await this.signalParserBreakage(error.message);
+        await this.healthStatusService.signalParserBreakage(error.message);
         return oldPRs;
       }
       // A GitHub outage is not actionable by the user, so wiping their PR
@@ -151,7 +147,7 @@ export class PRService implements IPRService {
           `[PRService] ${error.message} — preserving ${oldPRs.length} stored assigned PRs.`
         );
         await this.badgeService.setErrorBadge();
-        await this.signalGitHubOutage(error.message);
+        await this.healthStatusService.signalGitHubOutage(error.message);
         return oldPRs;
       }
       if (error instanceof RateLimitError) {
@@ -359,8 +355,8 @@ export class PRService implements IPRService {
       await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, freshAuthoredPRs);
 
       this.rateLimitService.recordSuccess();
-      await this.clearParserBreakage();
-      await this.clearGitHubOutage();
+      await this.healthStatusService.clearParserBreakage();
+      await this.healthStatusService.clearGitHubOutage();
       this.debugService.log(
         `[PRService] Successfully updated ${freshAuthoredPRs.length} authored PRs`
       );
@@ -370,14 +366,14 @@ export class PRService implements IPRService {
         this.debugService.warn(
           `[PRService] ${error.message} — preserving ${oldPRs.length} stored authored PRs.`
         );
-        await this.signalParserBreakage(error.message);
+        await this.healthStatusService.signalParserBreakage(error.message);
         return oldPRs;
       }
       if (error instanceof GitHubOutageError) {
         this.debugService.warn(
           `[PRService] ${error.message} — preserving ${oldPRs.length} stored authored PRs.`
         );
-        await this.signalGitHubOutage(error.message);
+        await this.healthStatusService.signalGitHubOutage(error.message);
         return oldPRs;
       }
       if (error instanceof RateLimitError) {
@@ -466,8 +462,8 @@ export class PRService implements IPRService {
       }
 
       this.rateLimitService.recordSuccess();
-      await this.clearParserBreakage();
-      await this.clearGitHubOutage();
+      await this.healthStatusService.clearParserBreakage();
+      await this.healthStatusService.clearGitHubOutage();
       this.debugService.log(`[PRService] Successfully updated ${mergedPRsWithStatus.length} merged PRs`);
       return mergedPRsWithStatus;
     } catch (error) {
@@ -475,14 +471,14 @@ export class PRService implements IPRService {
         this.debugService.warn(
           `[PRService] ${error.message} — preserving ${oldPRs.length} stored merged PRs.`
         );
-        await this.signalParserBreakage(error.message);
+        await this.healthStatusService.signalParserBreakage(error.message);
         return oldPRs;
       }
       if (error instanceof GitHubOutageError) {
         this.debugService.warn(
           `[PRService] ${error.message} — preserving ${oldPRs.length} stored merged PRs.`
         );
-        await this.signalGitHubOutage(error.message);
+        await this.healthStatusService.signalGitHubOutage(error.message);
         return oldPRs;
       }
       if (error instanceof RateLimitError) {
@@ -491,51 +487,6 @@ export class PRService implements IPRService {
       this.debugService.error('[PRService] Error updating merged PRs:', error);
       throw error;
     }
-  }
-
-  private async signalParserBreakage(context: string): Promise<void> {
-    if (this.parserBroken) return;
-    this.parserBroken = true;
-    const payload = { detected: true, timestamp: Date.now(), context };
-    await chrome.storage.local.set({ [STORAGE_KEY_PARSER_BREAKAGE]: payload });
-    chrome.runtime.sendMessage({
-      action: BROADCAST_ACTION.parserBreakageDetected,
-      data: payload,
-    }).catch(() => {});
-  }
-
-  private async clearParserBreakage(): Promise<void> {
-    if (!this.parserBroken) return;
-    this.parserBroken = false;
-    await chrome.storage.local.remove(STORAGE_KEY_PARSER_BREAKAGE);
-    chrome.runtime.sendMessage({
-      action: BROADCAST_ACTION.parserBreakageCleared,
-      data: null,
-    }).catch(() => {});
-  }
-
-  // Outage and parser breakage are separate storage keys and broadcasts
-  // because they require different user-facing messaging ("wait it out"
-  // vs "extension update incoming") and different developer-facing triage.
-  private async signalGitHubOutage(context: string): Promise<void> {
-    if (this.githubOutage) return;
-    this.githubOutage = true;
-    const payload = { detected: true, timestamp: Date.now(), context };
-    await chrome.storage.local.set({ [STORAGE_KEY_GITHUB_OUTAGE]: payload });
-    chrome.runtime.sendMessage({
-      action: BROADCAST_ACTION.githubOutageDetected,
-      data: payload,
-    }).catch(() => {});
-  }
-
-  private async clearGitHubOutage(): Promise<void> {
-    if (!this.githubOutage) return;
-    this.githubOutage = false;
-    await chrome.storage.local.remove(STORAGE_KEY_GITHUB_OUTAGE);
-    chrome.runtime.sendMessage({
-      action: BROADCAST_ACTION.githubOutageCleared,
-      data: null,
-    }).catch(() => {});
   }
 
   private delay(ms: number): Promise<void> {
