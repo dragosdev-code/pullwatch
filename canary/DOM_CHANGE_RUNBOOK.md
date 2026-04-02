@@ -21,6 +21,9 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 |------|---------|
 | `extension/common/default-patterns.ts` | Bundled fallback patterns + `compilePatterns()` helper |
 | `extension/common/pattern-types.ts` | TypeScript interfaces for all pattern shapes (`PatternRegistry`, `CompiledPatterns`) |
+| `extension/common/pattern-registry-schema.ts` | Valibot runtime schema — validates remote JSON and cached storage **before** compilation; produces dotted-path error messages |
+| `extension/common/__tests__/pattern-registry-schema.test.ts` | 48 unit tests for the schema validator — run after any `patterns.json` edit to confirm the extension will accept it |
+| `extension/common/__tests__/schema-test-helpers.ts` | Factory helpers (`makeValidRemoteConfig`, `makePatternEntry`, etc.) used by the schema tests |
 | `extension/background/services/GitHubHTMLParser.ts` | The parser that consumes compiled patterns — zero hardcoded selectors |
 | `extension/background/services/PatternRegistryService.ts` | Fetches remote `patterns.json`, caches in `chrome.storage.local`, 6-hour TTL |
 | `extension/common/constants.ts` | `REMOTE_PATTERNS_URL`, `PATTERN_REFRESH_TTL_MS` (6h) |
@@ -36,6 +39,10 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 - **Source repo**: <https://github.com/dragosdev-code/pr-live-config> (push to `main`, GitHub Pages auto-deploys within 1-2 minutes)
 - **Schema**: `{ version: number, minExtensionVersion: string, updatedAt: string, patterns: PatternRegistry }`
 - **Version gating**: `PatternRegistryService` skips the update if `config.version <= this.registryVersion` — you **must bump `version`** for any change to take effect.
+- **Runtime validation**: Before compiling, the service runs `validateRemoteConfig()` (from `extension/common/pattern-registry-schema.ts`) against the raw JSON. If the structure is invalid, it is rejected immediately with a dotted-path error message logged to the extension console — e.g., `prRowSelectors.0.type: Expected 'class' | 'attribute' | 'balanced-div', received 'xpath'`. The current compiled patterns are preserved unchanged. This is a **structural** check; regex syntax is still validated by `safeCompile` (a second defense layer) after the schema passes.
+- **Two version numbers to keep straight**:
+  - `version` (integer, in `patterns.json`) — the **config revision**. Increment by 1 every time you push updated patterns. Starts at 1; the extension stores 0 locally for "no remote config loaded yet."
+  - `minExtensionVersion` (semver string, in `patterns.json`) — the **minimum extension build** that should apply this config. Set this if new patterns require new extension code; leave it at `"0.0.0"` if all builds can safely use them. This is compared against `chrome.runtime.getManifest().version`, not against the config `version` number.
 
 ---
 
@@ -240,6 +247,17 @@ npm test
 
 Both must pass before proceeding.
 
+### What `npm test` checks here
+
+`npm test` runs the schema validator test suite at `extension/common/__tests__/pattern-registry-schema.test.ts` (48 tests across 9 story-chapters). One of those tests — **"Chapter 1: The bundled defaults are always valid"** — imports `DEFAULT_PATTERNS` directly and asserts that it passes `validatePatternRegistry()`. If your edit to `default-patterns.ts` accidentally removes a required field, changes `regex` to a non-string, or empties a required array, this test will fail with the exact dotted path of the problem, e.g.:
+
+```
+AssertionError: expected false to be true
+    at Chapter 1 > DEFAULT_PATTERNS passes validatePatternRegistry
+```
+
+This is the fastest feedback loop — no live network request, no browser, sub-second. If the schema test passes, the validator used by the extension will also accept your bundled defaults.
+
 ---
 
 ## Step 7 — Deploy to `patterns.json` (Hot-fix for Live Users)
@@ -295,6 +313,39 @@ Or use `jq`:
 ```bash
 jq . patterns.json > /dev/null && echo "Valid JSON" || echo "INVALID JSON"
 ```
+
+### 7.3b — Validate against the extension schema
+
+JSON syntax being valid is necessary but not sufficient. The extension rejects `patterns.json` if its **structure** does not match the `PatternRegistry` schema — even if the JSON parses cleanly. Run the unit test suite from the extension repo to confirm the live extension will accept what you just edited:
+
+```bash
+# Run from the extension repo root
+npm test
+```
+
+This executes `extension/common/__tests__/pattern-registry-schema.test.ts`. The tests mirror exactly what `validateRemoteConfig()` checks at runtime. If any test fails, the output includes the dotted path to the offending field, for example:
+
+```
+FAIL  extension/common/__tests__/pattern-registry-schema.test.ts
+  Chapter 4: Missing nested structure is caught before compilation
+    ✕ rejects when pageRecognition.hasPRContent is missing
+
+AssertionError: expected false to be true (schema rejected an invalid payload)
+```
+
+**Common failure reasons when editing `patterns.json`:**
+
+| Symptom | What to check |
+|---------|---------------|
+| `version: Expected number, received string` | `version` must be a number (`1`), not a string (`"1"`) |
+| `version: Value must be >=1` | You set `version: 0`; bump to at least `1` |
+| `prRowSelectors.0.type: Invalid value` | `type` must be exactly one of `"class"`, `"attribute"`, `"balanced-div"` |
+| `prLink: Array must have >=1 items` | `prLink`, `author`, `timestamp`, `prType`, `prRowSelectors` cannot be empty arrays |
+| `assigneeAvatar.avatarImg: Missing field` | A required sub-key of `assigneeAvatar` is absent |
+| `prLink.0.captureGroups.url: Value must be >=1` | `captureGroups` values are 1-based group indices; `0` is invalid |
+| `pageRecognition.hasPRContent.regex: Expected string` | `regex` must always be a string, never a number, null, or RegExp object |
+
+**This test is the quickest way to confirm the extension will accept your config before you push to GitHub Pages.** The schema tests run in under a second and require no network access.
 
 ### 7.4 — Commit and push
 
@@ -387,14 +438,29 @@ If you are an AI coding agent tasked with fixing a canary failure:
 3. **Identify the broken pattern** using the mapping table in Step 2.
 4. **Inspect the HTML** around where PR rows, links, or status icons appear. Look for changed class names, attribute names, or structural changes.
 5. **Edit `extension/common/default-patterns.ts`** with the fixed regex. The pattern shape is `{ regex: string, flags: string, captureGroups?: Record<string, number> }`.
-6. **Run `npm run canary:test`** to verify the fix works against live GitHub HTML.
-7. **Run `npm test`** to verify no regressions in unit tests.
+6. **Run `npm test`** immediately after editing `default-patterns.ts`. The schema test suite at `extension/common/__tests__/pattern-registry-schema.test.ts` validates the bundled defaults — Chapter 1 of the tests imports `DEFAULT_PATTERNS` and runs it through `validatePatternRegistry()`. If you accidentally remove a required field or break the structure, this fails in under a second with the exact dotted path of the problem, before any network request.
+7. **Run `npm run canary:test`** to verify the fix works against live GitHub HTML.
 8. **Update the remote `patterns.json`** in the `pr-live-config` repo (see Step 7). Remember to bump `version` and update `updatedAt`.
-9. **Commit both repos.**
+9. **After editing `patterns.json`**, run `npm test` again from the extension repo (see Step 7.3b). The same schema validator that runs inside the live extension also runs in these tests. If `npm test` passes, the live extension will accept your config; if it fails, the error message tells you exactly which field is wrong.
+10. **Commit both repos.**
 
 Key constraints:
-- The `patterns.json` structure MUST match the `PatternRegistry` interface in `extension/common/pattern-types.ts` exactly.
-- The `version` field in `patterns.json` MUST be strictly greater than the previous value or the extension will ignore the update.
+- The `patterns.json` structure MUST match the `PatternRegistry` interface in `extension/common/pattern-types.ts` exactly. The Valibot schema in `extension/common/pattern-registry-schema.ts` is the enforced definition — any deviation is rejected before compilation with a dotted-path error in the extension console.
+- The `version` field in `patterns.json` MUST be a **number ≥ 1** and strictly greater than the current cached value or the extension will ignore the update. `0` is reserved as the "no remote config yet" sentinel.
+- The `minExtensionVersion` field is the **extension semver** gate, not the config version. Set it to `"0.0.0"` if all builds can use the config, or a specific version if the new patterns require new extension code.
 - Regex strings in JSON use double-escaped backslashes (`\\d` not `\d`).
-- The `captureGroups` map MUST be correct — the parser indexes into match results using these numbers.
+- The `captureGroups` map MUST be correct — the parser indexes into match results using these numbers. Values must be positive integers ≥ 1 (group 0 is the full match, which is never a named group).
+- Arrays `prRowSelectors`, `prLink`, `author`, `timestamp`, and `prType` MUST each have at least one entry — the schema enforces `minLength(1)` on all of them.
 - **Never hardcode selectors in `GitHubHTMLParser.ts`** — all extraction logic is pattern-driven.
+
+### Understanding validation errors vs. compilation errors
+
+The extension applies two independent layers of defense:
+
+| Layer | When it runs | What it catches | Error visible in |
+|-------|-------------|-----------------|------------------|
+| Schema validation (`validateRemoteConfig`) | After `response.json()`, before compilePatterns | Wrong types, missing fields, invalid union values, empty required arrays, out-of-range captureGroups | Extension console: `[PatternRegistry] Remote config rejected: <dotted-path>: <reason>` |
+| Regex compilation (`safeCompile`) | After schema passes | Syntactically invalid RegExp source strings (e.g., `[unclosed`) | Extension console: `[PatternRegistry] Compilation failed: <error message>` |
+
+If you see "Remote config rejected" — fix the JSON structure (run `npm test` to guide you).
+If you see "Compilation failed" — the structure is valid but a regex string itself is syntactically broken.

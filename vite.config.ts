@@ -125,7 +125,7 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: 'happy-dom',
-      include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      include: ['src/**/*.{test,spec}.{ts,tsx}', 'extension/**/*.{test,spec}.ts'],
     },
   };
 });

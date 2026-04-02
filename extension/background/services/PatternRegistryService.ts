@@ -8,19 +8,11 @@ import {
   PATTERN_REFRESH_TTL_MS,
   REMOTE_FETCH_TIMEOUT_MS,
 } from '../../common/constants';
-
-interface StoredPatternData {
-  patterns: PatternRegistry;
-  version: number;
-  timestamp: number;
-}
-
-interface RemotePatternConfig {
-  version: number;
-  minExtensionVersion: string;
-  updatedAt?: string;
-  patterns: PatternRegistry;
-}
+import {
+  validateRemoteConfig,
+  validateStoredPatternData,
+  type StoredPatternData,
+} from '../../common/pattern-registry-schema';
 
 function getExtensionVersion(): string {
   try {
@@ -126,12 +118,16 @@ export class PatternRegistryService implements IPatternRegistryService {
         return;
       }
 
-      const config: RemotePatternConfig = await response.json();
+      const raw: unknown = await response.json();
 
-      if (!config.version || !config.patterns) {
-        this.debugService.warn('[PatternRegistry] Remote config missing required fields');
+      const validated = validateRemoteConfig(raw);
+      if (!validated.success) {
+        this.debugService.warn(
+          `[PatternRegistry] Remote config rejected: ${validated.message}`
+        );
         return;
       }
+      const config = validated.data;
 
       if (config.version <= this.registryVersion) {
         this.debugService.log(
@@ -185,10 +181,20 @@ export class PatternRegistryService implements IPatternRegistryService {
   }
 
   private async loadFromStorage(): Promise<StoredPatternData | null> {
-    const result = await chrome.storage.local.get(STORAGE_KEY_PATTERN_REGISTRY);
-    const stored = result[STORAGE_KEY_PATTERN_REGISTRY] as StoredPatternData | undefined;
-    if (!stored?.patterns) return null;
-    return stored;
+    const raw = await chrome.storage.local.get(STORAGE_KEY_PATTERN_REGISTRY);
+    const stored = raw[STORAGE_KEY_PATTERN_REGISTRY];
+    if (!stored) return null;
+
+    // Validate the full wrapper — not just patterns — because corrupted
+    // version/timestamp would poison staleness and version comparisons.
+    const result = validateStoredPatternData(stored);
+    if (!result.success) {
+      this.debugService.warn(
+        `[PatternRegistry] Stored data rejected: ${result.message}`
+      );
+      return null;
+    }
+    return result.data;
   }
 
   private async persistToStorage(patterns: PatternRegistry, version: number): Promise<void> {
