@@ -11,16 +11,24 @@ interface SoundPreviewButtonProps {
   disabled?: boolean;
   /** Optional size variant */
   size?: 'xs' | 'sm' | 'md';
+  /**
+   * How long to show the “playing” state after starting preview (ms).
+   * Use clip duration + buffer for custom sounds; default matches short built-ins.
+   */
+  playbackDurationMs?: number;
 }
 
 /**
  * Inline sound preview button.
  * Allows quick testing of a sound without opening the full picker modal.
  */
+const DEFAULT_PLAYBACK_UI_MS = 1000;
+
 export const SoundPreviewButton = ({
   sound,
   disabled = false,
   size = 'sm',
+  playbackDurationMs = DEFAULT_PLAYBACK_UI_MS,
 }: SoundPreviewButtonProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,12 +67,11 @@ export const SoundPreviewButton = ({
         console.error('[SoundPreviewButton] Failed to play sound:', error);
       }
 
-      // Reset playing state after sound duration
       playTimeoutRef.current = setTimeout(() => {
         setIsPlaying(false);
-      }, 1000);
+      }, playbackDurationMs);
     },
-    [sound, isPlaying, disabled, setIsPlaying]
+    [sound, isPlaying, disabled, playbackDurationMs]
   );
 
   // Don't render if sound is 'off' or disabled

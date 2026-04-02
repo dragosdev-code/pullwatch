@@ -46,6 +46,14 @@ export const RATE_LIMIT_MAX_BACKOFF_MS = 30 * 60 * 1000; // 30 minutes
 export const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html'; // Updated path to be relative to dist root
 export const OFFSCREEN_REASON_AUDIO_PLAYBACK = 'AUDIO_PLAYBACK';
 
+// Custom Sounds
+export const STORAGE_KEY_CUSTOM_SOUNDS_META = 'custom_sounds_meta';
+export const CUSTOM_SOUND_STORAGE_PREFIX = 'custom_sound_';
+export const MAX_CUSTOM_SOUNDS = 3;
+export const MAX_CUSTOM_SOUND_DURATION_S = 5;
+export const MAX_CUSTOM_SOUND_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+export const MAX_CUSTOM_SOUND_NAME_LENGTH = 19;
+
 // Notifications
 export const NOTIFICATION_NEW_PR = 'newPRNotification';
 

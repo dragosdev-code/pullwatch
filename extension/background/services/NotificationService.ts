@@ -2,7 +2,7 @@ import type { INotificationService } from '../interfaces/INotificationService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type { IStorageService } from '../interfaces/IStorageService';
 import type { ISoundService } from '../interfaces/ISoundService';
-import type { PullRequest } from '../../common/types';
+import type { PullRequest, NotificationSound } from '../../common/types';
 
 /**
  * NotificationService handles Chrome extension notifications with sound integration.
@@ -178,7 +178,7 @@ export class NotificationService implements INotificationService {
    * Plays notification sound for a specific category.
    */
   private async playNotificationSoundForCategory(
-    sound: 'ping' | 'bell' | 'off',
+    sound: NotificationSound,
     category: string
   ): Promise<void> {
     try {

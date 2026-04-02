@@ -1,4 +1,6 @@
-export type NotificationSound = 'ping' | 'bell' | 'off';
+import type { NotificationSound, CustomSoundMeta } from '../../../extension/common/types';
+
+export type { NotificationSound, CustomSoundMeta };
 
 export interface ExtensionSettings {
   assigned: {

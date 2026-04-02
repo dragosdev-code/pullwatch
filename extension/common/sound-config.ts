@@ -1,11 +1,11 @@
 // extension/common/sound-config.ts
 // Shared sound configuration used by both offscreen document and frontend
 
-import type { NotificationSound } from './types';
+import type { NotificationSound, BuiltInSound } from './types';
 
 /**
  * Sound preset configuration for Web Audio API playback.
- * Defines the audio characteristics of each notification sound.
+ * Defines the audio characteristics of each built-in notification sound.
  */
 export interface SoundPreset {
   /** Start times for each tone in the sequence (seconds) */
@@ -36,29 +36,29 @@ export interface SoundDefinition {
 }
 
 /**
- * Sound presets for active notification sounds.
- * Used by the offscreen document to generate audio.
+ * Sound presets for built-in notification sounds.
+ * Used by the offscreen document to generate audio via oscillators.
  */
-export const SOUND_PRESETS: Record<Exclude<NotificationSound, 'off'>, SoundPreset> = {
+export const SOUND_PRESETS: Record<BuiltInSound, SoundPreset> = {
   ping: {
     times: [0, 0.12],
-    frequencies: [880, 1100], // Higher, sharper tones (A5, C#6)
+    frequencies: [880, 1100],
     duration: 0.08,
     initialGain: 0.25,
     oscillatorType: 'sine',
   },
   bell: {
     times: [0, 0.25, 0.5],
-    frequencies: [523, 659, 784], // Lower, bell-like tones (C5, E5, G5)
+    frequencies: [523, 659, 784],
     duration: 0.15,
     initialGain: 0.35,
-    oscillatorType: 'triangle', // Triangle wave sounds more bell-like
+    oscillatorType: 'triangle',
   },
 };
 
 /**
- * Sound definitions for UI display.
- * Includes all sounds including 'off' option.
+ * Built-in sound definitions for UI display.
+ * Custom sounds are loaded dynamically from storage and are not in this array.
  */
 export const SOUND_DEFINITIONS: SoundDefinition[] = [
   {
@@ -81,39 +81,29 @@ export const SOUND_DEFINITIONS: SoundDefinition[] = [
   },
 ];
 
-/**
- * Get the sound definition for a specific sound ID.
- * @param soundId - The notification sound identifier
- * @returns The sound definition or undefined if not found
- */
+export function isCustomSoundId(soundId: NotificationSound): soundId is `custom_${number}` {
+  return typeof soundId === 'string' && /^custom_\d+$/.test(soundId);
+}
+
+export function isBuiltInSound(soundId: NotificationSound): soundId is BuiltInSound {
+  return soundId === 'ping' || soundId === 'bell';
+}
+
 export function getSoundDefinition(soundId: NotificationSound): SoundDefinition | undefined {
   return SOUND_DEFINITIONS.find((def) => def.id === soundId);
 }
 
-/**
- * Get the sound preset for a specific sound ID.
- * @param soundId - The notification sound identifier
- * @returns The sound preset or undefined if not found (e.g., for 'off')
- */
 export function getSoundPreset(soundId: NotificationSound): SoundPreset | undefined {
-  if (soundId === 'off') return undefined;
-  return SOUND_PRESETS[soundId];
+  if (isBuiltInSound(soundId)) {
+    return SOUND_PRESETS[soundId];
+  }
+  return undefined;
 }
 
-/**
- * Get all available sound IDs except 'off'.
- * Useful for iterating over playable sounds.
- * @returns Array of playable sound IDs
- */
-export function getPlayableSoundIds(): Exclude<NotificationSound, 'off'>[] {
+export function getBuiltInSoundIds(): BuiltInSound[] {
   return ['ping', 'bell'];
 }
 
-/**
- * Check if a sound is playable (not 'off').
- * @param soundId - The notification sound identifier
- * @returns True if the sound can be played
- */
 export function isPlayableSound(soundId: NotificationSound): boolean {
   return soundId !== 'off';
 }

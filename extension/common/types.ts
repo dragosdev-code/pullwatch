@@ -14,7 +14,22 @@ export type { BroadcastAction, RequestRuntimeAction, RuntimeAction };
 /**
  * Available notification sounds
  */
-export type NotificationSound = 'ping' | 'bell' | 'off';
+export type BuiltInSound = 'ping' | 'bell';
+export type CustomSoundId = `custom_${number}`;
+export type NotificationSound = BuiltInSound | CustomSoundId | 'off';
+
+/**
+ * Metadata for a user-uploaded custom notification sound.
+ * Stored as an array in chrome.storage.local under STORAGE_KEY_CUSTOM_SOUNDS_META.
+ * The actual audio data (Base64 WAV) is stored separately under the storageKey.
+ */
+export interface CustomSoundMeta {
+  id: CustomSoundId;
+  name: string;
+  durationMs: number;
+  createdAt: string;
+  storageKey: string;
+}
 
 /**
  * Settings for assigned PR notifications and display

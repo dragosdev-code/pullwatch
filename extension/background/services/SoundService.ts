@@ -4,8 +4,15 @@ import type { NotificationSound } from '../../common/types';
 import {
   OFFSCREEN_DOCUMENT_PATH,
   OFFSCREEN_REASON_AUDIO_PLAYBACK,
+  CUSTOM_SOUND_STORAGE_PREFIX,
 } from '../../common/constants';
+import { isCustomSoundId } from '../../common/sound-config';
 import { EVENT_PLAY_SOUND } from '../../common/runtime-actions';
+
+type PlaySoundPayload = {
+  soundType: NotificationSound;
+  customSoundBase64?: string;
+};
 
 /**
  * SoundService handles audio playback through offscreen documents.
@@ -113,6 +120,21 @@ export class SoundService implements ISoundService {
   }
 
   /**
+   * Builds the play-sound payload. Custom sounds are read from chrome.storage.local here
+   * because offscreen documents do not have access to the chrome.storage API.
+   */
+  private async buildPlaySoundPayload(sound: NotificationSound): Promise<PlaySoundPayload> {
+    if (!isCustomSoundId(sound)) {
+      return { soundType: sound };
+    }
+    const slot = sound.replace(/^custom_/, '');
+    const storageKey = `${CUSTOM_SOUND_STORAGE_PREFIX}${slot}`;
+    const result = await chrome.storage.local.get(storageKey);
+    const customSoundBase64 = result[storageKey] as string | undefined;
+    return { soundType: sound, customSoundBase64 };
+  }
+
+  /**
    * Plays a notification sound based on the sound type.
    * Awaits until the offscreen document confirms playback is complete,
    * keeping the service worker alive for the full sound duration.
@@ -128,9 +150,11 @@ export class SoundService implements ISoundService {
 
       await this.ensureOffscreenDocument();
 
+      const payload = await this.buildPlaySoundPayload(sound);
+
       await new Promise<void>((resolve, reject) => {
         chrome.runtime.sendMessage(
-          { action: EVENT_PLAY_SOUND, payload: { soundType: sound } },
+          { action: EVENT_PLAY_SOUND, payload },
           (response) => {
             if (chrome.runtime.lastError) {
               this.debugService.error(

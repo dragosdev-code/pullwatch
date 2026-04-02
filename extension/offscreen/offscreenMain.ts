@@ -1,12 +1,16 @@
 import { debugLog, debugError, debugWarn, initializeDebugTools } from '../debug/debugLogger';
 import { EVENT_OFFSCREEN_READY, EVENT_PLAY_SOUND } from '../common/runtime-actions';
-import type { RuntimeMessage, MessageResponse, NotificationSound } from '../common/types';
-import { SOUND_PRESETS, type SoundPreset } from '../common/sound-config';
+import type { RuntimeMessage, MessageResponse, NotificationSound, BuiltInSound } from '../common/types';
+import { SOUND_PRESETS, isCustomSoundId, isBuiltInSound, type SoundPreset } from '../common/sound-config';
 
 // Initialize debug tools for this context
 initializeDebugTools();
 
 debugLog('Offscreen document (offscreenMain.ts) loaded and script running.');
+
+// Offscreen documents do not expose chrome.storage — only chrome.runtime messaging is
+// available among extension APIs. Custom WAV data is read in the service worker and
+// passed as customSoundBase64 on the play-sound message payload.
 
 // Local interface to acknowledge webkitAudioContext for older browser compatibility
 interface WindowWithLegacyAudio extends Window {
@@ -32,25 +36,50 @@ function getOrCreateAudioContext(): AudioContext {
 }
 
 /**
- * Calculates total playback duration for a sound preset in milliseconds.
+ * Plays a user-uploaded custom sound from Base64 WAV bytes supplied by the service worker.
+ * Falls back to 'ping' if payload audio is missing (e.g. cross-device sync).
  */
+async function playCustomSound(
+  audioContext: AudioContext,
+  soundId: string,
+  base64: string | undefined,
+): Promise<number> {
+  if (!base64) {
+    debugWarn(`No custom sound payload for ${soundId}, falling back to ping`);
+    return playBuiltInSound(audioContext, 'ping');
+  }
+
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const buffer = await audioContext.decodeAudioData(bytes.buffer.slice(0));
+  debugLog(`Decoded custom sound: ${soundId}`);
+
+  const source = audioContext.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audioContext.destination);
+  source.start(0);
+
+  const durationMs = Math.ceil(buffer.duration * 1000) + 100;
+  debugLog(`Custom sound playback initiated: ${soundId} (${durationMs}ms)`);
+  return durationMs;
+}
+
+// ── Built-in sound playback ───────────────────────────────────────────────────
+
 function getSoundDurationMs(config: SoundPreset): number {
   const lastToneEnd = Math.max(...config.times) + config.duration;
-  // Add a small buffer (100ms) to ensure oscillators fully finish
   return Math.ceil(lastToneEnd * 1000) + 100;
 }
 
 /**
- * Plays a notification sound using the Web Audio API.
- * @param audioContext - The AudioContext to use for playback.
- * @param soundType - The type of sound to play ('ping' or 'bell')
- * @returns Duration in ms the sound will take to finish
+ * Plays a built-in notification sound using oscillator synthesis.
  */
-function playNotificationSound(audioContext: AudioContext, soundType: NotificationSound): number {
-  const config = SOUND_PRESETS[soundType as Exclude<NotificationSound, 'off'>] as SoundPreset;
+function playBuiltInSound(audioContext: AudioContext, soundType: BuiltInSound): number {
+  const config = SOUND_PRESETS[soundType];
 
   if (!config) {
-    debugError(`Unknown sound type: ${soundType}`);
+    debugError(`Unknown built-in sound type: ${soundType}`);
     return 0;
   }
 
@@ -77,16 +106,24 @@ function playNotificationSound(audioContext: AudioContext, soundType: Notificati
   });
 
   const durationMs = getSoundDurationMs(config);
-  debugLog(`Offscreen notification sound playback initiated: ${soundType} (${durationMs}ms)`);
+  debugLog(`Built-in sound playback initiated: ${soundType} (${durationMs}ms)`);
   return durationMs;
 }
 
 /**
- * Handles the request to play a notification sound.
+ * Handles the request to play a notification sound (built-in or custom).
  * Resolves only after the full sound duration has elapsed, keeping the
  * service worker alive via the pending sendResponse channel.
  */
-async function handlePlayNotificationSound(soundType: NotificationSound = 'ping'): Promise<void> {
+type PlaySoundMessagePayload = {
+  soundType?: NotificationSound;
+  customSoundBase64?: string;
+};
+
+async function handlePlayNotificationSound(
+  soundType: NotificationSound = 'ping',
+  playPayload?: PlaySoundMessagePayload,
+): Promise<void> {
   try {
     if (soundType === 'off') {
       debugLog('Sound is disabled (off), skipping playback');
@@ -104,7 +141,20 @@ async function handlePlayNotificationSound(soundType: NotificationSound = 'ping'
       debugLog('AudioContext resumed.');
     }
 
-    const durationMs = playNotificationSound(audioContext, soundType);
+    let durationMs: number;
+
+    if (isCustomSoundId(soundType)) {
+      durationMs = await playCustomSound(
+        audioContext,
+        soundType,
+        playPayload?.customSoundBase64,
+      );
+    } else if (isBuiltInSound(soundType)) {
+      durationMs = playBuiltInSound(audioContext, soundType);
+    } else {
+      debugWarn(`Unrecognised sound type "${soundType}", falling back to ping`);
+      durationMs = playBuiltInSound(audioContext, 'ping');
+    }
 
     if (durationMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, durationMs));
@@ -120,11 +170,10 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
   debugLog('Offscreen document received message:', message, 'from sender:', sender);
 
   if (message.action === EVENT_PLAY_SOUND) {
-    // Get sound type from payload, default to 'ping' if not specified
-    const payload = message.payload as { soundType?: NotificationSound } | undefined;
+    const payload = message.payload as PlaySoundMessagePayload | undefined;
     const soundType = payload?.soundType ?? 'ping';
 
-    handlePlayNotificationSound(soundType)
+    handlePlayNotificationSound(soundType, payload)
       .then(() => {
         sendResponse({
           success: true,
