@@ -73,7 +73,11 @@ export class DevTestService implements IDevTestService {
     const title = overrides?.title?.trim() || 'Test PR: Dev Test Notification';
     const message = overrides?.message?.trim() || 'This is a mock notification from the Dev Test Area';
 
-    const notificationId = `devtest-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    // Use the same pr-alert|category|url format as real notifications so the
+    // click handler opens a tab, letting us verify the full end-to-end flow
+    // in dev mode.
+    const mockPR = DevTestService.createMockPR();
+    const notificationId = `pr-alert|assigned|${mockPR.url}`;
     await this.notificationService.createNotification(
       {
         type: 'basic',

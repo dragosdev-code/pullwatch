@@ -10,6 +10,12 @@ import type { PullRequest } from '../../common/types';
  * Supports draft PR filtering and per-category sound selection.
  */
 export class NotificationService implements INotificationService {
+  // MV3 service workers can suspend at any time, wiping all in-memory state.
+  // We encode the PR URL directly into the notification ID so the click handler
+  // can recover it without relying on a Map or any global variable.
+  private static readonly NOTIFICATION_DELIMITER = '|';
+  private static readonly NOTIFICATION_PREFIX = 'pr-alert';
+
   private debugService: IDebugService;
   private storageService: IStorageService;
   private soundService: ISoundService;
@@ -140,7 +146,12 @@ export class NotificationService implements INotificationService {
           ? 'New PR Review Request'
           : `New PR Review Request (${prs.indexOf(pr) + 1}/${prs.length})`;
 
-      const notificationId = `pr-${category}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      // Deterministic ID so the click handler can extract the URL after a
+      // service-worker restart. Also gives us free deduplication: Chrome
+      // replaces an existing notification with the same ID rather than
+      // stacking duplicates.
+      const d = NotificationService.NOTIFICATION_DELIMITER;
+      const notificationId = `${NotificationService.NOTIFICATION_PREFIX}${d}${category}${d}${pr.url}`;
       const authors = pr.author;
       const primaryLogin = authors[0]?.login ?? 'Unknown Author';
       const contextSuffix = authors.length > 1 ? ` +${authors.length - 1}` : '';
@@ -182,15 +193,58 @@ export class NotificationService implements INotificationService {
     }
   }
 
+  /**
+   * Extracts category and PR URL from a structured notification ID.
+   * Returns null for IDs that don't follow our format so that non-PR
+   * notifications (if any are ever created) degrade gracefully.
+   */
+  private static parseNotificationId(notificationId: string): { category: string; url: string } | null {
+    const d = NotificationService.NOTIFICATION_DELIMITER;
+    const prefix = NotificationService.NOTIFICATION_PREFIX;
+    if (!notificationId.startsWith(`${prefix}${d}`)) return null;
+
+    const firstPipe = notificationId.indexOf(d);
+    const secondPipe = notificationId.indexOf(d, firstPipe + 1);
+    if (secondPipe === -1) return null;
+
+    const category = notificationId.substring(firstPipe + 1, secondPipe);
+    // Everything after the second delimiter is the URL -- indexOf-based
+    // splitting means pipes inside the URL (unlikely but possible) are
+    // preserved rather than truncated.
+    const url = notificationId.substring(secondPipe + 1);
+    if (!url) return null;
+    return { category, url };
+  }
+
   async handleNotificationClick(notificationId: string): Promise<void> {
     try {
       this.debugService.log(`[NotificationService] Notification clicked: ${notificationId}`);
 
-      // Clear the clicked notification
-      await this.clearNotification(notificationId);
+      const parsed = NotificationService.parseNotificationId(notificationId);
 
-      // Could open the PR URL in a new tab here
-      // chrome.tabs.create({ url: prUrl });
+      if (parsed) {
+        this.debugService.log(
+          `[NotificationService] Opening PR URL: ${parsed.url} (category: ${parsed.category})`
+        );
+        // Inner try/catch: a tab-creation failure must not prevent the
+        // notification from being cleared -- otherwise it stays in the
+        // OS tray with no way to dismiss it programmatically.
+        try {
+          await chrome.tabs.create({ url: parsed.url, active: true });
+        } catch (tabError) {
+          this.debugService.error('[NotificationService] Failed to open tab:', tabError);
+        }
+      } else {
+        // Graceful fallback for any notification ID that wasn't created
+        // by showPRNotificationsInternal (e.g. a custom one-off notification).
+        this.debugService.warn(
+          `[NotificationService] Notification ID does not match expected format, skipping redirect: ${notificationId}`
+        );
+      }
+
+      // Always clear -- even when the ID is unrecognised, because clicking
+      // a notification should always dismiss it from the OS tray.
+      await this.clearNotification(notificationId);
     } catch (error) {
       this.debugService.error('[NotificationService] Error handling notification click:', error);
     }
