@@ -12,9 +12,11 @@ export const STORAGE_KEY_PARSER_BREAKAGE = 'parser_breakage';
 export const STORAGE_KEY_GITHUB_OUTAGE = 'github_outage';
 
 // Remote Pattern Registry
-export const REMOTE_PATTERNS_URL = 'https://dragosdev-code.github.io/pr-live-config/patterns.json';
-// Raw file on the staging branch — used by the schema smoke test when
-// validating config changes before they reach production (GitHub Pages).
+// Production config — raw file on the main branch, served directly by GitHub.
+export const REMOTE_PATTERNS_URL =
+  'https://raw.githubusercontent.com/dragosdev-code/pr-live-config/main/patterns.json';
+// Staging config — raw file on the staging branch. Used by the schema smoke
+// test to validate config changes before they are merged to main.
 export const REMOTE_PATTERNS_STAGING_URL =
   'https://raw.githubusercontent.com/dragosdev-code/pr-live-config/staging/patterns.json';
 export const PATTERN_REFRESH_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours

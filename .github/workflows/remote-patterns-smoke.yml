@@ -14,9 +14,9 @@ on:
     inputs:
       use_staging_url:
         description: >-
-          Validate the staging branch (raw.githubusercontent) instead of
-          production (GitHub Pages). Useful for testing config changes on
-          the staging branch before merging to main.
+          Validate the staging branch instead of production (main branch).
+          Useful for testing config changes on the staging branch before
+          merging to main.
         type: boolean
         default: false
 

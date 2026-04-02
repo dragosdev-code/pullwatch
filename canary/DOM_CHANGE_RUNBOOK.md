@@ -9,7 +9,7 @@ When the canary test fails because GitHub changed their DOM, follow this runbook
 The extension parses GitHub HTML pages using regex patterns to extract PR data. These patterns exist in two places:
 
 1. **Bundled defaults** — `extension/common/default-patterns.ts` ships with every extension build. The canary CI also uses these.
-2. **Remote config** — `patterns.json` hosted at <https://dragosdev-code.github.io/pr-live-config/patterns.json> (source repo: <https://github.com/dragosdev-code/pr-live-config>). The extension fetches this every 6 hours and applies it if the `version` number is higher than what it has locally.
+2. **Remote config** — `patterns.json` hosted at <https://raw.githubusercontent.com/dragosdev-code/pr-live-config/main/patterns.json> (source repo: <https://github.com/dragosdev-code/pr-live-config>). The extension fetches this every 6 hours and applies it if the `version` number is higher than what it has locally.
 
 **When GitHub changes their DOM**, the regex patterns stop matching, the parser throws `ParserBreakageError`, and users see a "parser breakage" banner. The canary CI catches this within an hour and fires a Discord alert.
 
@@ -35,8 +35,9 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 
 ### Remote Config (`patterns.json`)
 
-- **URL**: <https://dragosdev-code.github.io/pr-live-config/patterns.json>
-- **Source repo**: <https://github.com/dragosdev-code/pr-live-config> (push to `main`, GitHub Pages auto-deploys within 1-2 minutes)
+- **URL** (production): <https://raw.githubusercontent.com/dragosdev-code/pr-live-config/main/patterns.json>
+- **URL** (staging): <https://raw.githubusercontent.com/dragosdev-code/pr-live-config/staging/patterns.json>
+- **Source repo**: <https://github.com/dragosdev-code/pr-live-config> (edit on `staging`, merge to `main` after smoke test passes)
 - **Schema**: `{ version: number, minExtensionVersion: string, updatedAt: string, patterns: PatternRegistry }`
 - **Version gating**: `PatternRegistryService` skips the update if `config.version <= this.registryVersion` — you **must bump `version`** for any change to take effect.
 - **Runtime validation**: Before compiling, the service runs `validateRemoteConfig()` (from `extension/common/pattern-registry-schema.ts`) against the raw JSON. If the structure is invalid, it is rejected immediately with a dotted-path error message logged to the extension console — e.g., `prRowSelectors.0.type: Expected 'class' | 'attribute' | 'balanced-div', received 'xpath'`. The current compiled patterns are preserved unchanged. This is a **structural** check; regex syntax is still validated by `safeCompile` (a second defense layer) after the schema passes.
@@ -267,12 +268,12 @@ This is the critical step that fixes things for users **without requiring an ext
 The flow uses a **staging-first** approach: edit on the `staging` branch, validate the hosted file with the schema smoke test, then promote to `main` (production) once the smoke passes. This prevents broken config from reaching live users.
 
 ```
-staging branch ──→ smoke test passes? ──→ merge to main ──→ GitHub Pages deploys
+staging branch ──→ smoke test passes? ──→ merge to main ──→ extension fetches
      │                    │                                        │
      │                  (no) → fix and retry                       │
      │                                                             ▼
-     └─── raw.githubusercontent.com                   dragosdev-code.github.io
-          (used by smoke test)                        (used by extension)
+     └─── raw.githubusercontent.com/…/staging   raw.githubusercontent.com/…/main
+          (used by smoke test with checkbox)     (used by extension + default smoke)
 ```
 
 ### 7.1 — Clone or open the config repo
@@ -392,13 +393,13 @@ REMOTE_PATTERNS_URL=https://raw.githubusercontent.com/dragosdev-code/pr-live-con
 2. Check the **"Use staging URL"** checkbox (similar to the canary's "force fresh login" checkbox).
 3. Click **"Run workflow"**.
 
-The workflow fetches `patterns.json` from the `staging` branch (`raw.githubusercontent.com`) instead of production (`GitHub Pages`) and runs the full schema + compile validation.
+The workflow fetches `patterns.json` from the `staging` branch instead of production (`main` branch) and runs the full schema + compile validation.
 
 **If the smoke test fails:** fix the issue on the `staging` branch, push again, and re-run. Do not proceed to 7.6 until it passes.
 
 ### 7.6 — Promote staging to production
 
-Once the smoke test passes on staging, merge to `main` to deploy via GitHub Pages:
+Once the smoke test passes on staging, merge to `main` to make the config live:
 
 ```bash
 cd pr-live-config
@@ -408,19 +409,19 @@ git merge staging
 git push origin main
 ```
 
-GitHub Pages auto-deploys within 1-2 minutes.
+The raw `main` URL is served immediately once the push lands — no deploy step needed.
 
 ### 7.7 — Verify production deployment
 
 ```bash
-curl -s https://dragosdev-code.github.io/pr-live-config/patterns.json | jq '.version'
+curl -s https://raw.githubusercontent.com/dragosdev-code/pr-live-config/main/patterns.json | jq '.version'
 ```
 
 Confirm the version matches what you just promoted.
 
 ### 7.8 — Run the smoke test against production
 
-Now validate that the production GitHub Pages URL is serving the correct file:
+Now validate that the production (`main`) URL is serving the correct file:
 
 ```bash
 # From the extension repo root — no env override needed, defaults to production
@@ -518,7 +519,7 @@ If you are an AI coding agent tasked with fixing a canary failure:
 8. **Update the remote `patterns.json`** on the `staging` branch of the `pr-live-config` repo (see Step 7). Remember to bump `version` and update `updatedAt`. Push to `staging`, not `main`.
 9. **After editing `patterns.json`**, run `npm test` from the extension repo (see Step 7.3b) for offline validation, then run the remote smoke test against staging: `REMOTE_PATTERNS_URL=https://raw.githubusercontent.com/dragosdev-code/pr-live-config/staging/patterns.json npm run test:remote-patterns` (see Step 7.5). This validates the actual hosted file end-to-end with the same schema + regex compilation the extension uses.
 10. **Promote staging to production** once the smoke test passes: `git checkout main && git merge staging && git push origin main` in the config repo (see Step 7.6).
-11. **Run the smoke test against production** to confirm GitHub Pages is serving the correct file: `npm run test:remote-patterns` (see Step 7.8).
+11. **Run the smoke test against production** to confirm the `main` branch URL is serving the correct file: `npm run test:remote-patterns` (see Step 7.8).
 12. **Commit both repos.**
 
 Key constraints:
