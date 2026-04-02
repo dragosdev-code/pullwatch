@@ -161,7 +161,7 @@ export const SoundPicker = ({ value, onChange, onClose, isOpen }: SoundPickerPro
 
         {/* Sound options list */}
         <div className="p-3 space-y-2 max-h-72 overflow-y-auto scrollbar-hide">
-          {SOUND_DEFINITIONS.map((definition) => (
+          {SOUND_DEFINITIONS.filter((d) => d.id !== 'off').map((definition) => (
             <SoundOption
               key={definition.id}
               definition={definition}
