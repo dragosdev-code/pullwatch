@@ -17,6 +17,7 @@ import {
 import { useCustomSounds } from '../../../hooks/use-custom-sounds';
 import { PlayIcon, XIcon, CheckIcon } from '../../ui/icons';
 import { SoundPreviewButton } from './sound-preview-button';
+import { TruncatedOneLineWithTooltip } from '../../ui/truncated-one-line-with-tooltip';
 
 type SoundNameForm = { soundName: string };
 
@@ -138,11 +139,7 @@ function SavedSoundRow({
       <span className="flex-1 text-sm font-medium text-base-content truncate">{meta.name}</span>
       <span className="badge badge-sm badge-ghost">{(meta.durationMs / 1000).toFixed(1)}s</span>
       <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-        <SoundPreviewButton
-          sound={meta.id}
-          size="sm"
-          playbackDurationMs={meta.durationMs + 150}
-        />
+        <SoundPreviewButton sound={meta.id} size="sm" playbackDurationMs={meta.durationMs + 150} />
       </div>
       <button
         type="button"
@@ -253,7 +250,7 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
 
       if (file.size > MAX_CUSTOM_SOUND_FILE_SIZE_BYTES) {
         setError(
-          `File too large. Maximum size is ${MAX_CUSTOM_SOUND_FILE_SIZE_BYTES / 1024 / 1024}MB.`,
+          `File too large. Maximum size is ${MAX_CUSTOM_SOUND_FILE_SIZE_BYTES / 1024 / 1024}MB.`
         );
         return;
       }
@@ -273,7 +270,7 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
         setError('Could not decode audio file. Try a different format (MP3, WAV, OGG).');
       }
     },
-    [setValue],
+    [setValue]
   );
 
   const handleStartChange = useCallback(
@@ -282,7 +279,7 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
       const maxStart = Math.max(0, endS - MAX_CUSTOM_SOUND_DURATION_S);
       setStartS(Math.max(maxStart, Math.max(0, clamped)));
     },
-    [endS],
+    [endS]
   );
 
   const handleEndChange = useCallback(
@@ -291,7 +288,7 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
       const maxEnd = Math.min(duration, startS + MAX_CUSTOM_SOUND_DURATION_S);
       setEndS(Math.min(maxEnd, Math.min(duration, clamped)));
     },
-    [startS, duration],
+    [startS, duration]
   );
 
   const handlePreview = useCallback(() => {
@@ -312,7 +309,7 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
         setIsPlaying(false);
         stopRef.current = null;
       },
-      (endS - startS) * 1000 + 100,
+      (endS - startS) * 1000 + 100
     );
 
     const originalStop = handle.stop;
@@ -346,7 +343,7 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
     (e: React.MouseEvent<HTMLDialogElement>) => {
       if (e.target === modalRef.current) handleClose();
     },
-    [handleClose],
+    [handleClose]
   );
 
   const canSave =
@@ -395,6 +392,15 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
           </div>
         </div>
 
+        {audioBuffer && (
+          <div className="px-3 py-1 shrink-0 border-b border-warning/20 bg-warning/10 text-[11px] leading-tight text-base-content/85 min-w-0">
+            <p className="truncate whitespace-nowrap">
+              <span className="font-medium">Unsaved:</span> Save before closing or you lose this
+              sound.
+            </p>
+          </div>
+        )}
+
         <div className="p-4 space-y-4 flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {!audioBuffer && (
             <div className="space-y-2">
@@ -413,10 +419,21 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
 
           {audioBuffer && (
             <>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-base-content/60">{fileName}</span>
-                  <button type="button" onClick={resetEditor} className="btn btn-ghost btn-xs">
+              <div className="space-y-2 min-w-0">
+                <div className="flex items-center justify-between gap-2 min-w-0 w-full">
+                  <TruncatedOneLineWithTooltip
+                    text={fileName}
+                    as="span"
+                    tooltipPlacement="bottom"
+                    tooltipHorizontalAnchor="end"
+                    textClassName="block w-full min-w-0 text-xs text-base-content/60 truncate"
+                    tooltipBodyClassName="text-center text-xs px-3 py-2 rounded-3xl whitespace-normal leading-relaxed"
+                  />
+                  <button
+                    type="button"
+                    onClick={resetEditor}
+                    className="btn btn-ghost btn-xs shrink-0"
+                  >
                     Change file
                   </button>
                 </div>
@@ -511,8 +528,8 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
                 })}
               />
               <p className="text-[11px] text-base-content/50 mt-1 px-0.5">
-                Letters, numbers, spaces, and . , - &apos; &middot; max {MAX_CUSTOM_SOUND_NAME_LENGTH}{' '}
-                characters
+                Letters, numbers, spaces, and . , - &apos; &middot; max{' '}
+                {MAX_CUSTOM_SOUND_NAME_LENGTH} characters
               </p>
               {errors.soundName && (
                 <p className="text-error text-xs mt-1 px-0.5" role="alert">
