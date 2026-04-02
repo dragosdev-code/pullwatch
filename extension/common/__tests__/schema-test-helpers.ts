@@ -1,11 +1,14 @@
 /**
- * Factory functions for pattern registry schema tests.
+ * Shared helpers for pattern registry tests.
  *
- * Each factory returns a fresh deep clone so tests can freely mutate
- * objects without cross-contamination between test cases.
+ * - Factories return fresh deep clones so tests can freely mutate
+ *   objects without cross-contamination between test cases.
+ * - fetchWithRetry provides resilient HTTP fetching for the remote
+ *   smoke test (retries transient 5xx / timeouts, fails fast on 4xx).
  */
 
 import { DEFAULT_PATTERNS } from '../default-patterns';
+import { REMOTE_FETCH_TIMEOUT_MS } from '../constants';
 import type { PatternEntry, PrRowSelector } from '../pattern-types';
 
 // ── Deep clone ──────────────────────────────────────────────────────
@@ -91,4 +94,59 @@ export function makeRowSelector(overrides?: Partial<PrRowSelector>): PrRowSelect
     flags: 'gi',
     ...overrides,
   };
+}
+
+// ── Resilient HTTP fetch ────────────────────────────────────────────
+// Used by the remote smoke test. Transient failures (5xx, timeouts,
+// network errors) are retried with exponential backoff. Permanent
+// client errors (4xx) fail immediately — retrying a 404 or 403 is
+// pointless and wastes CI minutes.
+
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF_MS = 1_000;
+
+function isTransient(status: number): boolean {
+  return status >= 500 && status < 600;
+}
+
+export async function fetchWithRetry(url: string): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: { 'Cache-Control': 'no-cache' },
+        signal: AbortSignal.timeout(REMOTE_FETCH_TIMEOUT_MS),
+      });
+
+      if (response.ok) return response;
+
+      if (!isTransient(response.status)) {
+        throw new Error(
+          `Permanent HTTP error ${response.status} ${response.statusText} — not retrying`,
+        );
+      }
+
+      lastError = new Error(`HTTP ${response.status} ${response.statusText}`);
+    } catch (error) {
+      // AbortSignal.timeout throws a DOMException with name "TimeoutError".
+      // Network failures throw TypeError. Both are transient.
+      if (
+        error instanceof Error &&
+        error.message.startsWith('Permanent HTTP error')
+      ) {
+        throw error;
+      }
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+
+    if (attempt < MAX_RETRIES) {
+      const backoff = INITIAL_BACKOFF_MS * 2 ** attempt;
+      await new Promise((resolve) => setTimeout(resolve, backoff));
+    }
+  }
+
+  throw new Error(
+    `Failed after ${MAX_RETRIES + 1} attempts. Last error: ${lastError?.message}`,
+  );
 }

@@ -1,0 +1,56 @@
+name: Remote Patterns Schema Smoke
+
+# Validates that the live hosted patterns.json is structurally accepted by the
+# extension (Valibot schema + RegExp compilation). This is independent of the
+# canary, which tests whether regexes *match* live GitHub HTML.
+
+on:
+  schedule:
+    # Every 6 hours at :47 past the hour. The interval happens to match
+    # PATTERN_REFRESH_TTL_MS but is not coupled to it — the smoke test guards
+    # the hosted config, while the TTL controls how often the extension polls.
+    - cron: '47 0,6,12,18 * * *'
+  workflow_dispatch:
+    inputs:
+      use_staging_url:
+        description: >-
+          Validate the staging branch (raw.githubusercontent) instead of
+          production (GitHub Pages). Useful for testing config changes on
+          the staging branch before merging to main.
+        type: boolean
+        default: false
+
+concurrency:
+  group: remote-patterns-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Run remote patterns smoke test
+        run: npm run test:remote-patterns
+        env:
+          # When use_staging_url is checked, point at the raw staging branch
+          # file instead of the production GitHub Pages URL.
+          # Mirrors REMOTE_PATTERNS_STAGING_URL in extension/common/constants.ts.
+          # When unchecked (or scheduled), the env var is empty and the test
+          # falls back to REMOTE_PATTERNS_URL (production) from constants.ts.
+          REMOTE_PATTERNS_URL: >-
+            ${{ inputs.use_staging_url == true
+                && 'https://raw.githubusercontent.com/dragosdev-code/pr-live-config/staging/patterns.json'
+                || '' }}
