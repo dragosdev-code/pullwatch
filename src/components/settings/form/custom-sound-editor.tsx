@@ -22,67 +22,355 @@ import { TruncatedOneLineWithTooltip } from '../../ui/truncated-one-line-with-to
 type SoundNameForm = { soundName: string };
 
 // ---------------------------------------------------------------------------
-// Waveform Canvas
+// Clamp helpers
 // ---------------------------------------------------------------------------
-interface WaveformProps {
-  peaks: number[];
-  startPct: number;
-  endPct: number;
+function clampStartS(next: number, currentEndS: number): number {
+  const capped = Math.min(next, currentEndS - 0.1);
+  const floor = Math.max(0, currentEndS - MAX_CUSTOM_SOUND_DURATION_S);
+  return Math.max(floor, Math.max(0, capped));
 }
 
-function Waveform({ peaks, startPct, endPct }: WaveformProps) {
+function clampEndS(next: number, currentStartS: number, dur: number): number {
+  const floored = Math.max(next, currentStartS + 0.1);
+  const cap = Math.min(dur, currentStartS + MAX_CUSTOM_SOUND_DURATION_S);
+  return Math.min(cap, Math.min(dur, floored));
+}
+
+function clampMoveWindow(
+  nextStart: number,
+  length: number,
+  dur: number,
+): { startS: number; endS: number } {
+  const s = Math.max(0, Math.min(nextStart, dur - length));
+  return { startS: s, endS: s + length };
+}
+
+// ---------------------------------------------------------------------------
+// Waveform Canvas — draggable trim
+// ---------------------------------------------------------------------------
+type DragMode = 'start' | 'end' | 'move';
+
+type HoverZone = DragMode | null;
+
+interface DragState {
+  mode: DragMode;
+  t0: number;
+  s0: number;
+  e0: number;
+  dur: number;
+}
+
+function hitMarginPx(canvasWidth: number): number {
+  return Math.max(8, Math.min(12, canvasWidth * 0.025));
+}
+
+/** DaisyUI exposes `--color-*` as full `oklch(...)`; avoid `oklch(${var} / a)` (invalid nesting). */
+function oklchWithAlpha(themeColorValue: string, alpha: number, fallbackChannels: string): string {
+  const raw = (themeColorValue || '').trim() || fallbackChannels;
+  const m = raw.match(/^oklch\(\s*(.+)\s*\)$/i);
+  if (m) {
+    let inner = m[1].trim().replace(/\s*\/\s*[\d.]+\s*$/i, '').trim();
+    return `oklch(${inner} / ${alpha})`;
+  }
+  return `oklch(${raw} / ${alpha})`;
+}
+
+interface WaveformProps {
+  peaks: number[];
+  startS: number;
+  endS: number;
+  duration: number;
+  setStartS: (v: number) => void;
+  setEndS: (v: number) => void;
+}
+
+function Waveform({ peaks, startS, endS, duration, setStartS, setEndS }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const drawFnRef = useRef<() => void>(() => {});
+  const dragRef = useRef<DragState | null>(null);
+  const hoverZoneRef = useRef<HoverZone>(null);
+  const trimRef = useRef({ startS, endS, duration });
+  trimRef.current = { startS, endS, duration };
+  const [cursor, setCursor] = useState('default');
+
+  useEffect(() => {
+    drawFnRef.current = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      const w = rect.width;
+      const h = rect.height;
+      const barWidth = Math.max(1, (w / peaks.length) * 0.7);
+      const gap = w / peaks.length;
+
+      const style = getComputedStyle(canvas);
+      const baseContentRaw =
+        style.getPropertyValue('--color-base-content').trim() || '21% 0.006 285.885';
+      const primaryRaw = style.getPropertyValue('--color-primary').trim() || '45% 0.24 277';
+      const handleChRaw =
+        style.getPropertyValue('--color-secondary').trim() ||
+        style.getPropertyValue('--color-accent').trim() ||
+        style.getPropertyValue('--color-neutral').trim() ||
+        '65% 0.241 354';
+
+      ctx.clearRect(0, 0, w, h);
+
+      const { startS: s0, endS: e0, duration: dur } = trimRef.current;
+      const selStart = dur > 0 ? (s0 / dur) * w : 0;
+      const selEnd = dur > 0 ? (e0 / dur) * w : w;
+      const selW = selEnd - selStart;
+      const hm = hitMarginPx(w);
+      const mid = selStart + selW / 2;
+      let leftZoneEnd = Math.min(selStart + hm, mid);
+      let rightZoneStart = Math.max(selEnd - hm, mid);
+      if (leftZoneEnd > rightZoneStart) {
+        leftZoneEnd = mid;
+        rightZoneStart = mid;
+      }
+
+      const hover = hoverZoneRef.current;
+      const dragMode = dragRef.current?.mode ?? null;
+      const activeStart = dragMode === 'start' || hover === 'start';
+      const activeEnd = dragMode === 'end' || hover === 'end';
+      const activeMove = dragMode === 'move' || hover === 'move';
+
+      const barCenterX = (i: number) => i * gap + barWidth * 0.5;
+
+      const barFillForPeakIndex = (i: number): string => {
+        const cx = barCenterX(i);
+        if (cx < selStart || cx > selEnd) {
+          return oklchWithAlpha(baseContentRaw, 0.4, '21% 0.006 285.885');
+        }
+        if (cx < leftZoneEnd) {
+          return oklchWithAlpha(handleChRaw, activeStart ? 0.62 : 0.52, '65% 0.241 354');
+        }
+        if (cx > rightZoneStart) {
+          return oklchWithAlpha(handleChRaw, activeEnd ? 0.62 : 0.52, '65% 0.241 354');
+        }
+        return oklchWithAlpha(primaryRaw, activeMove ? 0.64 : 0.58, '45% 0.24 277');
+      };
+
+      for (let i = 0; i < peaks.length; i++) {
+        const x = i * gap;
+        const amplitude = peaks[i] * (h / 2) * 0.9;
+        ctx.fillStyle = barFillForPeakIndex(i);
+        ctx.fillRect(x, h / 2 - amplitude, barWidth, amplitude * 2 || 1);
+      }
+
+      const excludedAlpha = 0.16;
+      ctx.fillStyle = oklchWithAlpha(baseContentRaw, excludedAlpha, '21% 0.006 285.885');
+      if (selStart > 0.5) {
+        ctx.fillRect(0, 0, selStart, h);
+      }
+      if (selEnd < w - 0.5) {
+        ctx.fillRect(selEnd, 0, w - selEnd, h);
+      }
+
+      const fillHandleIdle = 0.12;
+      const fillHandleActive = 0.22;
+      const fillMoveIdle = 0.08;
+      const fillMoveActive = 0.12;
+
+      ctx.fillStyle = oklchWithAlpha(
+        handleChRaw,
+        activeStart ? fillHandleActive : fillHandleIdle,
+        '65% 0.241 354',
+      );
+      ctx.fillRect(selStart, 0, leftZoneEnd - selStart, h);
+      ctx.fillStyle = oklchWithAlpha(
+        primaryRaw,
+        activeMove ? fillMoveActive : fillMoveIdle,
+        '45% 0.24 277',
+      );
+      ctx.fillRect(leftZoneEnd, 0, rightZoneStart - leftZoneEnd, h);
+      ctx.fillStyle = oklchWithAlpha(
+        handleChRaw,
+        activeEnd ? fillHandleActive : fillHandleIdle,
+        '65% 0.241 354',
+      );
+      ctx.fillRect(rightZoneStart, 0, selEnd - rightZoneStart, h);
+
+      ctx.strokeStyle = oklchWithAlpha(baseContentRaw, 0.28, '21% 0.006 285.885');
+      ctx.lineWidth = 1;
+      if (leftZoneEnd > selStart + 0.5) {
+        ctx.beginPath();
+        ctx.moveTo(leftZoneEnd, 0);
+        ctx.lineTo(leftZoneEnd, h);
+        ctx.stroke();
+      }
+      if (rightZoneStart < selEnd - 0.5 && rightZoneStart > leftZoneEnd + 0.5) {
+        ctx.beginPath();
+        ctx.moveTo(rightZoneStart, 0);
+        ctx.lineTo(rightZoneStart, h);
+        ctx.stroke();
+      }
+
+      const capLen = 5;
+      const edgeLine = (at: number, capsRight: boolean, active: boolean) => {
+        ctx.strokeStyle = active
+          ? oklchWithAlpha(primaryRaw, 0.92, '45% 0.24 277')
+          : oklchWithAlpha(baseContentRaw, 0.52, '21% 0.006 285.885');
+        ctx.lineWidth = active ? 3 : 2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(at, 0);
+        ctx.lineTo(at, h);
+        ctx.moveTo(at, 2);
+        ctx.lineTo(capsRight ? at + capLen : at - capLen, 2);
+        ctx.moveTo(at, h - 2);
+        ctx.lineTo(capsRight ? at + capLen : at - capLen, h - 2);
+        ctx.stroke();
+      };
+      edgeLine(selStart, true, activeStart);
+      edgeLine(selEnd, false, activeEnd);
+    };
+    drawFnRef.current();
+  }, [peaks, startS, endS, duration]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const observer = new ResizeObserver(() => drawFnRef.current());
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
 
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
+  const hitTest = useCallback(
+    (clientX: number): DragMode | null => {
+      const canvas = canvasRef.current;
+      if (!canvas || duration === 0) return null;
+      const rect = canvas.getBoundingClientRect();
+      const px = clientX - rect.left;
+      const w = rect.width;
+      const startPx = (startS / duration) * w;
+      const endPx = (endS / duration) * w;
+      const hitMargin = hitMarginPx(w);
+      if (Math.abs(px - startPx) <= hitMargin) return 'start';
+      if (Math.abs(px - endPx) <= hitMargin) return 'end';
+      if (px > startPx + hitMargin && px < endPx - hitMargin) return 'move';
+      return null;
+    },
+    [startS, endS, duration],
+  );
 
-    const w = rect.width;
-    const h = rect.height;
-    const barWidth = Math.max(1, (w / peaks.length) * 0.7);
-    const gap = w / peaks.length;
+  const pxToTime = useCallback(
+    (clientX: number): number => {
+      const canvas = canvasRef.current;
+      if (!canvas) return 0;
+      const rect = canvas.getBoundingClientRect();
+      return Math.max(0, Math.min(((clientX - rect.left) / rect.width) * duration, duration));
+    },
+    [duration],
+  );
 
-    const style = getComputedStyle(canvas);
-    const baseContent = style.getPropertyValue('--color-base-content').trim() || '0 0% 20%';
-    const primary = style.getPropertyValue('--color-primary').trim() || '262 80% 50%';
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (duration === 0) return;
+      const mode = hitTest(e.clientX);
+      if (!mode) return;
+      e.preventDefault();
+      wrapperRef.current?.setPointerCapture(e.pointerId);
+      dragRef.current = { mode, t0: pxToTime(e.clientX), s0: startS, e0: endS, dur: duration };
+      setCursor(mode === 'move' ? 'grabbing' : 'ew-resize');
+      drawFnRef.current();
+    },
+    [duration, hitTest, pxToTime, startS, endS],
+  );
 
-    ctx.clearRect(0, 0, w, h);
+  const syncHoverFromClientX = useCallback(
+    (clientX: number) => {
+      const next = hitTest(clientX);
+      if (hoverZoneRef.current !== next) {
+        hoverZoneRef.current = next;
+        drawFnRef.current();
+      }
+    },
+    [hitTest],
+  );
 
-    const selStart = startPct * w;
-    const selEnd = endPct * w;
-    ctx.fillStyle = `oklch(${primary} / 0.12)`;
-    ctx.fillRect(selStart, 0, selEnd - selStart, h);
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      if (!drag) {
+        const mode = hitTest(e.clientX);
+        syncHoverFromClientX(e.clientX);
+        setCursor(mode === 'move' ? 'grab' : mode ? 'ew-resize' : 'default');
+        return;
+      }
+      const t = pxToTime(e.clientX);
+      if (drag.mode === 'start') {
+        setStartS(clampStartS(t, drag.e0));
+      } else if (drag.mode === 'end') {
+        setEndS(clampEndS(t, drag.s0, drag.dur));
+      } else {
+        const { startS: ns, endS: ne } = clampMoveWindow(
+          drag.s0 + (t - drag.t0),
+          drag.e0 - drag.s0,
+          drag.dur,
+        );
+        setStartS(ns);
+        setEndS(ne);
+      }
+    },
+    [hitTest, pxToTime, setStartS, setEndS, syncHoverFromClientX],
+  );
 
-    for (let i = 0; i < peaks.length; i++) {
-      const x = i * gap;
-      const isInSelection = x >= selStart && x <= selEnd;
-      const amplitude = peaks[i] * (h / 2) * 0.9;
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      dragRef.current = null;
+      if (duration > 0) {
+        syncHoverFromClientX(e.clientX);
+        const mode = hitTest(e.clientX);
+        setCursor(mode === 'move' ? 'grab' : mode ? 'ew-resize' : 'default');
+      } else {
+        setCursor('default');
+      }
+      drawFnRef.current();
+    },
+    [duration, hitTest, syncHoverFromClientX],
+  );
 
-      ctx.fillStyle = isInSelection ? `oklch(${primary} / 0.7)` : `oklch(${baseContent} / 0.25)`;
-
-      ctx.fillRect(x, h / 2 - amplitude, barWidth, amplitude * 2 || 1);
-    }
-
-    ctx.strokeStyle = `oklch(${primary} / 0.6)`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(selStart, 0);
-    ctx.lineTo(selStart, h);
-    ctx.moveTo(selEnd, 0);
-    ctx.lineTo(selEnd, h);
-    ctx.stroke();
-  }, [peaks, startPct, endPct]);
+  const handlePointerCancel = useCallback(() => {
+    dragRef.current = null;
+    hoverZoneRef.current = null;
+    setCursor('default');
+    drawFnRef.current();
+  }, []);
 
   return (
-    <canvas ref={canvasRef} className="w-full h-24 rounded-lg border border-base-300 bg-base-200" />
+    <div
+      ref={wrapperRef}
+      className="rounded-lg"
+      style={{ cursor, touchAction: 'none' }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onPointerLeave={() => {
+        if (!dragRef.current) {
+          if (hoverZoneRef.current !== null) {
+            hoverZoneRef.current = null;
+            drawFnRef.current();
+          }
+          setCursor('default');
+        }
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        className="block w-full h-24 rounded-lg border border-base-300 bg-base-200"
+      />
+    </div>
   );
 }
 
@@ -273,24 +561,6 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
     [setValue]
   );
 
-  const handleStartChange = useCallback(
-    (val: number) => {
-      const clamped = Math.min(val, endS - 0.1);
-      const maxStart = Math.max(0, endS - MAX_CUSTOM_SOUND_DURATION_S);
-      setStartS(Math.max(maxStart, Math.max(0, clamped)));
-    },
-    [endS]
-  );
-
-  const handleEndChange = useCallback(
-    (val: number) => {
-      const clamped = Math.max(val, startS + 0.1);
-      const maxEnd = Math.min(duration, startS + MAX_CUSTOM_SOUND_DURATION_S);
-      setEndS(Math.min(maxEnd, Math.min(duration, clamped)));
-    },
-    [startS, duration]
-  );
-
   const handlePreview = useCallback(() => {
     if (!audioBuffer) return;
     if (isPlaying && stopRef.current) {
@@ -438,69 +708,62 @@ export const CustomSoundEditor = ({ isOpen, onClose, onSaved }: CustomSoundEdito
                   </button>
                 </div>
 
-                <Waveform peaks={peaks} startPct={startS / duration} endPct={endS / duration} />
+                <Waveform
+                  peaks={peaks}
+                  startS={startS}
+                  endS={endS}
+                  duration={duration}
+                  setStartS={setStartS}
+                  setEndS={setEndS}
+                />
 
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs text-base-content/60">
-                    <span>Start: {startS.toFixed(1)}s</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handlePreview}
-                        className={`btn btn-sm btn-ghost gap-1.5 ${isPlaying ? 'btn-active' : ''}`}
-                      >
-                        {isPlaying ? (
-                          <>
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                              className="size-3.5"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                            Stop
-                          </>
-                        ) : (
-                          <>
-                            <PlayIcon className="size-3.5" />
-                            Preview
-                          </>
-                        )}
-                      </button>
-                      <span className="badge badge-sm badge-primary">
-                        {selectedDuration.toFixed(1)}s
-                      </span>
-                    </div>
+                <p className="text-[11px] text-base-content/50 text-center leading-snug">
+                  <span className="font-medium text-base-content/70">Edges:</span> trim start/end
+                  <span className="mx-1">&middot;</span>
+                  <span className="font-medium text-base-content/70">Center:</span> move selection
+                </p>
 
-                    <span>End: {endS.toFixed(1)}s</span>
+                <div className="flex items-center justify-between text-xs text-base-content/60">
+                  <span>Start: {startS.toFixed(1)}s</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePreview}
+                      className={`btn btn-sm btn-ghost gap-1.5 ${isPlaying ? 'btn-active' : ''}`}
+                    >
+                      {isPlaying ? (
+                        <>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            className="size-3.5"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          Stop
+                        </>
+                      ) : (
+                        <>
+                          <PlayIcon className="size-3.5" />
+                          Preview
+                        </>
+                      )}
+                    </button>
+                    <span className="badge badge-sm badge-primary">
+                      {selectedDuration.toFixed(1)}s
+                    </span>
                   </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration}
-                    step={0.01}
-                    value={startS}
-                    onChange={(e) => handleStartChange(parseFloat(e.target.value))}
-                    className="range range-primary range-xs w-full"
-                  />
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration}
-                    step={0.01}
-                    value={endS}
-                    onChange={(e) => handleEndChange(parseFloat(e.target.value))}
-                    className="range range-primary range-xs w-full"
-                  />
-                  <p className="text-xs text-base-content/40 text-center">
-                    Max {MAX_CUSTOM_SOUND_DURATION_S}s &middot; Total: {duration.toFixed(1)}s
-                  </p>
+                  <span>End: {endS.toFixed(1)}s</span>
                 </div>
+                <p className="text-xs text-base-content/40 text-center">
+                  Drag handles or region to trim &middot; max {MAX_CUSTOM_SOUND_DURATION_S}s &middot;{' '}
+                  {duration.toFixed(1)}s total
+                </p>
               </div>
             </>
           )}
