@@ -87,7 +87,7 @@ export const Header = ({ prCount }: HeaderProps) => {
         <CountBadge
           value={prCount}
           size="md"
-          tone="primary"
+          tone={isAssignedTabActive ? 'primary' : 'neutral'}
           className="ml-2"
           onClick={handleCountClick}
           clickable={!isAssignedTabActive}

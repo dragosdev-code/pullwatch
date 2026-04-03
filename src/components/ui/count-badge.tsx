@@ -56,7 +56,7 @@ export const CountBadge = ({
         isThreePlusDigits && 'min-w-[34px]',
         TONE_CLASSES[tone],
         !isClickable && 'pointer-events-none',
-        isClickable && 'cursor-pointer! hover:shadow-md',
+        isClickable && 'cursor-pointer! hover:shadow-sm',
         className
       )}
     >
