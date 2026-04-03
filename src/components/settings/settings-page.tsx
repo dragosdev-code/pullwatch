@@ -180,9 +180,9 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
                     aria-hidden
                   />
                   <p className="text-[11px] font-medium text-warning leading-snug min-w-0">
-                    You may get draft notifications, but draft PRs are hidden from the To Review
-                    list — so after you dismiss the alert they can look “missing” from this popup.
-                    Turn on “Show drafts in list” if you want drafts visible here too.
+                    Draft PRs are currently hidden from your list. If you dismiss a draft
+                    notification, the PR won't be visible in the popup. Enable{' '}
+                    <b>Show drafts in list</b> below to keep them visible.
                   </p>
                 </div>
               )}
