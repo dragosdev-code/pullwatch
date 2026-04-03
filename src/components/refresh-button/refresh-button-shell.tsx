@@ -1,13 +1,11 @@
 import { useMemo } from 'react';
-import { deriveRefreshDisplay } from './derive-refresh-display';
-import { RefreshGlyph } from './refresh-glyph';
-import { RefreshTooltipFrame } from './refresh-tooltip-frame';
+import { RefreshGlyph } from './components/refresh-glyph';
+import { RefreshTooltipFrame } from './components/refresh-tooltip-frame';
 import type { RefreshButtonProps } from './types';
-import { useDelayedTooltip } from './use-delayed-tooltip';
+import { useDelayedTooltip } from './hooks/use-delayed-tooltip';
+import { deriveRefreshDisplay } from './utils/derive-refresh-display';
 
-export type { RefreshButtonProps } from './types';
-
-export const RefreshButton = ({
+export function RefreshButtonShell({
   manualFetchInProgress,
   onRefresh,
   fetchProgress01,
@@ -17,7 +15,7 @@ export const RefreshButton = ({
   canRefresh,
   lastInteractionWasThrottled,
   lastFetchDurationMs,
-}: RefreshButtonProps) => {
+}: RefreshButtonProps) {
   const derived = useMemo(
     () =>
       deriveRefreshDisplay({
@@ -86,4 +84,4 @@ export const RefreshButton = ({
       />
     </RefreshTooltipFrame>
   );
-};
+}

@@ -14,7 +14,7 @@ interface SettingsTestCooldownRingProps {
 }
 
 /**
- * Radial cooldown indicator — same strokeDasharray/offset pattern as RefreshGlyph (refresh-glyph.tsx)
+ * Radial cooldown indicator — same strokeDasharray/offset pattern as RefreshGlyph (refresh-button/components/refresh-glyph.tsx)
  * so the settings test control visually matches the header refresh ring.
  */
 export function SettingsTestCooldownRing({ active }: SettingsTestCooldownRingProps) {

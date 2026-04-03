@@ -1,5 +1,5 @@
-import { MIN_REFRESH_INTERVAL_MS } from '../../../extension/common/constants';
-import type { DerivedRefreshDisplay, RefreshButtonProps, RefreshRingPhase } from './types';
+import { MIN_REFRESH_INTERVAL_MS } from '../../../../extension/common/constants';
+import type { DerivedRefreshDisplay, RefreshButtonProps, RefreshRingPhase } from '../types';
 
 export const resolvePhase = (
   manualFetchInProgress: boolean,

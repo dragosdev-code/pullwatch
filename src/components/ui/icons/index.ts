@@ -1,6 +1,5 @@
 // Barrel export for all icon components
 export { GearIcon } from './gear-icon';
-export { RefreshIcon } from './refresh-icon';
 export { DiceIcon } from './dice-icon';
 export { CheckIcon } from './check-icon';
 export { WaveIcon } from './wave-icon';

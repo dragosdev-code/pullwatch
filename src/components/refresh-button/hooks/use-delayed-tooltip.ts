@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { TOOLTIP_SHOW_DELAY_MS } from './constants';
+import { TOOLTIP_SHOW_DELAY_MS } from '../constants';
 
 export const useDelayedTooltip = () => {
   const containerRef = useRef<HTMLDivElement>(null);

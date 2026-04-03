@@ -1,8 +1,8 @@
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { animated, config, useSpring } from '@react-spring/web';
 import clsx from 'clsx';
-import type { RefreshRingPhase } from './types';
-import { RING_C, RING_RADIUS } from './constants';
-import { RefreshIcon } from '../ui/icons';
+import type { RefreshRingPhase } from '../types';
+import { RING_C, RING_RADIUS } from '../constants';
 
 interface RefreshGlyphProps {
   phase: RefreshRingPhase;
@@ -91,7 +91,7 @@ export const RefreshGlyph = ({
         onFocus={!refreshDisabled ? scheduleTooltipOpen : undefined}
         onBlur={!refreshDisabled ? handleContainerBlur : undefined}
         className={clsx(
-          'relative z-[1] flex items-center justify-center rounded-full p-2 transition-colors duration-200',
+          'relative z-1 flex items-center justify-center rounded-full p-2 transition-colors duration-200',
           'text-base-content/50 hover:text-base-content hover:bg-base-200',
           'disabled:opacity-60 disabled:pointer-events-none disabled:hover:scale-100',
           canRefresh && !manualFetchInProgress && 'hover:cursor-pointer hover:scale-105',
@@ -101,13 +101,13 @@ export const RefreshGlyph = ({
             'disabled:cursor-not-allowed text-base-content/35'
         )}
       >
-        <RefreshIcon width={18} height={18} />
+        <ArrowPathIcon className="h-[18px] w-[18px]" aria-hidden />
       </animated.button>
 
       {showSeconds && (
         <span
           className={clsx(
-            'pointer-events-none absolute right-0 top-full z-[2] -mt-0.5 whitespace-nowrap text-right',
+            'pointer-events-none absolute right-0 top-full z-2 -mt-0.5 whitespace-nowrap text-right',
             'text-[10px] leading-none tabular-nums tracking-tight',
             manualFetchInProgress && 'text-primary/90',
             lastInteractionWasThrottled && 'text-warning',
