@@ -18,11 +18,6 @@ interface SoundPreviewButtonProps {
   /** Optional size variant */
   size?: 'xs' | 'sm' | 'md';
   /**
-   * How long to show the “playing” state after starting preview (ms).
-   * Use clip duration + buffer for custom sounds; default matches short built-ins.
-   */
-  playbackDurationMs?: number;
-  /**
    * Increment when preview should be reset from outside (e.g. row delete) so the playing UI clears.
    */
   playbackInterruptKey?: number;
@@ -30,31 +25,27 @@ interface SoundPreviewButtonProps {
 
 /**
  * Inline sound preview button.
- * Allows quick testing of a sound without opening the full picker modal.
+ *
+ * **Wave timing:** `playSoundPreview` resolves only after offscreen finishes (decode + playback).
+ * The wave is shown for that whole await. Custom WAVs decode in the offscreen document first, so
+ * you may see the wave briefly before you hear audio—that gap is normal; we do not add extra UI
+ * time after the sound ends (the old `playbackDurationMs` tail was wrong once the API awaited completion).
  */
-const DEFAULT_PLAYBACK_UI_MS = 1000;
-
 export const SoundPreviewButton = ({
   sound,
   disabled = false,
   size = 'sm',
-  playbackDurationMs = DEFAULT_PLAYBACK_UI_MS,
   playbackInterruptKey = 0,
 }: SoundPreviewButtonProps) => {
   // WHY useId: stable per mount so session ownership is unique even when two rows preview the same sound id (e.g. field + modal).
   const clientId = useId();
   const [isPlaying, setIsPlaying] = useState(false);
-  const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevInterruptKeyRef = useRef(playbackInterruptKey);
-  /** When true, ignore post-await scheduling (user stopped or parent interrupted while preview was in flight). */
+  /** When true, ignore post-await cleanup (user stopped or parent interrupted while preview was in flight). */
   const discardPlayCompletionRef = useRef(false);
 
   const resetLocalPreviewUi = useCallback(() => {
     discardPlayCompletionRef.current = true;
-    if (playTimeoutRef.current) {
-      clearTimeout(playTimeoutRef.current);
-      playTimeoutRef.current = null;
-    }
     setIsPlaying(false);
   }, []);
 
@@ -71,9 +62,6 @@ export const SoundPreviewButton = ({
   // WHY release on unmount: avoid leaving a zombie owner id that would block the next preview until something else claims.
   useEffect(() => {
     return () => {
-      if (playTimeoutRef.current) {
-        clearTimeout(playTimeoutRef.current);
-      }
       releasePreviewSession(clientId);
     };
   }, [clientId]);
@@ -117,10 +105,6 @@ export const SoundPreviewButton = ({
       discardPlayCompletionRef.current = false;
       setIsPlaying(true);
 
-      if (playTimeoutRef.current) {
-        clearTimeout(playTimeoutRef.current);
-      }
-
       try {
         await chromeExtensionService.playSoundPreview(sound);
       } catch (error) {
@@ -130,19 +114,16 @@ export const SoundPreviewButton = ({
         return;
       }
 
-      // WHY discard check: user may have stopped or another button claimed while `playSoundPreview` was resolving.
-      // WHY active-id check: same—superseded plays must not schedule the “fake playing” tail timeout.
+      // WHY discard / active-id: user may have stopped or another button claimed while `playSoundPreview` was resolving.
       if (discardPlayCompletionRef.current || getActivePreviewSessionId() !== clientId) {
         return;
       }
 
-      playTimeoutRef.current = setTimeout(() => {
-        setIsPlaying(false);
-        // WHY release after UI timeout: natural end should free the session like wave-click stop does.
-        releasePreviewSession(clientId);
-      }, playbackDurationMs);
+      // WHY no extra timeout: `playSoundPreview` already waits until offscreen playback ends; a follow-up delay only kept the wave on after audio stopped.
+      setIsPlaying(false);
+      releasePreviewSession(clientId);
     },
-    [sound, isPlaying, disabled, playbackDurationMs, clientId]
+    [sound, isPlaying, disabled, clientId]
   );
 
   // Don't render if sound is 'off' or disabled

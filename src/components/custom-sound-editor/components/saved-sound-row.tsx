@@ -44,7 +44,7 @@ export const SavedSoundRow = ({
       <span className="flex-1 text-sm font-medium text-base-content truncate">{meta.name}</span>
       <span className="badge badge-sm badge-ghost">{(meta.durationMs / 1000).toFixed(1)}s</span>
       <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-        <SoundPreviewButton sound={meta.id} size="sm" playbackDurationMs={meta.durationMs + 150} />
+        <SoundPreviewButton sound={meta.id} size="sm" />
       </div>
       <button
         type="button"
