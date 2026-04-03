@@ -160,10 +160,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
                       <span className="text-sm font-medium text-base-content leading-snug">
                         Notify on drafts
                       </span>
-                      <ExclamationTriangleIcon
-                        className="size-4 text-warning shrink-0"
-                        aria-hidden
-                      />
+                      <ExclamationTriangleIcon className="size-4 text-warning shrink-0" />
                     </>
                   ) : (
                     'Notify on drafts'
@@ -173,17 +170,14 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
               {draftNotifyListMismatch && (
                 <div
                   role="status"
-                  className="rounded-lg border border-base-300 border-l-[3px] border-l-warning bg-base-200 px-2.5 py-2 flex gap-2 items-start"
+                  className="rounded-lg border border-base-300 border-l-[3px] border-l-warning bg-base-200 px-3 py-2.5 flex items-start gap-2.5"
                 >
-                  <ExclamationTriangleIcon
-                    className="size-4 text-warning shrink-0 mt-0.5"
-                    aria-hidden
-                  />
-                  <p className="text-[11px] font-medium text-base-content leading-snug min-w-0">
+                  <ExclamationTriangleIcon className="w-4 h-4 text-warning shrink-0 mt-px" />
+                  <p className="text-xs font-medium text-base-content leading-snug min-w-0">
                     Draft PRs are currently hidden from your list. If you dismiss a draft
                     notification, the PR won&apos;t be visible in the popup. Enable{' '}
-                    <span className="font-semibold text-base-content">Show drafts in list</span>{' '}
-                    below to keep them visible.
+                    <span className="font-bold text-base-content">'Show drafts in list'</span> below
+                    to keep them visible.
                   </p>
                 </div>
               )}
