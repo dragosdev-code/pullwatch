@@ -26,15 +26,67 @@ interface WindowWithLegacyAudio extends Window {
 // per notification would exhaust the limit under rapid-fire scenarios.
 let sharedAudioContext: AudioContext | null = null;
 
-/** AbortController for the in-flight “wait for duration” tail of the current play; STOP/new play aborts it. */
+/**
+ * Aborts the post-play `setTimeout` wait so the SW `sendMessage` callback can run after STOP or a newer play.
+ * WHY: the worker stays alive until offscreen responds; we must end that wait when preview is cut short.
+ */
 let activePlaybackAbort: AbortController | null = null;
 
 /**
- * Cuts audio output and ends any pending playback wait. Used when the user stops preview (e.g. delete)
- * or when a new sound starts so clips never overlap.
+ * Monotonic stamp for “which PLAY/STOP request is current”.
+ * WHY: `decodeAudioData` is async; a superseded handler can finish decode after a newer PLAY started and would
+ * call `source.start()` unless we compare generations after every yield.
+ */
+let playRequestGeneration = 0;
+
+/** Last started custom clip; suspend/resume alone does not stop BufferSources—they resume with the context. */
+let activeCustomBufferSource: AudioBufferSourceNode | null = null;
+
+/** Built-in tones use oscillators; same resume issue if we only suspend the AudioContext. */
+const activeBuiltInOscillators: OscillatorNode[] = [];
+
+/**
+ * Hard-stops any nodes still connected from the previous play so a new preview cannot overlap.
+ * WHY: `AudioContext.suspend()` pauses time; `resume()` continues *all* scheduled sources, including
+ * an older `BufferSource` that was never `stop()`ped—users hear two clips at once.
+ */
+const stopAllActiveAudioNodes = (): void => {
+  if (activeCustomBufferSource) {
+    const ctx = activeCustomBufferSource.context;
+    try {
+      activeCustomBufferSource.stop(ctx.currentTime);
+    } catch {
+      /* already stopped / not started */
+    }
+    try {
+      activeCustomBufferSource.disconnect();
+    } catch {
+      /* */
+    }
+    activeCustomBufferSource = null;
+  }
+  for (const osc of activeBuiltInOscillators) {
+    try {
+      osc.stop(osc.context.currentTime);
+    } catch {
+      /* */
+    }
+    try {
+      osc.disconnect();
+    } catch {
+      /* */
+    }
+  }
+  activeBuiltInOscillators.length = 0;
+};
+
+/**
+ * Stops audible output and the duration wait for the current play.
+ * WHY node stops + suspend: suspend alone does not tear down started `BufferSource`s; `resume()` for the next clip would un-pause them too.
  */
 function interruptActivePlayback(): void {
   activePlaybackAbort?.abort();
+  stopAllActiveAudioNodes();
   if (sharedAudioContext?.state === 'running') {
     void sharedAudioContext.suspend();
   }
@@ -61,6 +113,8 @@ async function playCustomSound(
   audioContext: AudioContext,
   soundId: string,
   base64: string | undefined,
+  /** Snapshot from the caller; if a newer play or STOP bumped `playRequestGeneration`, discard output. */
+  requestGeneration: number,
 ): Promise<number> {
   if (!base64) {
     debugWarn(`No custom sound payload for ${soundId}, falling back to ping`);
@@ -71,11 +125,23 @@ async function playCustomSound(
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   const buffer = await audioContext.decodeAudioData(bytes.buffer.slice(0));
+  // WHY: another PLAY or STOP may have run while decoding; starting this buffer would layer on top of the new sound.
+  if (requestGeneration !== playRequestGeneration) {
+    debugLog(`Discarding decoded custom sound (superseded): ${soundId}`);
+    return 0;
+  }
   debugLog(`Decoded custom sound: ${soundId}`);
 
   const source = audioContext.createBufferSource();
   source.buffer = buffer;
   source.connect(audioContext.destination);
+  activeCustomBufferSource = source;
+  // WHY: `interruptActivePlayback` must not hold a pointer to a finished node so the next stop targets the right source.
+  source.onended = () => {
+    if (activeCustomBufferSource === source) {
+      activeCustomBufferSource = null;
+    }
+  };
   source.start(0);
 
   const durationMs = Math.ceil(buffer.duration * 1000) + 100;
@@ -104,6 +170,9 @@ function playBuiltInSound(audioContext: AudioContext, soundType: BuiltInSound): 
   config.times.forEach((time, index) => {
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
+
+    // WHY track oscillators: suspend/resume does not cancel scheduled tones; `stop()` on interrupt silences them immediately.
+    activeBuiltInOscillators.push(oscillator);
 
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
@@ -142,6 +211,8 @@ async function handlePlayNotificationSound(
   soundType: NotificationSound = 'ping',
   playPayload?: PlaySoundMessagePayload,
 ): Promise<void> {
+  // Bump generation before interrupt so in-flight decode from an older handler becomes stale as soon as this PLAY is accepted.
+  const myGeneration = ++playRequestGeneration;
   interruptActivePlayback();
 
   const abortController = new AbortController();
@@ -165,19 +236,30 @@ async function handlePlayNotificationSound(
       debugLog('AudioContext resumed.');
     }
 
-    let durationMs: number;
+    // WHY after `resume`: another message may have run during the await and bumped `playRequestGeneration`.
+    if (myGeneration !== playRequestGeneration) {
+      return;
+    }
+
+    let durationMs = 0;
 
     if (isCustomSoundId(soundType)) {
       durationMs = await playCustomSound(
         audioContext,
         soundType,
         playPayload?.customSoundBase64,
+        myGeneration,
       );
     } else if (isBuiltInSound(soundType)) {
       durationMs = playBuiltInSound(audioContext, soundType);
     } else {
       debugWarn(`Unrecognised sound type "${soundType}", falling back to ping`);
       durationMs = playBuiltInSound(audioContext, 'ping');
+    }
+
+    // WHY after decode/play path: custom decode is async; built-in path is sync but a STOP could interleave before we schedule the wait.
+    if (myGeneration !== playRequestGeneration) {
+      return;
     }
 
     if (durationMs > 0) {
@@ -233,7 +315,10 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
   }
 
   if (message.action === EVENT_STOP_SOUND_PLAYBACK) {
+    // WHY bump generation: in-flight decodes must not call `source.start()` after the user asked for silence.
+    playRequestGeneration += 1;
     interruptActivePlayback();
+    // WHY clear abort ref: interrupt already aborted the controller; leaving it would confuse `finally` in a concurrent PLAY handler.
     activePlaybackAbort = null;
     sendResponse({ success: true, data: 'Playback interrupted' } as MessageResponse);
     return true;

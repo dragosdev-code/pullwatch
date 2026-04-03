@@ -25,6 +25,22 @@ export class SoundService implements ISoundService {
   private initialized = false;
   private creatingOffscreenDocument: Promise<void> | null = null;
 
+  /**
+   * Promise-chain “FIFO gate” so only one `playNotificationSound` talks to offscreen at a time.
+   *
+   * **Why this feels unfamiliar coming from UI code:** In React, one user gesture usually finishes
+   * before the next starts from your perspective. In an extension **service worker**, multiple
+   * `chrome.runtime.onMessage` handlers can be **in flight at once**—each hit `await` and yield,
+   * so another message runs. Without this gate, two handlers could both `sendMessage(PLAY)` before
+   * either offscreen play finished → overlapping audio. This is the same idea as a mutex/queue,
+   * implemented with promises (no shared `locked` boolean, which races across `await`).
+   *
+   * **Mental model:** `playSoundGateTail` is “the promise the *next* caller must await.” Each
+   * caller swaps in a fresh promise, awaits the *previous* tail, does work, then `resolve()`s so
+   * the next waiter unblocks—like passing a baton down a line.
+   */
+  private playSoundGateTail: Promise<void> = Promise.resolve();
+
   constructor(debugService: IDebugService) {
     this.debugService = debugService;
   }
@@ -83,8 +99,9 @@ export class SoundService implements ISoundService {
       return this.creatingOffscreenDocument;
     }
 
-    this.creatingOffscreenDocument = this.doEnsureOffscreenDocument()
-      .finally(() => { this.creatingOffscreenDocument = null; });
+    this.creatingOffscreenDocument = this.doEnsureOffscreenDocument().finally(() => {
+      this.creatingOffscreenDocument = null;
+    });
     return this.creatingOffscreenDocument;
   }
 
@@ -149,8 +166,34 @@ export class SoundService implements ISoundService {
    * Plays a notification sound based on the sound type.
    * Awaits until the offscreen document confirms playback is complete,
    * keeping the service worker alive for the full sound duration.
+   *
+   * Wrapped in the promise gate above so concurrent callers are serialized (FIFO).
    */
   async playNotificationSound(sound: NotificationSound = 'ping'): Promise<void> {
+    // 1) Remember who was in front of us in line (every prior play chained to this promise).
+    const waitPrev = this.playSoundGateTail;
+
+    // 2) Immediately publish a *new* tail and keep its resolver—we will call it when *we* finish
+    //    so the next caller’s `await waitPrev` unblocks. (This part runs synchronously, before any
+    //    await—important so two callers can’t both think the queue is empty.)
+    let unlockGate!: () => void;
+    this.playSoundGateTail = new Promise<void>((resolve) => {
+      unlockGate = resolve;
+    });
+
+    // 3) Wait until everyone ahead of us has run their `finally { unlockGate() }`.
+    await waitPrev;
+
+    try {
+      await this.doPlayNotificationSound(sound);
+    } finally {
+      // 4) Always wake the next waiter—same idea as `finally` in try/fetch so loading spinners clear.
+      //    If we skipped this (e.g. only on success), one failure would freeze all later sounds forever.
+      unlockGate();
+    }
+  }
+
+  private async doPlayNotificationSound(sound: NotificationSound): Promise<void> {
     try {
       if (sound === 'off') {
         this.debugService.log('[SoundService] Sound is disabled (off), skipping playback');
@@ -172,24 +215,18 @@ export class SoundService implements ISoundService {
       const payload = await this.buildPlaySoundPayload(resolved);
 
       await new Promise<void>((resolve, reject) => {
-        chrome.runtime.sendMessage(
-          { action: EVENT_PLAY_SOUND, payload },
-          (response) => {
-            if (chrome.runtime.lastError) {
-              this.debugService.error(
-                '[SoundService] Error sending play sound message to offscreen:',
-                chrome.runtime.lastError.message
-              );
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              this.debugService.log(
-                '[SoundService] Sound playback completed, response:',
-                response
-              );
-              resolve();
-            }
+        chrome.runtime.sendMessage({ action: EVENT_PLAY_SOUND, payload }, (response) => {
+          if (chrome.runtime.lastError) {
+            this.debugService.error(
+              '[SoundService] Error sending play sound message to offscreen:',
+              chrome.runtime.lastError.message
+            );
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            this.debugService.log('[SoundService] Sound playback completed, response:', response);
+            resolve();
           }
-        );
+        });
       });
     } catch (error) {
       this.debugService.error('[SoundService] Error playing notification sound:', error);
@@ -203,22 +240,20 @@ export class SoundService implements ISoundService {
    */
   async stopNotificationPlayback(): Promise<void> {
     try {
+      // WHY not behind `playSoundGateTail`: stop must preempt immediately; queuing after a long play would block preview UX.
       if (!(await this.hasOffscreenDocument())) {
         return;
       }
       await new Promise<void>((resolve) => {
-        chrome.runtime.sendMessage(
-          { action: EVENT_STOP_SOUND_PLAYBACK, payload: {} },
-          () => {
-            if (chrome.runtime.lastError) {
-              this.debugService.warn(
-                '[SoundService] stop playback message:',
-                chrome.runtime.lastError.message
-              );
-            }
-            resolve();
+        chrome.runtime.sendMessage({ action: EVENT_STOP_SOUND_PLAYBACK, payload: {} }, () => {
+          if (chrome.runtime.lastError) {
+            this.debugService.warn(
+              '[SoundService] stop playback message:',
+              chrome.runtime.lastError.message
+            );
           }
-        );
+          resolve();
+        });
       });
     } catch (error) {
       this.debugService.error('[SoundService] Error stopping notification playback:', error);
