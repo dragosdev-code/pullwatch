@@ -14,6 +14,8 @@ import { useSavedIndicator } from './use-saved-indicator';
 import { SavedIndicator } from './saved-indicator';
 import { useAssignedDraftNotifyListSync } from './use-assigned-draft-notify-list-sync';
 import { AssignedDraftNotifySettingsBlock } from './assigned-draft-notify-settings-block';
+import { useShowDraftsListHiddenHint } from './use-show-drafts-list-hidden-hint';
+import { InfoCircleIcon } from '../ui/icons';
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -36,6 +38,10 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
     isLoading,
     isResettingRef,
   });
+
+  const { hintVisible: showDraftsListHiddenHintVisible } = useShowDraftsListHiddenHint(
+    draftSync.showDraftsInList
+  );
 
   useEffect(() => {
     if (settings) {
@@ -167,6 +173,18 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
                 label="Show drafts in list"
                 description="Display draft PRs in the To Review list."
               />
+              {showDraftsListHiddenHintVisible && (
+                <div
+                  role="status"
+                  className="mt-2 rounded-lg border border-base-300 border-l-[3px] border-l-info bg-base-200 px-3 py-2.5 flex items-start gap-2.5"
+                >
+                  <InfoCircleIcon className="w-4 h-4 text-info shrink-0 mt-px" />
+                  <p className="text-xs font-medium text-base-content leading-snug min-w-0">
+                    Draft PRs will leave your To Review list after the next sync, or tap Refresh in
+                    the header to update now.
+                  </p>
+                </div>
+              )}
             </div>
           </SettingsSection>
 
