@@ -6,6 +6,7 @@ import {
   SETTINGS_TEST_ERROR_DISABLED,
 } from '../../../../extension/common/constants';
 import { SettingsTestCooldownRing } from './settings-test-cooldown-ring';
+import { BellIcon } from '../../ui/icons';
 
 type TestCategory = 'assigned' | 'merged';
 
@@ -64,7 +65,8 @@ export const SettingsNotificationTestButton = ({
           : 'hover:bg-base-200 hover:cursor-pointer'
       }`}
     >
-      <span>Test</span>
+      <BellIcon className="size-2.5" />
+      <span className="mb-[0.5px]">Preview</span>
       {cooldown ? <SettingsTestCooldownRing active /> : null}
     </button>
   );
