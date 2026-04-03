@@ -39,3 +39,19 @@ export class GitHubOutageError extends Error {
     this.httpStatus = httpStatus;
   }
 }
+
+// ─── Chromium / platform (not thrown by this extension) ─────────────────────
+
+/**
+ * True when `error` is the transient chrome.storage failure Chromium reports as
+ * "No SW" (MV3 worker not attached yet — common right after sleep/wake).
+ *
+ * Custom `Error` subclasses in this file are for **our** throws (`RateLimitError`,
+ * etc.) so callers can use `instanceof`. The browser does not throw those types for
+ * storage glitches; it uses a plain `Error` with this message. Until Chrome exposes
+ * a stable `code` or subtype, we match the message — same idea as parsing HTTP
+ * status from a response we did not construct.
+ */
+export function isTransientExtensionStorageError(error: unknown): boolean {
+  return error instanceof Error && /no sw/i.test(error.message);
+}

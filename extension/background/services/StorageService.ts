@@ -13,6 +13,8 @@ import {
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
 } from '../../common/constants';
+import { isTransientExtensionStorageError } from '../../common/errors';
+import { runWithTransientStorageRetry } from '../../common/transient-storage-retry';
 
 /**
  * Default settings matching the UI defaults from src/components/settings/types.ts
@@ -50,6 +52,18 @@ export class StorageService implements IStorageService {
     this.debugService = debugService;
   }
 
+  private logStorageException(message: string, error: unknown): void {
+    if (isTransientExtensionStorageError(error)) {
+      this.debugService.warn(
+        message,
+        'Transient chrome.storage failure (common right after sleep/wake or cold MV3 worker).',
+        error
+      );
+    } else {
+      this.debugService.error(message, error);
+    }
+  }
+
   /**
    * Initializes the storage service.
    */
@@ -67,7 +81,7 @@ export class StorageService implements IStorageService {
       this.initialized = true;
       this.debugService.log('[StorageService] Storage service initialized');
     } catch (error) {
-      this.debugService.error('[StorageService] Failed to initialize:', error);
+      this.logStorageException('[StorageService] Failed to initialize:', error);
       throw error;
     }
   }
@@ -118,7 +132,7 @@ export class StorageService implements IStorageService {
 
       return null;
     } catch (error) {
-      this.debugService.error(`[StorageService] Error getting stored PRs for key '${key}':`, error);
+      this.logStorageException(`[StorageService] Error getting stored PRs for key '${key}':`, error);
       return null;
     }
   }
@@ -139,7 +153,7 @@ export class StorageService implements IStorageService {
         'items'
       );
     } catch (error) {
-      this.debugService.error(`[StorageService] Error setting stored PRs for key '${key}':`, error);
+      this.logStorageException(`[StorageService] Error setting stored PRs for key '${key}':`, error);
       throw error;
     }
   }
@@ -156,7 +170,7 @@ export class StorageService implements IStorageService {
       );
       return timestamp;
     } catch (error) {
-      this.debugService.error('[StorageService] Error getting last fetch time:', error);
+      this.logStorageException('[StorageService] Error getting last fetch time:', error);
       return null;
     }
   }
@@ -172,7 +186,7 @@ export class StorageService implements IStorageService {
         new Date(timestamp).toISOString()
       );
     } catch (error) {
-      this.debugService.error('[StorageService] Error setting last fetch time:', error);
+      this.logStorageException('[StorageService] Error setting last fetch time:', error);
       throw error;
     }
   }
@@ -187,7 +201,7 @@ export class StorageService implements IStorageService {
       this.debugService.log('[StorageService] Retrieved settings:', result);
       return result;
     } catch (error) {
-      this.debugService.error('[StorageService] Error getting settings:', error);
+      this.logStorageException('[StorageService] Error getting settings:', error);
       return DEFAULT_EXTENSION_SETTINGS;
     }
   }
@@ -206,7 +220,7 @@ export class StorageService implements IStorageService {
       await this.setSync(STORAGE_KEY_SETTINGS, updatedSettings);
       this.debugService.log('[StorageService] Settings updated:', updatedSettings);
     } catch (error) {
-      this.debugService.error('[StorageService] Error setting settings:', error);
+      this.logStorageException('[StorageService] Error setting settings:', error);
       throw error;
     }
   }
@@ -220,7 +234,7 @@ export class StorageService implements IStorageService {
     try {
       return await this.get<UserData>(STORAGE_KEY_USER_DATA);
     } catch (error) {
-      this.debugService.error('[StorageService] Error getting user data:', error);
+      this.logStorageException('[StorageService] Error getting user data:', error);
       return null;
     }
   }
@@ -233,7 +247,7 @@ export class StorageService implements IStorageService {
       await this.set(STORAGE_KEY_USER_DATA, userData);
       this.debugService.log('[StorageService] User data updated');
     } catch (error) {
-      this.debugService.error('[StorageService] Error setting user data:', error);
+      this.logStorageException('[StorageService] Error setting user data:', error);
       throw error;
     }
   }
@@ -248,11 +262,11 @@ export class StorageService implements IStorageService {
   async get<T>(key: string): Promise<T | null>;
   async get<T>(key: string): Promise<T | null> {
     try {
-      const result = await this.localStorage.get([key]);
+      const result = await runWithTransientStorageRetry(() => this.localStorage.get([key]));
       this.debugService.log(`[StorageService] Local storage key retrieved: '${key}'`);
       return (result[key] as T | undefined) ?? null;
     } catch (error) {
-      this.debugService.error(`[StorageService] Error getting local key '${key}':`, error);
+      this.logStorageException(`[StorageService] Error getting local key '${key}':`, error);
       return null;
     }
   }
@@ -265,10 +279,10 @@ export class StorageService implements IStorageService {
   async set<T>(key: string, value: T): Promise<void>;
   async set<T>(key: string, value: T): Promise<void> {
     try {
-      await this.localStorage.set({ [key]: value });
+      await runWithTransientStorageRetry(() => this.localStorage.set({ [key]: value }));
       this.debugService.log(`[StorageService] Local storage key set: '${key}'`);
     } catch (error) {
-      this.debugService.error(`[StorageService] Error setting local key '${key}':`, error);
+      this.logStorageException(`[StorageService] Error setting local key '${key}':`, error);
       throw error;
     }
   }
@@ -281,11 +295,11 @@ export class StorageService implements IStorageService {
    */
   private async getSync<T>(key: string): Promise<T | null> {
     try {
-      const result = await this.syncStorage.get([key]);
+      const result = await runWithTransientStorageRetry(() => this.syncStorage.get([key]));
       this.debugService.log(`[StorageService] Sync storage key retrieved: '${key}'`);
       return (result[key] as T | undefined) ?? null;
     } catch (error) {
-      this.debugService.error(`[StorageService] Error getting sync key '${key}':`, error);
+      this.logStorageException(`[StorageService] Error getting sync key '${key}':`, error);
       return null;
     }
   }
@@ -296,10 +310,10 @@ export class StorageService implements IStorageService {
    */
   private async setSync<T>(key: string, value: T): Promise<void> {
     try {
-      await this.syncStorage.set({ [key]: value });
+      await runWithTransientStorageRetry(() => this.syncStorage.set({ [key]: value }));
       this.debugService.log(`[StorageService] Sync storage key set: '${key}'`);
     } catch (error) {
-      this.debugService.error(`[StorageService] Error setting sync key '${key}':`, error);
+      this.logStorageException(`[StorageService] Error setting sync key '${key}':`, error);
       throw error;
     }
   }
@@ -309,10 +323,10 @@ export class StorageService implements IStorageService {
    */
   async remove(key: string): Promise<void> {
     try {
-      await this.localStorage.remove([key]);
+      await runWithTransientStorageRetry(() => this.localStorage.remove([key]));
       this.debugService.log(`[StorageService] Removed local key '${key}'`);
     } catch (error) {
-      this.debugService.error(`[StorageService] Error removing local key '${key}':`, error);
+      this.logStorageException(`[StorageService] Error removing local key '${key}':`, error);
       throw error;
     }
   }
@@ -322,14 +336,14 @@ export class StorageService implements IStorageService {
    */
   async getStorageInfo(): Promise<{ usedBytes: number; totalBytes: number }> {
     try {
-      const usedBytes = await this.localStorage.getBytesInUse();
+      const usedBytes = await runWithTransientStorageRetry(() => this.localStorage.getBytesInUse());
       // Chrome storage.local quota is typically 5MB
       const totalBytes = 5 * 1024 * 1024;
 
       this.debugService.log(`[StorageService] Local storage usage: ${usedBytes}/${totalBytes} bytes`);
       return { usedBytes, totalBytes };
     } catch (error) {
-      this.debugService.error('[StorageService] Error getting storage info:', error);
+      this.logStorageException('[StorageService] Error getting storage info:', error);
       return { usedBytes: 0, totalBytes: 0 };
     }
   }

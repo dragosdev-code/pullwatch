@@ -5,6 +5,7 @@ import {
   STORAGE_KEY_MERGED_PRS,
 } from '../extension/common/constants';
 import type { StoredPRs } from '../extension/common/types';
+import { runWithTransientStorageRetry } from '../extension/common/transient-storage-retry';
 import { queryKeys } from './constants/query-keys';
 import { isExtensionContext } from './utils/is-extension-context';
 
@@ -20,7 +21,14 @@ export const hydratePrQueriesFromStorage = async (
   }
 
   const keys = [STORAGE_KEY_ASSIGNED_PRS, STORAGE_KEY_MERGED_PRS, STORAGE_KEY_AUTHORED_PRS] as const;
-  const result = await chrome.storage.local.get([...keys]);
+
+  let result: Record<string, unknown>;
+  try {
+    // Same retry policy as StorageService — see extension/common/transient-storage-retry.ts
+    result = await runWithTransientStorageRetry(() => chrome.storage.local.get([...keys] as string[]));
+  } catch {
+    return;
+  }
 
   const assigned = (result[STORAGE_KEY_ASSIGNED_PRS] as StoredPRs | undefined)?.prs ?? [];
   const merged = (result[STORAGE_KEY_MERGED_PRS] as StoredPRs | undefined)?.prs ?? [];
