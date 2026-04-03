@@ -38,6 +38,8 @@ export const SoundPreviewButton = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevInterruptKeyRef = useRef(playbackInterruptKey);
+  /** When true, ignore post-await scheduling (user stopped or parent interrupted while preview was in flight). */
+  const discardPlayCompletionRef = useRef(false);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -51,6 +53,7 @@ export const SoundPreviewButton = ({
   useEffect(() => {
     if (playbackInterruptKey === prevInterruptKeyRef.current) return;
     prevInterruptKeyRef.current = playbackInterruptKey;
+    discardPlayCompletionRef.current = true;
     if (playTimeoutRef.current) {
       clearTimeout(playTimeoutRef.current);
       playTimeoutRef.current = null;
@@ -58,21 +61,29 @@ export const SoundPreviewButton = ({
     setIsPlaying(false);
   }, [playbackInterruptKey]);
 
-  /**
-   * Handle play button click
-   */
-  const handlePlay = useCallback(
+  const handleClick = useCallback(
     async (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
 
-      if (!isPlayableSound(sound) || isPlaying || disabled) {
+      if (!isPlayableSound(sound) || disabled) {
         return;
       }
 
+      if (isPlaying) {
+        discardPlayCompletionRef.current = true;
+        if (playTimeoutRef.current) {
+          clearTimeout(playTimeoutRef.current);
+          playTimeoutRef.current = null;
+        }
+        setIsPlaying(false);
+        void chromeExtensionService.stopSoundPreview();
+        return;
+      }
+
+      discardPlayCompletionRef.current = false;
       setIsPlaying(true);
 
-      // Clear any existing timeout
       if (playTimeoutRef.current) {
         clearTimeout(playTimeoutRef.current);
       }
@@ -81,6 +92,10 @@ export const SoundPreviewButton = ({
         await chromeExtensionService.playSoundPreview(sound);
       } catch (error) {
         console.error('[SoundPreviewButton] Failed to play sound:', error);
+      }
+
+      if (discardPlayCompletionRef.current) {
+        return;
       }
 
       playTimeoutRef.current = setTimeout(() => {
@@ -111,11 +126,9 @@ export const SoundPreviewButton = ({
   return (
     <button
       type="button"
-      onClick={handlePlay}
+      onClick={handleClick}
       disabled={disabled}
       className={`btn btn-circle btn-ghost btn-primary ${sizeClasses[size]} p-0`}
-      aria-label={`Preview ${sound} sound`}
-      title={`Preview ${sound} sound`}
     >
       {isPlaying ? (
         <PlayingAnimation className={iconSizes[size]} />
