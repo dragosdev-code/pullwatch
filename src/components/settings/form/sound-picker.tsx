@@ -1,9 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import type { NotificationSound } from '../../../../extension/common/types';
+import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import type { CustomSoundId, CustomSoundMeta, NotificationSound } from '../../../../extension/common/types';
 import {
   SOUND_DEFINITIONS,
   isPlayableSound,
-  isCustomSoundId,
   type SoundDefinition,
 } from '../../../../extension/common/sound-config';
 import { useCustomSounds } from '../../../hooks/use-custom-sounds';
@@ -27,12 +26,14 @@ interface SoundOptionProps {
   definition: SoundDefinition;
   isSelected: boolean;
   onSelect: () => void;
+  /** Rendered after the preview control; custom rows use this for delete (built-ins omit it). */
+  trailingActions?: ReactNode;
 }
 
 /**
  * Individual sound option row
  */
-const SoundOption = ({ definition, isSelected, onSelect }: SoundOptionProps) => {
+const SoundOption = ({ definition, isSelected, onSelect, trailingActions }: SoundOptionProps) => {
   const isPlayable = isPlayableSound(definition.id);
 
   return (
@@ -62,15 +63,93 @@ const SoundOption = ({ definition, isSelected, onSelect }: SoundOptionProps) => 
         <p className="text-xs text-base-content/60 truncate">{definition.description}</p>
       </div>
 
-      {/* Play button (only for playable sounds) */}
+      {/* Preview + optional trailing actions (delete sits here for custom sounds only) */}
       {isPlayable ? (
-        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 flex items-center gap-1"
+        >
           <SoundPreviewButton sound={definition.id} disabled={false} size="sm" />
+          {trailingActions}
         </div>
       ) : (
-        <div className="shrink-0 w-10" /> // Spacer for alignment
+        <div className="shrink-0 w-10" aria-hidden />
       )}
     </div>
+  );
+};
+
+interface CustomSoundOptionRowProps {
+  meta: CustomSoundMeta;
+  definition: SoundDefinition;
+  isSelected: boolean;
+  /** When true, row shows confirm/cancel like CustomSoundEditor saved list (taller padding than editor). */
+  isConfirming: boolean;
+  onSelect: () => void;
+  onRequestDelete: (e: React.MouseEvent) => void;
+  onConfirmDelete: (e: React.MouseEvent) => void;
+  onCancelDelete: (e: React.MouseEvent) => void;
+}
+
+/**
+ * Custom sound row in the picker: normal mode matches SoundOption size; delete uses a two-step
+ * confirm bar so we do not remove storage on a mis-tap (parity with CustomSoundEditor).
+ */
+const CustomSoundOptionRow = ({
+  meta,
+  definition,
+  isSelected,
+  isConfirming,
+  onSelect,
+  onRequestDelete,
+  onConfirmDelete,
+  onCancelDelete,
+}: CustomSoundOptionRowProps) => {
+  if (isConfirming) {
+    return (
+      <div
+        className="flex items-center gap-2 p-3 rounded-lg bg-base-200/80 border border-base-300"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="flex-1 min-w-0 text-sm text-base-content">
+          Remove &ldquo;{meta.name}&rdquo;?
+        </span>
+        <button
+          type="button"
+          onClick={onConfirmDelete}
+          className="btn btn-ghost btn-sm btn-circle text-success hover:bg-success/15 shrink-0"
+          aria-label="Confirm delete"
+        >
+          <CheckIcon className="size-4 text-success" />
+        </button>
+        <button
+          type="button"
+          onClick={onCancelDelete}
+          className="btn btn-ghost btn-sm btn-circle text-base-content/50 hover:text-base-content hover:bg-base-300/50 shrink-0"
+          aria-label="Cancel delete"
+        >
+          <XIcon className="size-3.5" width={14} height={14} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <SoundOption
+      definition={definition}
+      isSelected={isSelected}
+      onSelect={onSelect}
+      trailingActions={
+        <button
+          type="button"
+          onClick={onRequestDelete}
+          className="btn btn-ghost btn-xs btn-circle text-base-content/30 hover:text-error hover:bg-error/10"
+          aria-label={`Delete ${meta.name}`}
+        >
+          <XIcon className="size-2.5" width={10} height={10} />
+        </button>
+      }
+    />
   );
 };
 
@@ -86,12 +165,14 @@ export const SoundPicker = ({
   onOpenCustomEditor,
 }: SoundPickerProps) => {
   const [selectedSound, setSelectedSound] = useState<NotificationSound>(value);
+  const [pendingDeleteId, setPendingDeleteId] = useState<CustomSoundId | null>(null);
   const modalRef = useRef<HTMLDialogElement>(null);
   const { customSounds, deleteCustomSound, getCustomSoundDefinition } = useCustomSounds();
 
   useEffect(() => {
     if (isOpen) {
       setSelectedSound(value);
+      setPendingDeleteId(null);
     }
   }, [isOpen, value]);
 
@@ -105,12 +186,10 @@ export const SoundPicker = ({
     }
   }, [isOpen]);
 
-  const handleSelect = useCallback(
-    (soundId: NotificationSound) => {
-      setSelectedSound(soundId);
-    },
-    [setSelectedSound]
-  );
+  const handleSelect = useCallback((soundId: NotificationSound) => {
+    setPendingDeleteId(null);
+    setSelectedSound(soundId);
+  }, []);
 
   const handleConfirm = useCallback(() => {
     onChange(selectedSound);
@@ -139,17 +218,26 @@ export const SoundPicker = ({
     onOpenCustomEditor?.();
   }, [onOpenCustomEditor]);
 
-  const handleDeleteCustom = useCallback(
-    (e: React.MouseEvent, id: NotificationSound) => {
+  const handleRequestDeleteCustom = useCallback((e: React.MouseEvent, id: CustomSoundId) => {
+    e.stopPropagation();
+    setPendingDeleteId(id);
+  }, []);
+
+  const handleCancelDeleteCustom = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPendingDeleteId(null);
+  }, []);
+
+  const handleConfirmDeleteCustom = useCallback(
+    async (e: React.MouseEvent, id: CustomSoundId) => {
       e.stopPropagation();
-      if (isCustomSoundId(id)) {
-        deleteCustomSound(id);
-        if (selectedSound === id) {
-          setSelectedSound('ping');
-        }
+      await deleteCustomSound(id);
+      if (selectedSound === id) {
+        setSelectedSound('ping');
       }
+      setPendingDeleteId(null);
     },
-    [deleteCustomSound, selectedSound]
+    [deleteCustomSound, selectedSound],
   );
 
   return (
@@ -192,21 +280,17 @@ export const SoundPicker = ({
                 const def = getCustomSoundDefinition(meta.id);
                 if (!def) return null;
                 return (
-                  <div key={meta.id} className="relative">
-                    <SoundOption
-                      definition={def}
-                      isSelected={selectedSound === meta.id}
-                      onSelect={() => handleSelect(meta.id)}
-                    />
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteCustom(e, meta.id)}
-                      className="absolute top-1.5 right-1.5 btn btn-ghost btn-xs btn-circle text-base-content/30 hover:text-error hover:bg-error/10 z-10"
-                      aria-label={`Delete ${meta.name}`}
-                    >
-                      <XIcon className="size-2.5" width={10} height={10} />
-                    </button>
-                  </div>
+                  <CustomSoundOptionRow
+                    key={meta.id}
+                    meta={meta}
+                    definition={def}
+                    isSelected={selectedSound === meta.id}
+                    isConfirming={pendingDeleteId === meta.id}
+                    onSelect={() => handleSelect(meta.id)}
+                    onRequestDelete={(e) => handleRequestDeleteCustom(e, meta.id)}
+                    onConfirmDelete={(e) => handleConfirmDeleteCustom(e, meta.id)}
+                    onCancelDelete={handleCancelDeleteCustom}
+                  />
                 );
               })}
             </>
