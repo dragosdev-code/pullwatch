@@ -173,16 +173,17 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
               {draftNotifyListMismatch && (
                 <div
                   role="status"
-                  className="rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-2 flex gap-2 items-start"
+                  className="rounded-lg border border-base-300 border-l-[3px] border-l-warning bg-base-200 px-2.5 py-2 flex gap-2 items-start"
                 >
                   <ExclamationTriangleIcon
                     className="size-4 text-warning shrink-0 mt-0.5"
                     aria-hidden
                   />
-                  <p className="text-[11px] font-medium text-warning leading-snug min-w-0">
+                  <p className="text-[11px] font-medium text-base-content leading-snug min-w-0">
                     Draft PRs are currently hidden from your list. If you dismiss a draft
-                    notification, the PR won't be visible in the popup. Enable{' '}
-                    <b>Show drafts in list</b> below to keep them visible.
+                    notification, the PR won&apos;t be visible in the popup. Enable{' '}
+                    <span className="font-semibold text-base-content">Show drafts in list</span>{' '}
+                    below to keep them visible.
                   </p>
                 </div>
               )}
