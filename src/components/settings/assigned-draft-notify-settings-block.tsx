@@ -1,4 +1,4 @@
-import { Controller, useWatch, type Control } from 'react-hook-form';
+import { Controller, type Control } from 'react-hook-form';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { ToggleFieldLayout } from './form/toggle-field';
 import type { ExtensionSettings } from './types';
@@ -11,9 +11,8 @@ interface AssignedDraftNotifySettingsBlockProps {
 }
 
 /**
- * "Notify on drafts" row plus an explainer when the list is hidden and the switch reads as on
- * (`draftNotifyPreferred` or one frame of stale stored `true`). Sync logic lives in
- * `useAssignedDraftNotifyListSync`.
+ * "Notify on drafts" row. Warning styling + callout appear only when the list is hidden and the user
+ * has turned this toggle on (see `draftNotifyPreferred` in `useAssignedDraftNotifyListSync`).
  */
 export const AssignedDraftNotifySettingsBlock = ({
   control,
@@ -21,8 +20,6 @@ export const AssignedDraftNotifySettingsBlock = ({
   draftNotifyPreferred,
   setDraftNotifyPreferred,
 }: AssignedDraftNotifySettingsBlockProps) => {
-  const notifyStored = useWatch({ control, name: 'assigned.notifyOnDrafts' });
-
   return (
     <>
       <Controller
@@ -31,16 +28,14 @@ export const AssignedDraftNotifySettingsBlock = ({
         render={({ field }) => (
           <ToggleFieldLayout
             label="Notify on drafts"
-            toggleColor={showDraftsInList ? 'primary' : 'warning'}
+            toggleColor={
+              showDraftsInList ? 'primary' : draftNotifyPreferred ? 'warning' : 'primary'
+            }
             renderInput={(toggleClassName) => (
               <input
                 type="checkbox"
                 className={toggleClassName}
-                checked={
-                  showDraftsInList
-                    ? !!field.value
-                    : draftNotifyPreferred || !!field.value
-                }
+                checked={showDraftsInList ? !!field.value : draftNotifyPreferred}
                 onChange={(e) => {
                   if (showDraftsInList) {
                     field.onChange(e.target.checked);
@@ -56,7 +51,7 @@ export const AssignedDraftNotifySettingsBlock = ({
           />
         )}
       />
-      {!showDraftsInList && (draftNotifyPreferred || !!notifyStored) && (
+      {!showDraftsInList && draftNotifyPreferred && (
         <div
           role="status"
           className="rounded-lg border border-base-300 border-l-[3px] border-l-warning bg-base-200 px-3 py-2.5 flex items-start gap-2.5"

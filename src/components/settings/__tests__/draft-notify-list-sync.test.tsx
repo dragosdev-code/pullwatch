@@ -14,6 +14,9 @@ import { DEFAULT_SETTINGS, type ExtensionSettings } from '../types';
  *
  * **No real `chrome.storage` (or `StorageService` / debounced `saveSettings`)** runs in this file;
  * persistence is untested here — only hook behavior given load-shaped form state.
+ *
+ * Hiding the list with notify on clears `draftNotifyPreferred` (no warning UX). Re-showing the list
+ * does not turn notify on again unless the user enabled notify while the list was hidden.
  */
 const clone = (s: ExtensionSettings): ExtensionSettings => structuredClone(s);
 
@@ -88,13 +91,22 @@ describe('useAssignedDraftNotifyListSync', () => {
       expect(api.sync.suppressSavedFlashRef.current).toBe(false);
     });
 
-    it('legacy invalid (notify on, list hidden): forces stored notify false, preference true, suppress flash', () => {
+    it('legacy invalid (notify on, list hidden): forces stored notify false, no warning pref, suppress flash; showing list restores notify', async () => {
       const invalid = withAssigned({ showDraftsInList: false, notifyOnDrafts: true });
       const { api } = renderSync(invalid);
 
       expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(false);
-      expect(api.sync.draftNotifyPreferred).toBe(true);
+      expect(api.sync.draftNotifyPreferred).toBe(false);
       expect(api.sync.suppressSavedFlashRef.current).toBe(true);
+
+      act(() => {
+        api.methods.setValue('assigned.showDraftsInList', true, { shouldDirty: true });
+      });
+
+      await waitFor(() => {
+        expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(true);
+      });
+      expect(api.sync.draftNotifyPreferred).toBe(true);
     });
 
     it('list hidden and notify false: second hydrate does not clear preference (simulated storage echo)', () => {
@@ -117,7 +129,7 @@ describe('useAssignedDraftNotifyListSync', () => {
   });
 
   describe('transition: show drafts in list', () => {
-    it('hiding list while notify on: persists notify false, keeps preference true', async () => {
+    it('hiding list while notify on: persists notify false, clears warning pref (silent paired-off)', async () => {
       const visible = withAssigned({ showDraftsInList: true, notifyOnDrafts: true });
       const { api } = renderSync(visible);
 
@@ -131,12 +143,36 @@ describe('useAssignedDraftNotifyListSync', () => {
         expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(false);
       });
 
-      // Stored notify is false; preference true is in-memory only (not a second storage field).
-      expect(api.sync.draftNotifyPreferred).toBe(true);
+      expect(api.sync.draftNotifyPreferred).toBe(false);
       expect(api.sync.showDraftsInList).toBe(false);
     });
 
-    it('showing list again applies preference (true) into stored notifyOnDrafts', async () => {
+    it('after silent hide, turning notify on while list hidden sets warning preference; showing list persists notify', async () => {
+      const visible = withAssigned({ showDraftsInList: true, notifyOnDrafts: true });
+      const { api } = renderSync(visible);
+
+      act(() => {
+        api.methods.setValue('assigned.showDraftsInList', false, { shouldDirty: true });
+      });
+      await waitFor(() => expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(false));
+      expect(api.sync.draftNotifyPreferred).toBe(false);
+
+      act(() => {
+        api.sync.setDraftNotifyPreferred(true);
+      });
+      expect(api.sync.draftNotifyPreferred).toBe(true);
+      expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(false);
+
+      act(() => {
+        api.methods.setValue('assigned.showDraftsInList', true, { shouldDirty: true });
+      });
+      await waitFor(() => {
+        expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(true);
+      });
+      expect(api.sync.draftNotifyPreferred).toBe(true);
+    });
+
+    it('showing list again after silent hide keeps notify off', async () => {
       const visible = withAssigned({ showDraftsInList: true, notifyOnDrafts: true });
       const { api } = renderSync(visible);
 
@@ -145,15 +181,16 @@ describe('useAssignedDraftNotifyListSync', () => {
       });
 
       await waitFor(() => expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(false));
-      expect(api.sync.draftNotifyPreferred).toBe(true);
+      expect(api.sync.draftNotifyPreferred).toBe(false);
 
       act(() => {
         api.methods.setValue('assigned.showDraftsInList', true, { shouldDirty: true });
       });
 
       await waitFor(() => {
-        expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(true);
+        expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(false);
       });
+      expect(api.sync.draftNotifyPreferred).toBe(false);
     });
 
     it('showing list with preference false keeps notify off', async () => {

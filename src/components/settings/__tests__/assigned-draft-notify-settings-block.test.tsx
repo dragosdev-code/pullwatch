@@ -96,7 +96,7 @@ describe('AssignedDraftNotifySettingsBlock', () => {
       expect(notifyCheckbox().className).not.toContain('toggle-warning');
     });
 
-    it('uses warning DaisyUI toggle when drafts are hidden from list', () => {
+    it('uses primary toggle when drafts are hidden and user has not turned notify on', () => {
       const settings = mergeSettings({
         assigned: { notifyOnDrafts: false, showDraftsInList: false },
       });
@@ -105,6 +105,22 @@ describe('AssignedDraftNotifySettingsBlock', () => {
           settings={settings}
           showDraftsInList={false}
           draftNotifyPreferred={false}
+          setDraftNotifyPreferred={vi.fn()}
+        />,
+      );
+      expect(notifyCheckbox().className).toContain('toggle-primary');
+      expect(notifyCheckbox().className).not.toContain('toggle-warning');
+    });
+
+    it('uses warning DaisyUI toggle when drafts are hidden and user turned notify on', () => {
+      const settings = mergeSettings({
+        assigned: { notifyOnDrafts: false, showDraftsInList: false },
+      });
+      render(
+        <BlockHarness
+          settings={settings}
+          showDraftsInList={false}
+          draftNotifyPreferred
           setDraftNotifyPreferred={vi.fn()}
         />,
       );
@@ -142,7 +158,7 @@ describe('AssignedDraftNotifySettingsBlock', () => {
       expect(notifyCheckbox()).toHaveProperty('checked', true);
     });
 
-    it('when list hidden: appears on if preference OR stored notify is true', () => {
+    it('when list hidden: checked only from preference (stored notify ignored for display)', () => {
       const staleStoredOn = mergeSettings({
         assigned: { notifyOnDrafts: true, showDraftsInList: false },
       });
@@ -154,7 +170,7 @@ describe('AssignedDraftNotifySettingsBlock', () => {
           setDraftNotifyPreferred={vi.fn()}
         />,
       );
-      expect(notifyCheckbox()).toHaveProperty('checked', true);
+      expect(notifyCheckbox()).toHaveProperty('checked', false);
 
       const bothOff = mergeSettings({
         assigned: { notifyOnDrafts: false, showDraftsInList: false },
@@ -199,7 +215,7 @@ describe('AssignedDraftNotifySettingsBlock', () => {
       expect(status.textContent).toContain('Show drafts in list');
     });
 
-    it('shows callout when stored notify is true (one frame stale) even if preference false', () => {
+    it('hides callout when stored notify is true but preference false (no user opt-in while hidden)', () => {
       const settings = mergeSettings({
         assigned: { notifyOnDrafts: true, showDraftsInList: false },
       });
@@ -211,7 +227,7 @@ describe('AssignedDraftNotifySettingsBlock', () => {
           setDraftNotifyPreferred={vi.fn()}
         />,
       );
-      expect(screen.getByRole('status')).toBeTruthy();
+      expect(screen.queryByRole('status')).toBeNull();
     });
 
     it('hides callout when list hidden and both preference and stored notify are false', () => {
