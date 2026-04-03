@@ -17,3 +17,5 @@ export { ClockIcon } from './clock-icon';
 export { CommentIcon } from './comment-icon';
 export { RepoIcon } from './repo-icon';
 export { MusicIcon } from './music-icon';
+export { MagnifyingGlassPlusIcon } from './magnifying-glass-plus-icon';
+export { MagnifyingGlassMinusIcon } from './magnifying-glass-minus-icon';

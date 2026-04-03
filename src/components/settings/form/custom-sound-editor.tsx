@@ -15,7 +15,13 @@ import {
   getWaveformPeaks,
 } from '../../../lib/audio-utils';
 import { useCustomSounds } from '../../../hooks/use-custom-sounds';
-import { PlayIcon, XIcon, CheckIcon } from '../../ui/icons';
+import {
+  PlayIcon,
+  XIcon,
+  CheckIcon,
+  MagnifyingGlassPlusIcon,
+  MagnifyingGlassMinusIcon,
+} from '../../ui/icons';
 import { SoundPreviewButton } from './sound-preview-button';
 import { TruncatedOneLineWithTooltip } from '../../ui/truncated-one-line-with-tooltip';
 
@@ -75,6 +81,26 @@ function oklchWithAlpha(themeColorValue: string, alpha: number, fallbackChannels
   return `oklch(${raw} / ${alpha})`;
 }
 
+const MIN_WAVEFORM_ZOOM = 1;
+const MAX_WAVEFORM_ZOOM = 10;
+const WAVEFORM_VIEWPORT_FALLBACK_PX = 320;
+const EDGE_SCROLL_MARGIN_PX = 50;
+const EDGE_SCROLL_SPEED_PX = 5;
+
+type EdgeScrollDir = 'left' | 'right';
+
+function getEdgeScrollDirection(
+  scrollEl: HTMLElement,
+  clientX: number,
+): EdgeScrollDir | null {
+  if (scrollEl.scrollWidth <= scrollEl.clientWidth) return null;
+  const r = scrollEl.getBoundingClientRect();
+  if (clientX < r.left || clientX > r.right) return null;
+  if (clientX <= r.left + EDGE_SCROLL_MARGIN_PX) return 'left';
+  if (clientX >= r.right - EDGE_SCROLL_MARGIN_PX) return 'right';
+  return null;
+}
+
 interface WaveformProps {
   peaks: number[];
   startS: number;
@@ -86,13 +112,22 @@ interface WaveformProps {
 
 function Waveform({ peaks, startS, endS, duration, setStartS, setEndS }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const drawFnRef = useRef<() => void>(() => {});
   const dragRef = useRef<DragState | null>(null);
   const hoverZoneRef = useRef<HoverZone>(null);
+  const lastPointerClientXRef = useRef(0);
+  const edgeScrollRafRef = useRef<number | null>(null);
   const trimRef = useRef({ startS, endS, duration });
   trimRef.current = { startS, endS, duration };
   const [cursor, setCursor] = useState('default');
+  const [zoomLevel, setZoomLevel] = useState(MIN_WAVEFORM_ZOOM);
+  const [baseViewportWidth, setBaseViewportWidth] = useState(0);
+
+  const baseW =
+    baseViewportWidth > 0 ? baseViewportWidth : WAVEFORM_VIEWPORT_FALLBACK_PX;
+  const canvasCssWidth = baseW * zoomLevel;
 
   useEffect(() => {
     drawFnRef.current = () => {
@@ -235,7 +270,18 @@ function Waveform({ peaks, startS, endS, duration, setStartS, setEndS }: Wavefor
       edgeLine(selEnd, false, activeEnd);
     };
     drawFnRef.current();
-  }, [peaks, startS, endS, duration]);
+  }, [peaks, startS, endS, duration, zoomLevel, baseViewportWidth]);
+
+  useEffect(() => {
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return;
+    const observer = new ResizeObserver(() => {
+      setBaseViewportWidth(scrollEl.clientWidth);
+    });
+    observer.observe(scrollEl);
+    setBaseViewportWidth(scrollEl.clientWidth);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -245,6 +291,17 @@ function Waveform({ peaks, startS, endS, duration, setStartS, setEndS }: Wavefor
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const el = scrollRef.current;
+    const { startS: s0, endS: e0, duration: dur } = trimRef.current;
+    if (!el || dur <= 0 || baseViewportWidth <= 0) return;
+    const canvasW = baseViewportWidth * zoomLevel;
+    const centerT = (s0 + e0) / 2;
+    const targetPx = (centerT / dur) * canvasW - el.clientWidth / 2;
+    el.scrollLeft = Math.max(0, Math.min(targetPx, Math.max(0, canvasW - el.clientWidth)));
+  }, [zoomLevel, baseViewportWidth]);
+
+  /** Map pointer to canvas X: full canvas getBoundingClientRect (incl. when scrolled) gives correct content px. */
   const hitTest = useCallback(
     (clientX: number): DragMode | null => {
       const canvas = canvasRef.current;
@@ -268,10 +325,84 @@ function Waveform({ peaks, startS, endS, duration, setStartS, setEndS }: Wavefor
       const canvas = canvasRef.current;
       if (!canvas) return 0;
       const rect = canvas.getBoundingClientRect();
-      return Math.max(0, Math.min(((clientX - rect.left) / rect.width) * duration, duration));
+      const px = clientX - rect.left;
+      return Math.max(0, Math.min((px / rect.width) * duration, duration));
     },
     [duration],
   );
+
+  const bumpZoom = useCallback((delta: number) => {
+    setZoomLevel((z) =>
+      Math.min(MAX_WAVEFORM_ZOOM, Math.max(MIN_WAVEFORM_ZOOM, z + delta)),
+    );
+  }, []);
+
+  const stopEdgeScroll = useCallback(() => {
+    if (edgeScrollRafRef.current != null) {
+      cancelAnimationFrame(edgeScrollRafRef.current);
+      edgeScrollRafRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => stopEdgeScroll(), [stopEdgeScroll]);
+
+  const applyDragFromClientX = useCallback(
+    (clientX: number) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const t = pxToTime(clientX);
+      if (drag.mode === 'start') {
+        setStartS(clampStartS(t, drag.e0));
+      } else if (drag.mode === 'end') {
+        setEndS(clampEndS(t, drag.s0, drag.dur));
+      } else {
+        const { startS: ns, endS: ne } = clampMoveWindow(
+          drag.s0 + (t - drag.t0),
+          drag.e0 - drag.s0,
+          drag.dur,
+        );
+        setStartS(ns);
+        setEndS(ne);
+      }
+    },
+    [pxToTime, setStartS, setEndS],
+  );
+
+  const runEdgeScrollTick = useCallback(() => {
+    edgeScrollRafRef.current = null;
+    if (!dragRef.current) return;
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return;
+    const clientX = lastPointerClientXRef.current;
+    const dir = getEdgeScrollDirection(scrollEl, clientX);
+    if (dir === 'left' && scrollEl.scrollLeft > 0) {
+      scrollEl.scrollLeft = Math.max(0, scrollEl.scrollLeft - EDGE_SCROLL_SPEED_PX);
+    } else if (dir === 'right') {
+      const maxL = scrollEl.scrollWidth - scrollEl.clientWidth;
+      if (scrollEl.scrollLeft < maxL - 0.5) {
+        scrollEl.scrollLeft = Math.min(maxL, scrollEl.scrollLeft + EDGE_SCROLL_SPEED_PX);
+      }
+    }
+    applyDragFromClientX(clientX);
+    if (!dragRef.current) return;
+    const dir2 = getEdgeScrollDirection(scrollEl, clientX);
+    const maxL = scrollEl.scrollWidth - scrollEl.clientWidth;
+    const more =
+      (dir2 === 'left' && scrollEl.scrollLeft > 0) ||
+      (dir2 === 'right' && scrollEl.scrollLeft < maxL - 0.5);
+    if (dir2 && more) {
+      edgeScrollRafRef.current = requestAnimationFrame(() => runEdgeScrollTick());
+    }
+  }, [applyDragFromClientX]);
+
+  const tryScheduleEdgeScroll = useCallback(() => {
+    if (edgeScrollRafRef.current != null) return;
+    if (!dragRef.current) return;
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return;
+    if (!getEdgeScrollDirection(scrollEl, lastPointerClientXRef.current)) return;
+    edgeScrollRafRef.current = requestAnimationFrame(() => runEdgeScrollTick());
+  }, [runEdgeScrollTick]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -280,6 +411,7 @@ function Waveform({ peaks, startS, endS, duration, setStartS, setEndS }: Wavefor
       if (!mode) return;
       e.preventDefault();
       wrapperRef.current?.setPointerCapture(e.pointerId);
+      lastPointerClientXRef.current = e.clientX;
       dragRef.current = { mode, t0: pxToTime(e.clientX), s0: startS, e0: endS, dur: duration };
       setCursor(mode === 'move' ? 'grabbing' : 'ew-resize');
       drawFnRef.current();
@@ -307,26 +439,16 @@ function Waveform({ peaks, startS, endS, duration, setStartS, setEndS }: Wavefor
         setCursor(mode === 'move' ? 'grab' : mode ? 'ew-resize' : 'default');
         return;
       }
-      const t = pxToTime(e.clientX);
-      if (drag.mode === 'start') {
-        setStartS(clampStartS(t, drag.e0));
-      } else if (drag.mode === 'end') {
-        setEndS(clampEndS(t, drag.s0, drag.dur));
-      } else {
-        const { startS: ns, endS: ne } = clampMoveWindow(
-          drag.s0 + (t - drag.t0),
-          drag.e0 - drag.s0,
-          drag.dur,
-        );
-        setStartS(ns);
-        setEndS(ne);
-      }
+      lastPointerClientXRef.current = e.clientX;
+      applyDragFromClientX(e.clientX);
+      tryScheduleEdgeScroll();
     },
-    [hitTest, pxToTime, setStartS, setEndS, syncHoverFromClientX],
+    [hitTest, syncHoverFromClientX, applyDragFromClientX, tryScheduleEdgeScroll],
   );
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      stopEdgeScroll();
       dragRef.current = null;
       if (duration > 0) {
         syncHoverFromClientX(e.clientX);
@@ -337,39 +459,71 @@ function Waveform({ peaks, startS, endS, duration, setStartS, setEndS }: Wavefor
       }
       drawFnRef.current();
     },
-    [duration, hitTest, syncHoverFromClientX],
+    [duration, hitTest, syncHoverFromClientX, stopEdgeScroll],
   );
 
   const handlePointerCancel = useCallback(() => {
+    stopEdgeScroll();
     dragRef.current = null;
     hoverZoneRef.current = null;
     setCursor('default');
     drawFnRef.current();
-  }, []);
+  }, [stopEdgeScroll]);
 
   return (
-    <div
-      ref={wrapperRef}
-      className="rounded-lg"
-      style={{ cursor, touchAction: 'none' }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onPointerLeave={() => {
-        if (!dragRef.current) {
-          if (hoverZoneRef.current !== null) {
-            hoverZoneRef.current = null;
-            drawFnRef.current();
-          }
-          setCursor('default');
-        }
-      }}
-    >
-      <canvas
-        ref={canvasRef}
-        className="block w-full h-24 rounded-lg border border-base-300 bg-base-200"
-      />
+    <div className="space-y-1.5 min-w-0">
+      <div className="flex items-center justify-end gap-1">
+        <button
+          type="button"
+          className="btn btn-ghost btn-xs btn-square shrink-0"
+          aria-label="Zoom out waveform"
+          disabled={zoomLevel <= MIN_WAVEFORM_ZOOM}
+          onClick={() => bumpZoom(-1)}
+        >
+          <MagnifyingGlassMinusIcon className="size-4" />
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-xs btn-square shrink-0"
+          aria-label="Zoom in waveform"
+          disabled={zoomLevel >= MAX_WAVEFORM_ZOOM}
+          onClick={() => bumpZoom(1)}
+        >
+          <MagnifyingGlassPlusIcon className="size-4" />
+        </button>
+        <span className="text-[10px] text-base-content/45 tabular-nums w-8 text-right">
+          {zoomLevel}×
+        </span>
+      </div>
+      <div
+        ref={scrollRef}
+        className="max-w-full overflow-x-auto overflow-y-hidden rounded-lg border border-base-300 touch-pan-x"
+      >
+        <div
+          ref={wrapperRef}
+          className="shrink-0"
+          style={{ width: canvasCssWidth, cursor, touchAction: 'none' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerLeave={() => {
+            if (!dragRef.current) {
+              if (hoverZoneRef.current !== null) {
+                hoverZoneRef.current = null;
+                drawFnRef.current();
+              }
+              setCursor('default');
+            }
+          }}
+        >
+          <canvas
+            ref={canvasRef}
+            className="block h-24 bg-base-200"
+            style={{ width: canvasCssWidth, height: 96 }}
+          />
+        </div>
+      </div>
     </div>
   );
 }
