@@ -36,7 +36,7 @@ export const CustomSoundTrimPanel = ({
         text={fileName}
         as="span"
         tooltipPlacement="bottom"
-        tooltipHorizontalAnchor="end"
+        tooltipHorizontalAnchor="start"
         textClassName="block w-full min-w-0 text-xs text-base-content/60 truncate"
         tooltipBodyClassName="text-center text-xs px-3 py-2 rounded-3xl whitespace-normal leading-relaxed"
       />

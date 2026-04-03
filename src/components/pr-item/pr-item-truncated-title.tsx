@@ -33,7 +33,7 @@ export const PrItemTruncatedTitle = ({
     onStackLiftChange={onStackLiftChange}
     textClassName={clsx(
       'text-sm font-medium truncate transition-all duration-150',
-      isReviewed ? 'text-base-content/60' : 'text-base-content',
+      isReviewed ? 'text-base-content/60' : 'text-base-content'
     )}
     truncatedTextClassName="hover:text-base-content hover:underline"
     tooltipBodyClassName="font-semibold text-xs px-3 py-2 rounded-3xl whitespace-normal leading-relaxed text-left"
