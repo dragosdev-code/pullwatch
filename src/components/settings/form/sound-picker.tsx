@@ -1,5 +1,9 @@
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
-import type { CustomSoundId, CustomSoundMeta, NotificationSound } from '../../../../extension/common/types';
+import type {
+  CustomSoundId,
+  CustomSoundMeta,
+  NotificationSound,
+} from '../../../../extension/common/types';
 import {
   SOUND_DEFINITIONS,
   isPlayableSound,
@@ -74,10 +78,7 @@ const SoundOption = ({
 
       {/* Preview + optional trailing actions (delete sits here for custom sounds only) */}
       {isPlayable ? (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="shrink-0 flex items-center gap-1"
-        >
+        <div onClick={(e) => e.stopPropagation()} className="shrink-0 flex items-center gap-1">
           <SoundPreviewButton
             sound={definition.id}
             disabled={false}
@@ -252,7 +253,7 @@ export const SoundPicker = ({
       stopPreviewForCustomRow(id);
       setPendingDeleteId(id);
     },
-    [stopPreviewForCustomRow],
+    [stopPreviewForCustomRow]
   );
 
   const handleCancelDeleteCustom = useCallback((e: React.MouseEvent) => {
@@ -270,7 +271,7 @@ export const SoundPicker = ({
       }
       setPendingDeleteId(null);
     },
-    [deleteCustomSound, selectedSound, stopPreviewForCustomRow],
+    [deleteCustomSound, selectedSound, stopPreviewForCustomRow]
   );
 
   return (
@@ -280,7 +281,7 @@ export const SoundPicker = ({
       onClick={handleBackdropClick}
       onKeyDown={handleKeyDown}
     >
-      <div className="modal-box max-w-md max-h-[min(100vh,32rem)] p-0 overflow-hidden flex flex-col">
+      <div className="modal-box w-full max-h-[min(100vh,32rem)] p-0 overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-5 py-4 border-b border-base-200 shrink-0">
           <div className="flex items-center justify-between">

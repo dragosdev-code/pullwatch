@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { useStore } from 'zustand';
+import clsx from 'clsx';
 import type { CustomSoundId } from '../../../extension/common/types';
 import {
   MAX_CUSTOM_SOUND_FILE_SIZE_BYTES,
   MAX_CUSTOM_SOUND_NAME_LENGTH,
 } from '../../../extension/common/constants';
-import {
-  decodeAudioFile,
-  trimAudioBuffer,
-  audioBufferToWavBase64,
-} from '../../lib/audio-utils';
+import { decodeAudioFile, trimAudioBuffer, audioBufferToWavBase64 } from '../../lib/audio-utils';
 import { useCustomSounds } from '../../hooks/use-custom-sounds';
 import { useAudioPreview } from './hooks/use-audio-preview';
 import { CustomSoundEditorHeader } from './components/custom-sound-editor-header';
@@ -28,11 +25,7 @@ import type { CustomSoundEditorProps, SoundNameForm } from './types';
  * Glue layer: workflows (upload, save, close) compose draft store, async feedback,
  * delete UI, RHF, and persistence. Slices own facts only; this module owns reset order.
  */
-export function CustomSoundEditorShell({
-  isOpen,
-  onClose,
-  onSaved,
-}: CustomSoundEditorProps) {
+export function CustomSoundEditorShell({ isOpen, onClose, onSaved }: CustomSoundEditorProps) {
   const modalRef = useRef<HTMLDialogElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -108,7 +101,7 @@ export function CustomSoundEditorShell({
 
       if (file.size > MAX_CUSTOM_SOUND_FILE_SIZE_BYTES) {
         setError(
-          `File too large. Maximum size is ${MAX_CUSTOM_SOUND_FILE_SIZE_BYTES / 1024 / 1024}MB.`,
+          `File too large. Maximum size is ${MAX_CUSTOM_SOUND_FILE_SIZE_BYTES / 1024 / 1024}MB.`
         );
         return;
       }
@@ -124,7 +117,7 @@ export function CustomSoundEditorShell({
         setError('Could not decode audio file. Try a different format (MP3, WAV, OGG).');
       }
     },
-    [audioDraftStore, setError, setValue],
+    [audioDraftStore, setError, setValue]
   );
 
   const handleSave = useCallback(async () => {
@@ -160,7 +153,7 @@ export function CustomSoundEditorShell({
     (e: React.MouseEvent<HTMLDialogElement>) => {
       if (e.target === modalRef.current) handleClose();
     },
-    [handleClose],
+    [handleClose]
   );
 
   const canSave =
@@ -176,7 +169,7 @@ export function CustomSoundEditorShell({
       deleteCustomSound(id);
       clearPendingDelete();
     },
-    [deleteCustomSound, clearPendingDelete],
+    [deleteCustomSound, clearPendingDelete]
   );
 
   return (
@@ -188,7 +181,12 @@ export function CustomSoundEditorShell({
         if (e.key === 'Escape') handleClose();
       }}
     >
-      <div className="modal-box max-w-md max-h-[min(100vh,32rem)] p-0 overflow-hidden flex flex-col">
+      <div
+        className={clsx(
+          'modal-box max-w-md max-h-[min(100vh,32rem)] p-0 overflow-hidden flex flex-col',
+          audioBuffer && 'w-full'
+        )}
+      >
         <CustomSoundEditorHeader onClose={handleClose} />
 
         {audioBuffer && (
@@ -222,7 +220,10 @@ export function CustomSoundEditorShell({
           )}
 
           <div className={audioBuffer ? '' : 'hidden'} aria-hidden={!audioBuffer}>
-            <CustomSoundNameField disabled={!audioBuffer} existingNames={existingNamesForValidation} />
+            <CustomSoundNameField
+              disabled={!audioBuffer}
+              existingNames={existingNamesForValidation}
+            />
           </div>
 
           {error && (
