@@ -5,9 +5,18 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { AssignedDraftNotifySettingsBlock } from '../assigned-draft-notify-settings-block';
 import { DEFAULT_SETTINGS, type ExtensionSettings } from '../types';
 
-const mergeSettings = (patch: Partial<ExtensionSettings>): ExtensionSettings => ({
+/**
+ * `Partial<ExtensionSettings>` only shallow-partializes: a provided `assigned` value must still
+ * include every assigned field. Tests only vary draft-related keys, so we accept deep partials
+ * for `assigned` / `merged` and merge onto defaults.
+ */
+type SettingsTestPatch = {
+  assigned?: Partial<ExtensionSettings['assigned']>;
+  merged?: Partial<ExtensionSettings['merged']>;
+};
+
+const mergeSettings = (patch: SettingsTestPatch): ExtensionSettings => ({
   ...DEFAULT_SETTINGS,
-  ...patch,
   assigned: { ...DEFAULT_SETTINGS.assigned, ...patch.assigned },
   merged: { ...DEFAULT_SETTINGS.merged, ...patch.merged },
 });

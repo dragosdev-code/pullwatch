@@ -13,6 +13,7 @@ import { useAuthoredPRs } from './hooks/use-authored-prs';
 import { usePRUpdates } from './hooks/use-pr-updates';
 import { usePrEntranceViewedState } from './hooks/use-pr-entrance-viewed-state';
 import { useStorageSync } from './hooks/use-storage-sync';
+import { usePrListsStorageSync } from './hooks/use-pr-lists-storage-sync';
 import { useGlobalError, useClearGlobalError } from './stores/global-error';
 import { useDebugMode } from './stores/debug';
 import { SettingsOverlay } from './components/settings/settings-overlay';
@@ -26,6 +27,7 @@ const App = () => {
   const clearGlobalError = useClearGlobalError();
 
   useStorageSync();
+  usePrListsStorageSync();
 
   const { data: assignedPRs = [], isSuccess } = useAssignedPRs();
   const { data: mergedPRs = [] } = useMergedPRs();
