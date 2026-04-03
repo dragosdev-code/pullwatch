@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { chromeExtensionService } from '../../services/chrome-extension-service';
-import { DEV_TEST_MIN_ALARM_OVERRIDE_MS } from '../../../extension/common/constants';
-import { useDevTestSettingsStore, useDevTestAlarmOverride } from './use-dev-test-settings';
+import { chromeExtensionService } from '../../../services/chrome-extension-service';
+import { DEV_TEST_MIN_ALARM_OVERRIDE_MS } from '../../../../extension/common/constants';
+import { useDevTestSettingsStore, useDevTestAlarmOverride } from '../store/dev-test-settings-store';
 
 export const AlarmOverridePanel = () => {
   const alarmOverride = useDevTestAlarmOverride();
@@ -49,7 +49,7 @@ export const AlarmOverridePanel = () => {
       </p>
 
       <div className="flex items-center gap-2">
-        <label className="text-[10px] text-base-content/60 flex-shrink-0">Interval (sec):</label>
+        <label className="text-[10px] text-base-content/60 shrink-0">Interval (sec):</label>
         <input
           type="number"
           min={DEV_TEST_MIN_ALARM_OVERRIDE_MS / 1000}

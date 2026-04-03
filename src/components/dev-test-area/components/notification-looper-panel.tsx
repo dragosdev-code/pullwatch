@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { chromeExtensionService } from '../../services/chrome-extension-service';
-import { DEV_TEST_MIN_LOOP_INTERVAL_MS } from '../../../extension/common/constants';
-import { useDevTestSettingsStore, useDevTestLooper } from './use-dev-test-settings';
+import { chromeExtensionService } from '../../../services/chrome-extension-service';
+import { DEV_TEST_MIN_LOOP_INTERVAL_MS } from '../../../../extension/common/constants';
+import { useDevTestSettingsStore, useDevTestLooper } from '../store/dev-test-settings-store';
 
 export const NotificationLooperPanel = () => {
   const looper = useDevTestLooper();
@@ -56,7 +56,7 @@ export const NotificationLooperPanel = () => {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <label className="text-[10px] text-base-content/60 flex-shrink-0">Interval (ms):</label>
+        <label className="text-[10px] text-base-content/60 shrink-0">Interval (ms):</label>
         <input
           type="number"
           min={DEV_TEST_MIN_LOOP_INTERVAL_MS}

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { DevTestSettings } from '../../../extension/common/types';
-import { DEFAULT_DEV_TEST_SETTINGS } from '../../../extension/common/constants';
+import type { DevTestSettings } from '../../../../extension/common/types';
+import { DEFAULT_DEV_TEST_SETTINGS } from '../../../../extension/common/constants';
 
 interface DevTestSettingsState extends DevTestSettings {
   updateNotification: (patch: Partial<DevTestSettings['notification']>) => void;

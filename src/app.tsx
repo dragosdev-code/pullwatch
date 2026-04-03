@@ -6,7 +6,7 @@ import type { Tab } from './components/ui/tabs/types';
 import { AssignedList } from './components/lists/assigned-list';
 import { AuthoredList } from './components/lists/authored-list';
 import { MergedList } from './components/lists/merged-list';
-import { DevTestArea } from './components/dev-test-area/dev-test-area';
+import { DevTestArea } from './components/dev-test-area';
 import { useAssignedPRs } from './hooks/use-assigned-prs';
 import { useMergedPRs } from './hooks/use-merged-prs';
 import { useAuthoredPRs } from './hooks/use-authored-prs';
