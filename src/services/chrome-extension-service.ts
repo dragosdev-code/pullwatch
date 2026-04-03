@@ -121,6 +121,13 @@ export class ChromeExtensionService {
   }
 
   /**
+   * Fires a sample system notification and the saved sound for To Review (`assigned`) or Merged.
+   */
+  async testSettingsNotification(category: 'assigned' | 'merged'): Promise<void> {
+    return this.sendMessage(SETTINGS_ACTION.testSettingsNotification, { category });
+  }
+
+  /**
    * Plays a sound preview for the specified notification sound type.
    * Used in settings to let users test sounds before selecting.
    * @param sound - The sound type to preview ('ping', 'bell', or 'off')

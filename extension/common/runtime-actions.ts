@@ -17,6 +17,7 @@ export const PR_DATA_ACTION = {
 export const SETTINGS_ACTION = {
   saveSettings: 'saveSettings',
   getSettings: 'getSettings',
+  testSettingsNotification: 'testSettingsNotification',
 } as const;
 
 export const OFFSCREEN_ACTION = {

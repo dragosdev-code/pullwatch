@@ -160,6 +160,14 @@ export interface MessageResponse<R = unknown, E = unknown> {
   error?: E;
 }
 
+/**
+ * Payload for settings-page notification test (`SETTINGS_ACTION.testSettingsNotification`).
+ * `assigned` is the "To Review PRs" notification channel (review requests).
+ */
+export interface SettingsNotificationTestPayload {
+  category: 'assigned' | 'merged';
+}
+
 // ─── Dev Test Area Types ─────────────────────────────────────────────────────
 
 export interface DevTestNotificationOverrides {

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { SettingsSection } from './form/settings-section';
 import { ToggleField } from './form/toggle-field';
+import { NotificationEnableRow } from './form/notification-enable-row';
 import { SoundSelectField } from './form/sound-select-field';
 import { ThemePicker } from './form/theme-picker';
 import { LinkBehaviorField } from './form/link-behavior-field';
@@ -134,10 +135,11 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
         <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 flex flex-col gap-5">
           {/* To Review PRs */}
           <SettingsSection title="To Review PRs">
-            <ToggleField
+            <NotificationEnableRow
               name="assigned.notificationsEnabled"
-              label="Enable notifications"
               description="Receive alerts for new PRs to review."
+              testCategory="assigned"
+              notificationsEnabled={assignedEnabled}
             />
 
             {/* Sub-group: only active when notifications are enabled */}
@@ -161,10 +163,11 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
 
           {/* Merged PRs */}
           <SettingsSection title="Merged PRs">
-            <ToggleField
+            <NotificationEnableRow
               name="merged.notificationsEnabled"
-              label="Enable notifications"
               description="Receive alerts when your PRs are merged."
+              testCategory="merged"
+              notificationsEnabled={mergedEnabled}
             />
 
             {/* Sub-group: only active when notifications are enabled */}

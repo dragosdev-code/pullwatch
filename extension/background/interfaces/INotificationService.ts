@@ -23,6 +23,13 @@ export interface INotificationService extends IService {
   showMergedPRNotifications(mergedPRs: PullRequest | PullRequest[]): Promise<void>;
 
   /**
+   * Fires a sample notification + sound from settings (To Review vs Merged).
+   * Uses non-`pr-alert` IDs so clicks dismiss without opening a tab.
+   * On failure throws `Error` whose message is `SETTINGS_TEST_ERROR_COOLDOWN` or `SETTINGS_TEST_ERROR_DISABLED`.
+   */
+  fireSettingsTestNotification(category: 'assigned' | 'merged'): Promise<void>;
+
+  /**
    * Handles notification clicks.
    */
   handleNotificationClick(notificationId: string): Promise<void>;

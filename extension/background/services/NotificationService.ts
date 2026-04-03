@@ -3,6 +3,13 @@ import type { IDebugService } from '../interfaces/IDebugService';
 import type { IStorageService } from '../interfaces/IStorageService';
 import type { ISoundService } from '../interfaces/ISoundService';
 import type { PullRequest, NotificationSound } from '../../common/types';
+import {
+  SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
+  SETTINGS_TEST_ERROR_COOLDOWN,
+  SETTINGS_TEST_ERROR_DISABLED,
+} from '../../common/constants';
+import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../common/settings-test-notification-copy';
+import { isPlayableSound } from '../../common/sound-config';
 
 /**
  * NotificationService handles Chrome extension notifications with sound integration.
@@ -20,6 +27,12 @@ export class NotificationService implements INotificationService {
   private storageService: IStorageService;
   private soundService: ISoundService;
   private initialized = false;
+
+  /**
+   * Per-category throttle for settings "Test" (in-memory only). MV3 worker restarts reset this —
+   * acceptable because the popup UI enforces the same interval and abuse volume is low.
+   */
+  private lastSettingsTestAtMs: { assigned: number; merged: number } = { assigned: 0, merged: 0 };
 
   constructor(deps: {
     debugService: IDebugService;
@@ -125,6 +138,59 @@ export class NotificationService implements INotificationService {
       this.debugService.error('[NotificationService] Error showing merged PR notifications:', error);
       throw error;
     }
+  }
+
+  /**
+   * Sample notification for end users (settings page). Separate from Dev Test: ID must not use the
+   * `pr-alert|` prefix so handleNotificationClick skips tabs.create and only clears the toast.
+   * `silent: true` matches real PR alerts — OS does not double-play; extension owns sound via SoundService.
+   */
+  async fireSettingsTestNotification(category: 'assigned' | 'merged'): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastSettingsTestAtMs[category] < SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS) {
+      throw new Error(SETTINGS_TEST_ERROR_COOLDOWN);
+    }
+
+    const settings = await this.storageService.getExtensionSettings();
+    const enabled =
+      category === 'assigned'
+        ? settings.assigned.notificationsEnabled
+        : settings.merged.notificationsEnabled;
+    if (!enabled) {
+      throw new Error(SETTINGS_TEST_ERROR_DISABLED);
+    }
+
+    const copy = SETTINGS_TEST_NOTIFICATION_COPY[category];
+    const sound: NotificationSound =
+      category === 'assigned' ? settings.assigned.sound : settings.merged.sound;
+    const localIconUrl = chrome.runtime.getURL('logo.png');
+    const notificationId = `extension-settings-test|${category}`;
+
+    await this.createNotification(
+      {
+        type: 'basic',
+        iconUrl: localIconUrl,
+        title: copy.title,
+        message: copy.message,
+        contextMessage: copy.contextMessage,
+        requireInteraction: false,
+        silent: true,
+        priority: 2,
+      },
+      notificationId
+    );
+
+    this.lastSettingsTestAtMs[category] = Date.now();
+
+    if (isPlayableSound(sound)) {
+      try {
+        await this.soundService.playNotificationSound(sound);
+      } catch (soundError) {
+        this.debugService.error('[NotificationService] Settings test sound failed:', soundError);
+      }
+    }
+
+    this.debugService.log(`[NotificationService] Settings test notification fired (${category})`);
   }
 
   /**

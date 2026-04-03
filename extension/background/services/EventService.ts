@@ -9,7 +9,12 @@ import type {
   PullRequest,
   NotificationSound,
   DevTestNotificationOverrides,
+  SettingsNotificationTestPayload,
 } from '../../common/types';
+import {
+  SETTINGS_TEST_ERROR_COOLDOWN,
+  SETTINGS_TEST_ERROR_DISABLED,
+} from '../../common/constants';
 import {
   BROADCAST_ACTION,
   type BroadcastAction,
@@ -55,6 +60,7 @@ export class EventService implements IEventService {
       [PR_DATA_ACTION.fetchAuthoredPRs, (m, r) => this.handleAuthoredPRDataActions(m, r)],
       [SETTINGS_ACTION.saveSettings, (m, r) => this.handleSettingsActions(m, r)],
       [SETTINGS_ACTION.getSettings, (m, r) => this.handleSettingsActions(m, r)],
+      [SETTINGS_ACTION.testSettingsNotification, (m, r) => this.handleSettingsActions(m, r)],
       [EVENT_PLAY_SOUND, (m, r) => this.handleOffscreenActions(m, r)],
       [EVENT_OFFSCREEN_READY, (m, r) => this.handleOffscreenActions(m, r)],
       [PREVIEW_SOUND_ACTION.previewSound, (m, r) => this.handlePreviewSoundAction(m, r)],
@@ -409,13 +415,41 @@ export class EventService implements IEventService {
 
 
   /**
-   * Handles settings related actions (saveSettings, getSettings).
+   * Handles settings related actions (saveSettings, getSettings, testSettingsNotification).
    */
   async handleSettingsActions(
     message: RuntimeMessage,
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
+      if (message.action === SETTINGS_ACTION.testSettingsNotification) {
+        const payload = (message as RuntimeRequestMessage<SettingsNotificationTestPayload>).payload;
+        if (
+          !payload ||
+          (payload.category !== 'assigned' && payload.category !== 'merged')
+        ) {
+          sendResponse({ success: false, error: 'Invalid test notification payload' });
+          return;
+        }
+        const notificationService = this.serviceContainer.getService('notificationService');
+        try {
+          await notificationService.fireSettingsTestNotification(payload.category);
+          sendResponse({ success: true });
+        } catch (err) {
+          if (
+            err instanceof Error &&
+            (err.message === SETTINGS_TEST_ERROR_COOLDOWN ||
+              err.message === SETTINGS_TEST_ERROR_DISABLED)
+          ) {
+            sendResponse({ success: false, error: err.message });
+            return;
+          }
+          this.debugService.error('[EventService] Settings test notification failed:', err);
+          sendResponse({ success: false, error: 'Failed to fire test notification' });
+        }
+        return;
+      }
+
       const storageService = this.serviceContainer.getService('storageService');
 
       if (this.isMessageAction<Partial<ExtensionSettings>>(message, SETTINGS_ACTION.saveSettings)) {

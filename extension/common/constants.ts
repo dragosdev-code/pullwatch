@@ -57,6 +57,13 @@ export const MAX_CUSTOM_SOUND_NAME_LENGTH = 19;
 // Notifications
 export const NOTIFICATION_NEW_PR = 'newPRNotification';
 
+/** Minimum delay between settings-page "Test" notification fires per category (UI mirrors this). */
+export const SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS = 5000;
+
+/** Returned in message responses when settings test is rejected — UI can map to copy without string matching free text. */
+export const SETTINGS_TEST_ERROR_COOLDOWN = 'SETTINGS_TEST_COOLDOWN';
+export const SETTINGS_TEST_ERROR_DISABLED = 'SETTINGS_TEST_DISABLED';
+
 // Permissions (example, expand as needed)
 export const PERMISSION_STORAGE = 'storage';
 export const PERMISSION_ALARMS = 'alarms';
