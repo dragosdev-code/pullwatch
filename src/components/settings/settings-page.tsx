@@ -20,7 +20,7 @@ interface SettingsPageProps {
 export const SettingsPage = ({ onClose }: SettingsPageProps) => {
   const { settings, isLoading, saveSettings } = useExtensionSettings();
   const { behavior: linkBehavior, setBehavior: setLinkBehavior } = useLinkBehavior();
-  const { visible: savedVisible, flash: flashSaved } = useSavedIndicator();
+  const { visible: savedVisible, flash: flashSaved, flashId: savedFlashId } = useSavedIndicator();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isResettingRef = useRef(false);
 
@@ -128,7 +128,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
 
           <h1 className="text-base font-bold text-base-content leading-none">Settings</h1>
 
-          <SavedIndicator visible={savedVisible} />
+          <SavedIndicator visible={savedVisible} flashId={savedFlashId} />
         </div>
 
         {/* Scrollable content */}
