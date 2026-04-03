@@ -7,6 +7,7 @@ export { WaveIcon } from './wave-icon';
 export { BellIcon } from './bell-icon';
 export { MuteIcon } from './mute-icon';
 export { PlayIcon } from './play-icon';
+export { PauseIcon } from './pause-icon';
 export { PlayingAnimation } from './playing-animation';
 export { ChevronIcon } from './chevron-icon';
 export { PullRequestOpenIcon } from './pull-request-open-icon';

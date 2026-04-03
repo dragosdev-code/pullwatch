@@ -9,7 +9,7 @@ import {
 } from '../../../../extension/common/sound-config';
 import { useCustomSounds } from '../../../hooks/use-custom-sounds';
 import { SoundPicker } from './sound-picker';
-import { CustomSoundEditor } from './custom-sound-editor';
+import { CustomSoundEditor } from '../../custom-sound-editor';
 import { SoundPreviewButton } from './sound-preview-button';
 import { MusicIcon } from '../../ui/icons';
 
