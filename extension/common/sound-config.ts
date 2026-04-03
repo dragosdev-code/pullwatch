@@ -107,3 +107,33 @@ export function getBuiltInSoundIds(): BuiltInSound[] {
 export function isPlayableSound(soundId: NotificationSound): boolean {
   return soundId !== 'off';
 }
+
+/**
+ * Whether `custom_sounds_meta` still lists this id. Used to detect “orphan” settings
+ * (e.g. user deleted the sound in the editor but sync/settings still say `custom_1`).
+ */
+export function customSoundMetaHasId(
+  metas: readonly { id: string }[],
+  sound: NotificationSound,
+): boolean {
+  return metas.some((m) => m.id === sound);
+}
+
+/**
+ * Maps a notification sound to what we can actually play: built-ins and known customs pass
+ * through; a `custom_*` id missing from meta becomes `ping` so UI and playback stay aligned.
+ *
+ * WHY `ping`: matches offscreen fallback when WAV payload is missing; predictable default.
+ */
+export function resolvePlayableSoundOrFallback(
+  sound: NotificationSound,
+  metas: readonly { id: string }[],
+): NotificationSound {
+  if (sound === 'off') {
+    return sound;
+  }
+  if (isCustomSoundId(sound) && !customSoundMetaHasId(metas, sound)) {
+    return 'ping';
+  }
+  return sound;
+}

@@ -1,12 +1,13 @@
 import type { ISoundService } from '../interfaces/ISoundService';
 import type { IDebugService } from '../interfaces/IDebugService';
-import type { NotificationSound } from '../../common/types';
+import type { NotificationSound, CustomSoundMeta } from '../../common/types';
 import {
   OFFSCREEN_DOCUMENT_PATH,
   OFFSCREEN_REASON_AUDIO_PLAYBACK,
   CUSTOM_SOUND_STORAGE_PREFIX,
+  STORAGE_KEY_CUSTOM_SOUNDS_META,
 } from '../../common/constants';
-import { isCustomSoundId } from '../../common/sound-config';
+import { isCustomSoundId, resolvePlayableSoundOrFallback } from '../../common/sound-config';
 import { EVENT_PLAY_SOUND } from '../../common/runtime-actions';
 
 type PlaySoundPayload = {
@@ -131,7 +132,17 @@ export class SoundService implements ISoundService {
     const storageKey = `${CUSTOM_SOUND_STORAGE_PREFIX}${slot}`;
     const result = await chrome.storage.local.get(storageKey);
     const customSoundBase64 = result[storageKey] as string | undefined;
+    // WHY: Meta can still reference a slot after WAV was removed or failed to sync; sending
+    // an empty custom payload only makes offscreen warn and fall back to ping—normalize here.
+    if (!customSoundBase64) {
+      return { soundType: 'ping' };
+    }
     return { soundType: sound, customSoundBase64 };
+  }
+
+  private async loadCustomSoundsMeta(): Promise<CustomSoundMeta[]> {
+    const result = await chrome.storage.local.get(STORAGE_KEY_CUSTOM_SOUNDS_META);
+    return (result[STORAGE_KEY_CUSTOM_SOUNDS_META] as CustomSoundMeta[] | undefined) ?? [];
   }
 
   /**
@@ -150,7 +161,15 @@ export class SoundService implements ISoundService {
 
       await this.ensureOffscreenDocument();
 
-      const payload = await this.buildPlaySoundPayload(sound);
+      const metas = await this.loadCustomSoundsMeta();
+      const resolved = resolvePlayableSoundOrFallback(sound, metas);
+      if (resolved !== sound) {
+        this.debugService.log(
+          `[SoundService] Resolved missing custom slot ${sound} to ${resolved} for playback`
+        );
+      }
+
+      const payload = await this.buildPlaySoundPayload(resolved);
 
       await new Promise<void>((resolve, reject) => {
         chrome.runtime.sendMessage(
