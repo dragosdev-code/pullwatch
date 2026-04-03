@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { TruncatedOneLineWithTooltip } from '../ui/truncated-one-line-with-tooltip';
+import { TruncatedOneLineWithTooltip } from '../../ui/truncated-one-line-with-tooltip';
 
 interface PrItemTruncatedTitleProps {
   /** Full PR title text (shown in the row and, when truncated, in the tooltip). */

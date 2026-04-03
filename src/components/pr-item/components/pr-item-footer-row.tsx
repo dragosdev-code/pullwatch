@@ -1,7 +1,7 @@
-import type { PullRequest } from '../../../extension/common/types';
+import type { PullRequest } from '../../../../extension/common/types';
 import clsx from 'clsx';
-import { PrAuthorRow } from '../ui/pr-author-row';
-import { formatTimeAgo } from './format-time-ago';
+import { PrAuthorRow } from '../../ui/pr-author-row';
+import { formatTimeAgo } from '../utils/format-time-ago';
 
 interface PrItemFooterRowProps {
   authors: PullRequest['author'];

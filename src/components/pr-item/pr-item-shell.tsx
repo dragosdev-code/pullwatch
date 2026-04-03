@@ -1,23 +1,21 @@
 import { animated } from '@react-spring/web';
 import clsx from 'clsx';
 import { useCallback, useState } from 'react';
-import { PrItemFooterRow } from './pr-item-footer-row';
-import { PrItemHeaderRow } from './pr-item-header-row';
-import { PrItemRepoRow } from './pr-item-repo-row';
+import { PrItemFooterRow } from './components/pr-item-footer-row';
+import { PrItemHeaderRow } from './components/pr-item-header-row';
+import { PrItemRepoRow } from './components/pr-item-repo-row';
 import type { PRItemProps } from './types';
-import { usePrEntranceSpring } from './use-pr-entrance-spring';
-import { usePrLinkClick } from './use-pr-link-click';
+import { usePrEntranceSpring } from './hooks/use-pr-entrance-spring';
+import { usePrLinkClick } from './hooks/use-pr-link-click';
 
-export type { PRItemProps } from './types';
-
-export const PRItem = ({
+export function PrItemShell({
   pr,
   isNew,
   isFirst = false,
   isReviewed = false,
   showAuthorStatus = false,
   onPrLinkActivated,
-}: PRItemProps) => {
+}: PRItemProps) {
   const handleClick = usePrLinkClick({
     url: pr.url,
     prId: pr.id,
@@ -64,4 +62,4 @@ export const PRItem = ({
       />
     </animated.a>
   );
-};
+}

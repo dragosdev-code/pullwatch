@@ -75,7 +75,7 @@ export const Header = ({ prCount }: HeaderProps) => {
             onClick={handleGithubClick}
             className={`transition-all duration-200 ${
               isDebugPending
-                ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white px-2 py-1 rounded-md shadow-md hover:shadow-lg transform hover:scale-105'
+                ? 'bg-linear-to-r from-purple-500 to-blue-500 text-white px-2 py-1 rounded-md shadow-md hover:shadow-lg transform hover:scale-105'
                 : ''
             }`}
             title={isDebugPending ? 'Click once more to enable debug mode' : 'Github Live Review'}

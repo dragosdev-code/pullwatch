@@ -4,7 +4,7 @@ import {
   PR_ENTRANCE_FROM_SKIP,
   PR_ENTRANCE_SPRING_CONFIG,
   PR_ENTRANCE_TO,
-} from './constants';
+} from '../constants';
 
 export const usePrEntranceSpring = (isNew: boolean) =>
   useSpring({

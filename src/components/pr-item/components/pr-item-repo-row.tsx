@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { RepoIcon } from '../ui/icons';
+import { RepoIcon } from '../../ui/icons';
 
 interface PrItemRepoRowProps {
   repoName: string;

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useLinkBehavior } from '../../hooks/use-link-behavior';
+import { useLinkBehavior } from '../../../hooks/use-link-behavior';
 
 export const usePrLinkClick = ({
   url,
