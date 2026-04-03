@@ -10,6 +10,7 @@ import { useExtensionSettings } from '../../hooks/use-extension-settings';
 import { useLinkBehavior } from '../../hooks/use-link-behavior';
 import { DEFAULT_SETTINGS } from './types';
 import type { ExtensionSettings } from './types';
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { useSavedIndicator } from './use-saved-indicator';
 import { SavedIndicator } from './saved-indicator';
 
@@ -40,6 +41,9 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
 
   const assignedEnabled = methods.watch('assigned.notificationsEnabled');
   const mergedEnabled = methods.watch('merged.notificationsEnabled');
+  const notifyOnDrafts = methods.watch('assigned.notifyOnDrafts');
+  const showDraftsInList = methods.watch('assigned.showDraftsInList');
+  const draftNotifyListMismatch = notifyOnDrafts && !showDraftsInList;
 
   const handleLinkBehaviorChange = (newBehavior: Parameters<typeof setLinkBehavior>[0]) => {
     setLinkBehavior(newBehavior);
@@ -148,7 +152,40 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
                 assignedEnabled ? '' : 'opacity-40 pointer-events-none'
               }`}
             >
-              <ToggleField name="assigned.notifyOnDrafts" label="Notify on drafts" />
+              <ToggleField
+                name="assigned.notifyOnDrafts"
+                label={
+                  draftNotifyListMismatch ? (
+                    <>
+                      <span className="text-sm font-medium text-base-content leading-snug">
+                        Notify on drafts
+                      </span>
+                      <ExclamationTriangleIcon
+                        className="size-4 text-warning shrink-0"
+                        aria-hidden
+                      />
+                    </>
+                  ) : (
+                    'Notify on drafts'
+                  )
+                }
+              />
+              {draftNotifyListMismatch && (
+                <div
+                  role="status"
+                  className="rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-2 flex gap-2 items-start"
+                >
+                  <ExclamationTriangleIcon
+                    className="size-4 text-warning shrink-0 mt-0.5"
+                    aria-hidden
+                  />
+                  <p className="text-[11px] font-medium text-warning leading-snug min-w-0">
+                    You may get draft notifications, but draft PRs are hidden from the To Review
+                    list — so after you dismiss the alert they can look “missing” from this popup.
+                    Turn on “Show drafts in list” if you want drafts visible here too.
+                  </p>
+                </div>
+              )}
               <SoundSelectField name="assigned.sound" label="Sound" />
             </div>
 
@@ -189,15 +226,6 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
           <SettingsSection title="Appearance">
             <ThemePicker />
           </SettingsSection>
-
-          {/* macOS notification tip
-          {(assignedEnabled || mergedEnabled) && (
-            <div className="text-[11px] text-base-content/40 leading-relaxed px-1">
-              <span className="font-medium text-base-content/50">Tip:</span> On macOS, go to
-              System Settings &gt; Notifications &gt; Chrome and set the alert style to
-              &quot;Alerts&quot; for notifications that stay until dismissed.
-            </div>
-          )} */}
         </div>
       </div>
     </FormProvider>

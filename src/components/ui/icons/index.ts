@@ -5,6 +5,7 @@ export { DiceIcon } from './dice-icon';
 export { CheckIcon } from './check-icon';
 export { WaveIcon } from './wave-icon';
 export { BellIcon } from './bell-icon';
+export { InfoCircleIcon } from './info-circle-icon';
 export { MuteIcon } from './mute-icon';
 export { PlayIcon } from './play-icon';
 export { PauseIcon } from './pause-icon';

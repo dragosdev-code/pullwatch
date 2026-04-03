@@ -1,15 +1,23 @@
+import type { ReactNode } from 'react';
 import { useFormContext } from 'react-hook-form';
 import type { ExtensionSettings } from '../types';
 
 interface ToggleFieldProps {
   name: string;
-  label: string;
+  label: ReactNode;
   description?: string;
   disabled?: boolean;
 }
 
 export const ToggleField = ({ name, label, description, disabled = false }: ToggleFieldProps) => {
   const { register } = useFormContext<ExtensionSettings>();
+
+  const titleRow =
+    typeof label === 'string' ? (
+      <span className="text-sm font-medium text-base-content leading-snug">{label}</span>
+    ) : (
+      label
+    );
 
   return (
     <div
@@ -18,7 +26,7 @@ export const ToggleField = ({ name, label, description, disabled = false }: Togg
       }`}
     >
       <div className="flex flex-col min-w-0">
-        <span className="text-sm font-medium text-base-content leading-snug">{label}</span>
+        <div className="flex items-center gap-1.5 min-w-0">{titleRow}</div>
         {description && (
           <span className="text-xs text-base-content/50 mt-0.5 leading-snug">{description}</span>
         )}
