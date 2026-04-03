@@ -8,7 +8,7 @@ import {
   STORAGE_KEY_CUSTOM_SOUNDS_META,
 } from '../../common/constants';
 import { isCustomSoundId, resolvePlayableSoundOrFallback } from '../../common/sound-config';
-import { EVENT_PLAY_SOUND } from '../../common/runtime-actions';
+import { EVENT_PLAY_SOUND, EVENT_STOP_SOUND_PLAYBACK } from '../../common/runtime-actions';
 
 type PlaySoundPayload = {
   soundType: NotificationSound;
@@ -194,6 +194,34 @@ export class SoundService implements ISoundService {
     } catch (error) {
       this.debugService.error('[SoundService] Error playing notification sound:', error);
       // Don't re-throw: sound failure should not break the notification flow
+    }
+  }
+
+  /**
+   * Tells the offscreen document to suspend audio and end the current play wait.
+   * No-op if the offscreen document is not open.
+   */
+  async stopNotificationPlayback(): Promise<void> {
+    try {
+      if (!(await this.hasOffscreenDocument())) {
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        chrome.runtime.sendMessage(
+          { action: EVENT_STOP_SOUND_PLAYBACK, payload: {} },
+          () => {
+            if (chrome.runtime.lastError) {
+              this.debugService.warn(
+                '[SoundService] stop playback message:',
+                chrome.runtime.lastError.message
+              );
+            }
+            resolve();
+          }
+        );
+      });
+    } catch (error) {
+      this.debugService.error('[SoundService] Error stopping notification playback:', error);
     }
   }
 

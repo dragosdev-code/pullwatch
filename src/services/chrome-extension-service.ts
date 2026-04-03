@@ -130,6 +130,13 @@ export class ChromeExtensionService {
   }
 
   /**
+   * Stops any in-flight sound preview in the offscreen audio document.
+   */
+  async stopSoundPreview(): Promise<void> {
+    return this.sendMessage(PREVIEW_SOUND_ACTION.stopPreviewSound, {});
+  }
+
+  /**
    * Sets up a listener for background script messages.
    */
   onMessage(callback: (message: RuntimeMessage) => void): () => void {

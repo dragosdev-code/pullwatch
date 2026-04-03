@@ -58,6 +58,7 @@ export class EventService implements IEventService {
       [EVENT_PLAY_SOUND, (m, r) => this.handleOffscreenActions(m, r)],
       [EVENT_OFFSCREEN_READY, (m, r) => this.handleOffscreenActions(m, r)],
       [PREVIEW_SOUND_ACTION.previewSound, (m, r) => this.handlePreviewSoundAction(m, r)],
+      [PREVIEW_SOUND_ACTION.stopPreviewSound, (m, r) => this.handleStopPreviewSoundAction(m, r)],
       [DEV_TEST_ACTION.fireNotification, (m, r) => this.handleDevTestActions(m, r)],
       [DEV_TEST_ACTION.startLoop, (m, r) => this.handleDevTestActions(m, r)],
       [DEV_TEST_ACTION.stopLoop, (m, r) => this.handleDevTestActions(m, r)],
@@ -529,6 +530,27 @@ export class EventService implements IEventService {
     } catch (error) {
       this.debugService.error('[EventService] Error handling sound preview:', error);
       sendResponse({ success: false, error: 'Failed to play sound preview' });
+    }
+  }
+
+  /**
+   * Stops sound preview / offscreen playback (e.g. user deleted a custom sound while previewing).
+   */
+  async handleStopPreviewSoundAction(
+    message: RuntimeMessage,
+    sendResponse: (response: MessageResponse) => void
+  ): Promise<void> {
+    try {
+      if (!this.isMessageAction(message, PREVIEW_SOUND_ACTION.stopPreviewSound)) {
+        sendResponse({ success: false, error: 'Invalid stopPreviewSound message' });
+        return;
+      }
+      const soundService = this.serviceContainer.getService('soundService');
+      await soundService.stopNotificationPlayback();
+      sendResponse({ success: true, data: 'Sound preview stopped' });
+    } catch (error) {
+      this.debugService.error('[EventService] Error stopping sound preview:', error);
+      sendResponse({ success: false, error: 'Failed to stop sound preview' });
     }
   }
 

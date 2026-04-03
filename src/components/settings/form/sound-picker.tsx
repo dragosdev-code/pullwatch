@@ -6,6 +6,7 @@ import {
   type SoundDefinition,
 } from '../../../../extension/common/sound-config';
 import { useCustomSounds } from '../../../hooks/use-custom-sounds';
+import { chromeExtensionService } from '../../../services/chrome-extension-service';
 import { SoundPreviewButton } from './sound-preview-button';
 import { CheckIcon, XIcon } from '../../ui/icons';
 
@@ -28,12 +29,20 @@ interface SoundOptionProps {
   onSelect: () => void;
   /** Rendered after the preview control; custom rows use this for delete (built-ins omit it). */
   trailingActions?: ReactNode;
+  /** Bumped when parent stops preview externally so the play control resets. */
+  previewPlaybackInterruptKey?: number;
 }
 
 /**
  * Individual sound option row
  */
-const SoundOption = ({ definition, isSelected, onSelect, trailingActions }: SoundOptionProps) => {
+const SoundOption = ({
+  definition,
+  isSelected,
+  onSelect,
+  trailingActions,
+  previewPlaybackInterruptKey,
+}: SoundOptionProps) => {
   const isPlayable = isPlayableSound(definition.id);
 
   return (
@@ -69,7 +78,12 @@ const SoundOption = ({ definition, isSelected, onSelect, trailingActions }: Soun
           onClick={(e) => e.stopPropagation()}
           className="shrink-0 flex items-center gap-1"
         >
-          <SoundPreviewButton sound={definition.id} disabled={false} size="sm" />
+          <SoundPreviewButton
+            sound={definition.id}
+            disabled={false}
+            size="sm"
+            playbackInterruptKey={previewPlaybackInterruptKey}
+          />
           {trailingActions}
         </div>
       ) : (
@@ -89,6 +103,7 @@ interface CustomSoundOptionRowProps {
   onRequestDelete: (e: React.MouseEvent) => void;
   onConfirmDelete: (e: React.MouseEvent) => void;
   onCancelDelete: (e: React.MouseEvent) => void;
+  previewPlaybackInterruptKey?: number;
 }
 
 /**
@@ -104,6 +119,7 @@ const CustomSoundOptionRow = ({
   onRequestDelete,
   onConfirmDelete,
   onCancelDelete,
+  previewPlaybackInterruptKey,
 }: CustomSoundOptionRowProps) => {
   if (isConfirming) {
     return (
@@ -139,6 +155,7 @@ const CustomSoundOptionRow = ({
       definition={definition}
       isSelected={isSelected}
       onSelect={onSelect}
+      previewPlaybackInterruptKey={previewPlaybackInterruptKey}
       trailingActions={
         <button
           type="button"
@@ -166,6 +183,9 @@ export const SoundPicker = ({
 }: SoundPickerProps) => {
   const [selectedSound, setSelectedSound] = useState<NotificationSound>(value);
   const [pendingDeleteId, setPendingDeleteId] = useState<CustomSoundId | null>(null);
+  const [previewInterruptByCustomId, setPreviewInterruptByCustomId] = useState<
+    Partial<Record<CustomSoundId, number>>
+  >({});
   const modalRef = useRef<HTMLDialogElement>(null);
   const { customSounds, deleteCustomSound, getCustomSoundDefinition } = useCustomSounds();
 
@@ -218,10 +238,22 @@ export const SoundPicker = ({
     onOpenCustomEditor?.();
   }, [onOpenCustomEditor]);
 
-  const handleRequestDeleteCustom = useCallback((e: React.MouseEvent, id: CustomSoundId) => {
-    e.stopPropagation();
-    setPendingDeleteId(id);
+  const stopPreviewForCustomRow = useCallback((id: CustomSoundId) => {
+    void chromeExtensionService.stopSoundPreview();
+    setPreviewInterruptByCustomId((prev) => ({
+      ...prev,
+      [id]: (prev[id] ?? 0) + 1,
+    }));
   }, []);
+
+  const handleRequestDeleteCustom = useCallback(
+    (e: React.MouseEvent, id: CustomSoundId) => {
+      e.stopPropagation();
+      stopPreviewForCustomRow(id);
+      setPendingDeleteId(id);
+    },
+    [stopPreviewForCustomRow],
+  );
 
   const handleCancelDeleteCustom = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -231,13 +263,14 @@ export const SoundPicker = ({
   const handleConfirmDeleteCustom = useCallback(
     async (e: React.MouseEvent, id: CustomSoundId) => {
       e.stopPropagation();
+      stopPreviewForCustomRow(id);
       await deleteCustomSound(id);
       if (selectedSound === id) {
         setSelectedSound('ping');
       }
       setPendingDeleteId(null);
     },
-    [deleteCustomSound, selectedSound],
+    [deleteCustomSound, selectedSound, stopPreviewForCustomRow],
   );
 
   return (
@@ -290,6 +323,7 @@ export const SoundPicker = ({
                     onRequestDelete={(e) => handleRequestDeleteCustom(e, meta.id)}
                     onConfirmDelete={(e) => handleConfirmDeleteCustom(e, meta.id)}
                     onCancelDelete={handleCancelDeleteCustom}
+                    previewPlaybackInterruptKey={previewInterruptByCustomId[meta.id] ?? 0}
                   />
                 );
               })}

@@ -1,5 +1,9 @@
 import { debugLog, debugError, debugWarn, initializeDebugTools } from '../debug/debugLogger';
-import { EVENT_OFFSCREEN_READY, EVENT_PLAY_SOUND } from '../common/runtime-actions';
+import {
+  EVENT_OFFSCREEN_READY,
+  EVENT_PLAY_SOUND,
+  EVENT_STOP_SOUND_PLAYBACK,
+} from '../common/runtime-actions';
 import type { RuntimeMessage, MessageResponse, NotificationSound, BuiltInSound } from '../common/types';
 import { SOUND_PRESETS, isCustomSoundId, isBuiltInSound, type SoundPreset } from '../common/sound-config';
 
@@ -21,6 +25,20 @@ interface WindowWithLegacyAudio extends Window {
 // resources. Chrome caps concurrent AudioContexts at ~6 per origin; creating one
 // per notification would exhaust the limit under rapid-fire scenarios.
 let sharedAudioContext: AudioContext | null = null;
+
+/** AbortController for the in-flight “wait for duration” tail of the current play; STOP/new play aborts it. */
+let activePlaybackAbort: AbortController | null = null;
+
+/**
+ * Cuts audio output and ends any pending playback wait. Used when the user stops preview (e.g. delete)
+ * or when a new sound starts so clips never overlap.
+ */
+function interruptActivePlayback(): void {
+  activePlaybackAbort?.abort();
+  if (sharedAudioContext?.state === 'running') {
+    void sharedAudioContext.suspend();
+  }
+}
 
 function getOrCreateAudioContext(): AudioContext {
   if (sharedAudioContext && sharedAudioContext.state !== 'closed') {
@@ -124,6 +142,12 @@ async function handlePlayNotificationSound(
   soundType: NotificationSound = 'ping',
   playPayload?: PlaySoundMessagePayload,
 ): Promise<void> {
+  interruptActivePlayback();
+
+  const abortController = new AbortController();
+  activePlaybackAbort = abortController;
+  const signal = abortController.signal;
+
   try {
     if (soundType === 'off') {
       debugLog('Sound is disabled (off), skipping playback');
@@ -157,11 +181,29 @@ async function handlePlayNotificationSound(
     }
 
     if (durationMs > 0) {
-      await new Promise<void>((resolve) => setTimeout(resolve, durationMs));
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          signal.removeEventListener('abort', onAbort);
+          resolve();
+        };
+        const onAbort = () => {
+          clearTimeout(tid);
+          finish();
+        };
+        const tid = setTimeout(finish, durationMs);
+        signal.addEventListener('abort', onAbort);
+      });
       debugLog(`Offscreen sound playback completed: ${soundType}`);
     }
   } catch (error) {
     debugError('Failed to play sound in offscreen document:', error);
+  } finally {
+    if (activePlaybackAbort === abortController) {
+      activePlaybackAbort = null;
+    }
   }
 }
 
@@ -189,6 +231,14 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       });
     return true; // Indicates that the response will be sent asynchronously
   }
+
+  if (message.action === EVENT_STOP_SOUND_PLAYBACK) {
+    interruptActivePlayback();
+    activePlaybackAbort = null;
+    sendResponse({ success: true, data: 'Playback interrupted' } as MessageResponse);
+    return true;
+  }
+
   // Handle other messages if needed
 
   // Default response for unhandled actions

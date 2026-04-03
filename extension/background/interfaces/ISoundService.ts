@@ -12,6 +12,11 @@ export interface ISoundService extends IService {
   playNotificationSound(sound?: NotificationSound): Promise<void>;
 
   /**
+   * Stops any in-flight offscreen playback (preview or notification tail wait).
+   */
+  stopNotificationPlayback(): Promise<void>;
+
+  /**
    * Ensures the offscreen document is ready for audio playback.
    */
   ensureOffscreenDocument(): Promise<void>;

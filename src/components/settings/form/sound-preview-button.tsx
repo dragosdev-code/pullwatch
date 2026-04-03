@@ -16,6 +16,10 @@ interface SoundPreviewButtonProps {
    * Use clip duration + buffer for custom sounds; default matches short built-ins.
    */
   playbackDurationMs?: number;
+  /**
+   * Increment when preview should be reset from outside (e.g. row delete) so the playing UI clears.
+   */
+  playbackInterruptKey?: number;
 }
 
 /**
@@ -29,9 +33,11 @@ export const SoundPreviewButton = ({
   disabled = false,
   size = 'sm',
   playbackDurationMs = DEFAULT_PLAYBACK_UI_MS,
+  playbackInterruptKey = 0,
 }: SoundPreviewButtonProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevInterruptKeyRef = useRef(playbackInterruptKey);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -41,6 +47,16 @@ export const SoundPreviewButton = ({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (playbackInterruptKey === prevInterruptKeyRef.current) return;
+    prevInterruptKeyRef.current = playbackInterruptKey;
+    if (playTimeoutRef.current) {
+      clearTimeout(playTimeoutRef.current);
+      playTimeoutRef.current = null;
+    }
+    setIsPlaying(false);
+  }, [playbackInterruptKey]);
 
   /**
    * Handle play button click

@@ -21,14 +21,18 @@ export const SETTINGS_ACTION = {
 
 export const OFFSCREEN_ACTION = {
   playNotificationSound: 'playNotificationSound',
+  /** Offscreen suspends AudioContext and ends the wait so preview/notification playback can stop early. */
+  stopNotificationSoundPlayback: 'stopNotificationSoundPlayback',
   offscreenReady: 'offscreenReady',
 } as const;
 
 export const EVENT_PLAY_SOUND = OFFSCREEN_ACTION.playNotificationSound;
+export const EVENT_STOP_SOUND_PLAYBACK = OFFSCREEN_ACTION.stopNotificationSoundPlayback;
 export const EVENT_OFFSCREEN_READY = OFFSCREEN_ACTION.offscreenReady;
 
 export const PREVIEW_SOUND_ACTION = {
   previewSound: 'previewSound',
+  stopPreviewSound: 'stopPreviewSound',
 } as const;
 
 export const DEV_TEST_ACTION = {
