@@ -8,6 +8,13 @@ import {
 } from '../../extension/common/constants';
 import { validateCustomSoundName } from '../../extension/common/custom-sound-name';
 
+/**
+ * Custom sounds: metadata list in `custom_sounds_meta`, WAV bytes per slot in `custom_sound_{n}`.
+ * WHY split storage: chrome.storage.sync (settings) only references ids like `custom_1`; large Base64
+ * WAVs stay in local so sync quota isn’t blown and the service worker can read bytes for offscreen.
+ */
+
+/** WHY guard: hook runs in unit tests / Storybook without extension APIs—return empty instead of throwing. */
 async function loadMeta(): Promise<CustomSoundMeta[]> {
   if (typeof chrome === 'undefined' || !chrome.storage) return [];
   const result = await chrome.storage.local.get(STORAGE_KEY_CUSTOM_SOUNDS_META);
@@ -18,6 +25,12 @@ async function persistMeta(meta: CustomSoundMeta[]): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY_CUSTOM_SOUNDS_META]: meta });
 }
 
+/**
+ * Picks the smallest unused slot in `1..MAX_CUSTOM_SOUNDS`.
+ * WHY not monotonic ids: after deleting `custom_1`, the next save should reuse slot 1 so we don’t
+ * leave “holes” forever and settings that still say `custom_1` (sync) can match a real clip again.
+ * The service worker resolves sound by slot number → `custom_sound_{slot}` key.
+ */
 function nextAvailableSlot(existing: CustomSoundMeta[]): number {
   const usedSlots = new Set(existing.map((m) => parseInt(m.id.replace('custom_', ''), 10)));
   for (let i = 1; i <= MAX_CUSTOM_SOUNDS + 1; i++) {
@@ -37,7 +50,10 @@ export function useCustomSounds() {
     });
   }, []);
 
-  // Live reactivity via storage change listener
+  /**
+   * WHY listen: another UI surface (e.g. sound picker vs editor) or the same app in another frame
+   * can write `custom_sounds_meta`; without this, React state would stay stale until remount.
+   */
   useEffect(() => {
     if (typeof chrome === 'undefined' || !chrome.storage) return;
 
@@ -56,6 +72,7 @@ export function useCustomSounds() {
     return () => chrome.storage.onChanged.removeListener(listener);
   }, []);
 
+  /** WHY length-based: slot reuse means “free slot” ≠ “under max count”; cap is total clips, not highest id. */
   const canAddMore = customSounds.length < MAX_CUSTOM_SOUNDS;
 
   const saveCustomSound = useCallback(
@@ -64,6 +81,7 @@ export function useCustomSounds() {
       base64Wav: string,
       durationMs: number,
     ): Promise<CustomSoundId> => {
+      // WHY reload from disk: two saves in parallel must see each other’s meta, not stale React state.
       const current = await loadMeta();
       if (current.length >= MAX_CUSTOM_SOUNDS) {
         throw new Error(`Maximum of ${MAX_CUSTOM_SOUNDS} custom sounds reached`);
@@ -90,6 +108,7 @@ export function useCustomSounds() {
 
       const updated = [...current, meta];
 
+      // WHY WAV before meta: background/offscreen read meta then load by `storageKey`; meta pointing at missing WAV causes orphan/fallback noise.
       await chrome.storage.local.set({ [storageKey]: base64Wav });
       await persistMeta(updated);
       setCustomSounds(updated);
@@ -106,6 +125,7 @@ export function useCustomSounds() {
 
     const updated = current.filter((m) => m.id !== id);
 
+    // WHY remove WAV key: free disk; slot becomes eligible again via `nextAvailableSlot`.
     await chrome.storage.local.remove(target.storageKey);
     await persistMeta(updated);
     setCustomSounds(updated);
@@ -125,6 +145,7 @@ export function useCustomSounds() {
     [customSounds],
   );
 
+  /** WHY map: sync settings only store `custom_*` ids—labels for picker rows come from meta, not from ids. */
   const resolveDisplayName = useMemo(() => {
     const map = new Map(customSounds.map((m) => [m.id, m.name]));
     return (soundId: string): string | undefined => map.get(soundId as CustomSoundId);
