@@ -2,22 +2,43 @@ import type { ReactNode } from 'react';
 import { useFormContext } from 'react-hook-form';
 import type { ExtensionSettings } from '../types';
 
-interface ToggleFieldProps {
-  name: string;
+export type ToggleFieldColor = 'primary' | 'warning';
+
+const toggleColorClass: Record<ToggleFieldColor, string> = {
+  primary: 'toggle-primary',
+  warning: 'toggle-warning',
+};
+
+export interface ToggleFieldLayoutProps {
   label: ReactNode;
   description?: string;
   disabled?: boolean;
+  /** DaisyUI toggle accent when checked (`toggle-primary` vs `toggle-warning`). */
+  toggleColor?: ToggleFieldColor;
+  /** Renders the checkbox; receives full `toggle toggle-sm …` classes. */
+  renderInput: (toggleClassName: string) => ReactNode;
 }
 
-export const ToggleField = ({ name, label, description, disabled = false }: ToggleFieldProps) => {
-  const { register } = useFormContext<ExtensionSettings>();
-
+/**
+ * Presentational shell for settings toggles (label + optional description + switch).
+ * Use with `register` via {@link ToggleField} or with `Controller` via `renderInput`.
+ */
+export const ToggleFieldLayout = ({
+  label,
+  description,
+  disabled = false,
+  toggleColor = 'primary',
+  renderInput,
+}: ToggleFieldLayoutProps) => {
   const titleRow =
     typeof label === 'string' ? (
       <span className="text-sm font-medium text-base-content leading-snug">{label}</span>
     ) : (
       label
     );
+
+  const tone = toggleColorClass[toggleColor];
+  const toggleClassName = `toggle toggle-sm ${tone} shrink-0`;
 
   return (
     <div
@@ -31,13 +52,43 @@ export const ToggleField = ({ name, label, description, disabled = false }: Togg
           <span className="text-xs text-base-content/50 mt-0.5 leading-snug">{description}</span>
         )}
       </div>
-      <input
-        type="checkbox"
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        {...register(name as any)}
-        disabled={disabled}
-        className="toggle toggle-sm toggle-primary shrink-0"
-      />
+      {renderInput(toggleClassName)}
     </div>
+  );
+};
+
+interface ToggleFieldProps {
+  name: string;
+  label: ReactNode;
+  description?: string;
+  disabled?: boolean;
+  toggleColor?: ToggleFieldColor;
+}
+
+export const ToggleField = ({
+  name,
+  label,
+  description,
+  disabled = false,
+  toggleColor = 'primary',
+}: ToggleFieldProps) => {
+  const { register } = useFormContext<ExtensionSettings>();
+
+  return (
+    <ToggleFieldLayout
+      label={label}
+      description={description}
+      disabled={disabled}
+      toggleColor={toggleColor}
+      renderInput={(toggleClassName) => (
+        <input
+          type="checkbox"
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          {...register(name as any)}
+          disabled={disabled}
+          className={toggleClassName}
+        />
+      )}
+    />
   );
 };

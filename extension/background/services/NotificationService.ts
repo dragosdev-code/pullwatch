@@ -10,6 +10,7 @@ import {
 } from '../../common/constants';
 import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../common/settings-test-notification-copy';
 import { isPlayableSound } from '../../common/sound-config';
+import { effectiveAssignedNotifyOnDrafts } from '../../common/effective-assigned-draft-notify';
 
 /**
  * NotificationService handles Chrome extension notifications with sound integration.
@@ -71,24 +72,28 @@ export class NotificationService implements INotificationService {
       // Normalize input to array
       const prsArray = Array.isArray(newPRs) ? newPRs : [newPRs];
 
-      // Filter out drafts if notifyOnDrafts is false
-      const filteredPRs = settings.assigned.notifyOnDrafts
+      const notifyDraftsEffective = effectiveAssignedNotifyOnDrafts(settings.assigned);
+
+      // Filter out drafts unless both notify-on-drafts AND show-drafts-in-list are on (invalid combo → treat as off).
+      const filteredPRs = notifyDraftsEffective
         ? prsArray
         : prsArray.filter((pr) => pr.type !== 'draft');
 
-      if (!settings.assigned.notifyOnDrafts) {
-        const skippedDrafts = prsArray.filter((pr) => pr.type === 'draft');
-        if (skippedDrafts.length > 0) {
-          this.debugService.log(
-            `[NotificationService] Skipped ${skippedDrafts.length} draft PR(s) (notifyOnDrafts=false):`,
-            skippedDrafts.map((pr) => `${pr.title} (${pr.url})`)
-          );
-        }
+      const skippedDrafts = prsArray.filter((pr) => pr.type === 'draft');
+      if (skippedDrafts.length > 0 && !notifyDraftsEffective) {
+        const invalidCombo =
+          settings.assigned.notifyOnDrafts && !settings.assigned.showDraftsInList;
+        this.debugService.log(
+          invalidCombo
+            ? `[NotificationService] Skipped ${skippedDrafts.length} draft PR(s) (invalid settings: notifyOnDrafts with showDraftsInList off would cause duplicate notifications; treating notifyOnDrafts as false):`
+            : `[NotificationService] Skipped ${skippedDrafts.length} draft PR(s) (notifyOnDrafts=false):`,
+          skippedDrafts.map((pr) => `${pr.title} (${pr.url})`)
+        );
       }
 
       if (filteredPRs.length === 0) {
         this.debugService.log(
-          '[NotificationService] All new PRs are drafts and notifyOnDrafts is disabled, skipping notifications'
+          '[NotificationService] All new PRs are drafts and draft notifications are off (or invalid draft settings), skipping notifications'
         );
         return;
       }
