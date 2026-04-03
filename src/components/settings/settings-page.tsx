@@ -180,8 +180,8 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
                 >
                   <InfoCircleIcon className="w-4 h-4 text-info shrink-0 mt-px" />
                   <p className="text-xs font-medium text-base-content leading-snug min-w-0">
-                    Draft PRs will leave your To Review list after the next sync, or tap Refresh in
-                    the header to update now.
+                    Draft PRs will leave your 'To Review' list after the next sync, or after using
+                    the Refresh Button from the top right of the popup.
                   </p>
                 </div>
               )}

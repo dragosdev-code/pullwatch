@@ -2,7 +2,7 @@ export const RING_RADIUS = 18;
 export const RING_C = 2 * Math.PI * RING_RADIUS;
 
 /** Hover/focus delay before opening DaisyUI tooltip (`tooltip-open`). */
-export const TOOLTIP_SHOW_DELAY_MS = 1000;
+export const TOOLTIP_SHOW_DELAY_MS = 600;
 
 /**
  * DaisyUI shows tooltips on :hover and :focus-visible immediately.

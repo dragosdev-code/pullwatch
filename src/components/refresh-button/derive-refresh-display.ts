@@ -59,12 +59,12 @@ const computeTooltipLines = (
   }
   if (lastFetchDurationMs > 0) {
     return [
-      'Refresh assigned, merged & authored PRs',
+      'Refresh "to review", "authored" & "merged" PRs',
       `Last fetch: ${(lastFetchDurationMs / 1000).toFixed(1)}s`,
     ];
   }
   return [
-    'Refresh assigned, merged & authored PRs',
+    'Refresh "to review", "authored" & "merged" PRs',
     `Max once per ${MIN_REFRESH_INTERVAL_MS / 1000}s`,
   ];
 };
