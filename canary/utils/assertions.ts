@@ -27,6 +27,112 @@ export const CANARY_MARKER_EMBEDDED_JSON_DRIFT = 'CANARY_EMBEDDED_JSON_DRIFT';
  */
 export const CANARY_MARKER_NEW_HTML_FALLBACK_DEGRADED = 'CANARY_NEW_HTML_FALLBACK_DEGRADED';
 
+/** Canonical key for matching the same PR row across JSON harvest vs HTML scrape. */
+function normalizePullUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/\/+$/, '') || u.pathname;
+    return `${u.hostname.toLowerCase()}${path}`;
+  } catch {
+    return url.trim().replace(/\/+$/, '');
+  }
+}
+
+function inferNumberFromPullUrl(pr: PullRequest): number | null {
+  if (pr.number != null && pr.number > 0) return pr.number;
+  const m = pr.url.match(/\/pull\/(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/** Decode a small subset of entities so JSON plain text and DOM-derived titles compare fairly. */
+function decodeBasicHtmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;/g, "'")
+    .replace(/&#x0*27;/gi, "'");
+}
+
+function normalizeTitleForCompare(title: string): string {
+  return decodeBasicHtmlEntities(title.trim()).replace(/\s+/g, ' ');
+}
+
+/**
+ * When embedded JSON and the new-experience HTML parser both return the same row count,
+ * require per-PR agreement on fields the UI relies on. JSON is treated as ground truth for
+ * the SSR payload; HTML must scrape the same logical row (not just the same cardinality).
+ */
+function assertNewExperienceJsonHtmlFieldAlignment(
+  jsonPrs: PullRequest[],
+  htmlPrs: PullRequest[],
+  targetLabel: string,
+): void {
+  const jsonKeys = jsonPrs.map((p) => normalizePullUrl(p.url));
+  expect(
+    new Set(jsonKeys).size,
+    `[${targetLabel}] duplicate normalized PR urls in embedded JSON`,
+  ).toBe(jsonPrs.length);
+
+  const htmlByKey = new Map<string, PullRequest>();
+  for (const hp of htmlPrs) {
+    htmlByKey.set(normalizePullUrl(hp.url), hp);
+  }
+
+  expect(
+    htmlByKey.size,
+    `[${targetLabel}] HTML parser produced duplicate normalized URLs (cannot align 1:1 with JSON)`,
+  ).toBe(htmlPrs.length);
+
+  for (let i = 0; i < jsonPrs.length; i++) {
+    const jp = jsonPrs[i];
+    const key = normalizePullUrl(jp.url);
+    const hp = htmlByKey.get(key);
+
+    expect(
+      hp,
+      `[${targetLabel}] row ${i + 1}/${jsonPrs.length}: no HTML parser row for JSON PR url ${jp.url}`,
+    ).toBeDefined();
+
+    const htmlRow = hp!;
+
+    expect(
+      normalizeTitleForCompare(htmlRow.title),
+      `[${targetLabel}] PR ${key} title (HTML vs embedded JSON)`,
+    ).toBe(normalizeTitleForCompare(jp.title));
+
+    expect(htmlRow.repoName, `[${targetLabel}] PR ${key} repoName`).toBe(jp.repoName);
+    expect(htmlRow.type, `[${targetLabel}] PR ${key} type`).toBe(jp.type);
+
+    const jn = inferNumberFromPullUrl(jp);
+    const hn = inferNumberFromPullUrl(htmlRow);
+    expect(jn, `[${targetLabel}] PR ${key} number from JSON/url`).not.toBeNull();
+    expect(hn, `[${targetLabel}] PR ${key} number from HTML/url`).not.toBeNull();
+    expect(hn, `[${targetLabel}] PR ${key} number HTML vs JSON`).toBe(jn);
+
+    const jLogin = jp.author[0]?.login;
+    const hLogin = htmlRow.author[0]?.login;
+    expect(jLogin, `[${targetLabel}] PR ${key} JSON author.login`).toBeTruthy();
+    expect(hLogin, `[${targetLabel}] PR ${key} HTML author.login`).toBeTruthy();
+    expect(hLogin, `[${targetLabel}] PR ${key} author login HTML vs JSON`).toBe(jLogin);
+
+    const jc = jp.createdAt;
+    const hc = htmlRow.createdAt;
+    expect(jc, `[${targetLabel}] PR ${key} JSON createdAt`).toBeTruthy();
+    expect(hc, `[${targetLabel}] PR ${key} HTML createdAt`).toBeTruthy();
+    const jt = new Date(jc!).getTime();
+    const ht = new Date(hc!).getTime();
+    expect(Number.isNaN(jt), `[${targetLabel}] PR ${key} JSON createdAt parseable`).toBe(false);
+    expect(Number.isNaN(ht), `[${targetLabel}] PR ${key} HTML createdAt parseable`).toBe(false);
+    // Same instant; allow 1s slack for sub-second rounding between payload vs DOM attribute.
+    expect(
+      Math.abs(jt - ht),
+      `[${targetLabel}] PR ${key} createdAt skew (JSON "${jc}" vs HTML "${hc}")`,
+    ).toBeLessThanOrEqual(1000);
+  }
+}
+
 /**
  * Heuristic: page is the new global pulls dashboard (SSR blob or route payload markers).
  * Used to avoid treating login walls as JSON drift.
@@ -96,8 +202,10 @@ export function observeNewExperienceSearchObservability(html: string, targetLabe
   } else {
     // Visible proof in logs that the HTML fallback path still parses the live DOM (dual-path §2e),
     // even though parseSearchRouteAndAssert stops after JSON — production only hits HTML when JSON is null.
+    assertNewExperienceJsonHtmlFieldAlignment(jsonPrs, htmlPrs!, targetLabel);
     console.log(
-      `  [parse] NewExperienceGitHubHTMLParser dual-probe "${targetLabel}": ${htmlPrs!.length} PR(s) — count matches embedded JSON; HTML fallback path exercised on same page.`,
+      `  [parse] NewExperienceGitHubHTMLParser dual-probe "${targetLabel}": ${htmlPrs!.length} PR(s) — ` +
+        `embedded JSON and HTML scrape agree on url, title, repo, type, author, number, createdAt.`,
     );
   }
 }
