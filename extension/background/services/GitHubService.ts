@@ -16,10 +16,28 @@ import {
   USER_AGENT,
   REQUEST_DELAY_MS,
   GITHUB_FETCH_TIMEOUT_MS,
+  STORAGE_KEY_ROUTE_HINT,
+  ROUTE_HINT_TTL_MS,
 } from '../../common/constants';
 import { RateLimitError, ParserBreakageError, GitHubOutageError } from '../../common/errors';
 import { GitHubHTMLParser } from './GitHubHTMLParser';
+import { GitHubEmbeddedJsonPullHarvest } from './GitHubEmbeddedJsonPullHarvest';
+import { NewExperienceGitHubHTMLParser } from './NewExperienceGitHubHTMLParser';
 import { delay } from '../../common/utils';
+
+/**
+ * Which GitHub pulls dashboard experience the user is on.
+ * - `'search'`: New React-based `/pulls/search` (has embedded JSON + new HTML)
+ * - `'legacy'`: Classic server-rendered `/pulls` (parsed by GitHubHTMLParser)
+ */
+type RouteType = 'search' | 'legacy';
+
+/** Persisted in `chrome.storage.local` so the waterfall skips probing once it
+ *  knows which experience a user is on. TTL-gated to auto-recover from rollouts. */
+interface RouteHint {
+  route: RouteType;
+  timestamp: number;
+}
 
 // 5xx and Cloudflare edge errors (520-530) signal GitHub infrastructure
 // problems, not content/DOM changes. Classifying them separately lets
@@ -211,17 +229,169 @@ export class GitHubService implements IGitHubService {
     throw lastError;
   }
 
+  // ─── Route hint persistence ──────────────────────────────────────────────
+  // The hint remembers which dashboard experience (/pulls or /pulls/search)
+  // last succeeded so that steady-state polling issues one HTTP request per
+  // list rather than probing both endpoints every cycle.
+
+  /** Reads the cached route hint. Returns `null` when absent or expired. */
+  private async readRouteHint(): Promise<RouteType | null> {
+    try {
+      const data = await chrome.storage.local.get(STORAGE_KEY_ROUTE_HINT);
+      const hint = data[STORAGE_KEY_ROUTE_HINT] as RouteHint | undefined;
+      if (!hint) return null;
+
+      const expired = Date.now() - hint.timestamp > ROUTE_HINT_TTL_MS;
+      if (expired) return null;
+
+      return hint.route;
+    } catch {
+      // Storage transient error — degrade to "no hint" so the waterfall
+      // probes both routes rather than crashing the fetch cycle.
+      return null;
+    }
+  }
+
+  /** Persists the successful route so subsequent cycles skip probing. */
+  private writeRouteHint(route: RouteType): void {
+    const hint: RouteHint = { route, timestamp: Date.now() };
+    // Fire-and-forget: if storage fails, the next cycle re-probes.
+    chrome.storage.local.set({ [STORAGE_KEY_ROUTE_HINT]: hint }).catch(() => {});
+  }
+
+  /** Clears a stale hint when both routes fail, forcing a fresh probe next cycle. */
+  private clearRouteHint(): void {
+    chrome.storage.local.remove(STORAGE_KEY_ROUTE_HINT).catch(() => {});
+  }
+
+  // ─── URL transformation ─────────────────────────────────────────────────
+
+  /**
+   * Injects `/search` into a legacy `/pulls?q=…` URL to produce the new
+   * experience's `/pulls/search?q=…` form. Idempotent — already-transformed
+   * URLs pass through unchanged.
+   *
+   * All URL templates in constants.ts use the legacy form, so the waterfall
+   * calls this only for the `'search'` route; the original URL is already
+   * correct for the `'legacy'` route.
+   */
+  private static toSearchUrl(url: string): string {
+    if (url.includes('/pulls/search?')) return url;
+    return url.replace('/pulls?', '/pulls/search?');
+  }
+
+  // ─── Parse pipelines per route ──────────────────────────────────────────
+
+  /**
+   * Dispatches to the correct parse pipeline based on the route.
+   * Keeps the waterfall's try/catch clean by consolidating the
+   * route → parser mapping here.
+   */
+  private parseForRoute(html: string, route: RouteType, context: string): PullRequest[] {
+    return route === 'search'
+      ? this.parseSearchRoute(html, context)
+      : this.parseLegacyRoute(html, context);
+  }
+
+  /**
+   * Search-route pipeline: tries the JSON Harvester first (most reliable
+   * when present), then falls back to the new-experience HTML parser.
+   *
+   * The JSON Harvester already provides **absolute** permalinks in each
+   * entry, so it does NOT receive `baseURL`. The HTML parser still needs
+   * `baseURL` to resolve relative `href` attributes on anchor elements.
+   */
+  private parseSearchRoute(html: string, context: string): PullRequest[] {
+    // Primary probe: embedded JSON — structured data, immune to CSS churn.
+    const jsonResult = GitHubEmbeddedJsonPullHarvest.extractFromHTML(html);
+    if (jsonResult !== null) return jsonResult;
+
+    // Secondary probe: new-experience HTML patterns (CSS-module selectors).
+    const patterns = this.patternRegistryService.getPatterns();
+    const htmlResult = NewExperienceGitHubHTMLParser.parseFromHTML(html, this.baseURL, patterns);
+    if (htmlResult !== null) return htmlResult;
+
+    // Neither probe recognized the page — signal the waterfall to try
+    // the other route rather than returning an ambiguous empty array.
+    throw new ParserBreakageError(context);
+  }
+
+  /**
+   * Legacy-route pipeline: delegates entirely to {@link GitHubHTMLParser},
+   * which throws {@link ParserBreakageError} internally when the HTML
+   * doesn't match any known structure.
+   */
+  private parseLegacyRoute(html: string, _context: string): PullRequest[] {
+    const patterns = this.patternRegistryService.getPatterns();
+    return GitHubHTMLParser.parseFromHTML(html, this.baseURL, patterns);
+  }
+
+  // ─── Waterfall fetch orchestrator ───────────────────────────────────────
+
   /**
    * Fetches a GitHub PR listing page and returns parsed + avatar-enriched PRs.
-   * Kicks off a non-blocking pattern refresh so the next cycle benefits from
-   * any remote config updates.
+   *
+   * Implements a two-route waterfall:
+   * 1. Determines the primary route from the cached hint (defaults to
+   *    `'search'` because GitHub is actively rolling out the new experience).
+   * 2. Fetches + parses the primary route. On success, caches the hint.
+   * 3. If the primary route throws {@link ParserBreakageError}, fetches the
+   *    fallback route. On success, caches the corrected hint.
+   * 4. If both routes fail, clears the hint so the next cycle probes fresh.
+   *
+   * Auth, rate-limit, and outage errors bubble immediately — the other
+   * route would hit the same infrastructure problem.
+   *
+   * Kicks off a non-blocking pattern refresh so the next cycle benefits
+   * from any remote config updates.
    */
   private async fetchPRs(url: string, context: string): Promise<PullRequest[]> {
     this.patternRegistryService.refreshIfStale().catch(() => {});
-    return this.fetchGitHubData(url, context, async (html) => {
-      const prs = GitHubHTMLParser.parseFromHTML(html, this.baseURL, this.patternRegistryService.getPatterns());
+
+    const hint = await this.readRouteHint();
+
+    // Default to 'search' (new experience) when no hint exists —
+    // GitHub's rollout is forward, so new > legacy is the more
+    // common path for first-time probing.
+    const primaryRoute: RouteType = hint ?? 'search';
+    const fallbackRoute: RouteType = primaryRoute === 'search' ? 'legacy' : 'search';
+
+    const primaryUrl = primaryRoute === 'search' ? GitHubService.toSearchUrl(url) : url;
+    const fallbackUrl = fallbackRoute === 'search' ? GitHubService.toSearchUrl(url) : url;
+
+    // ── Primary attempt ────────────────────────────────────────────
+    try {
+      const prs = await this.fetchGitHubData(primaryUrl, context, (html) =>
+        this.parseForRoute(html, primaryRoute, context),
+      );
+      this.writeRouteHint(primaryRoute);
       return this.avatarService.enrichPRsWithAvatars(prs);
-    });
+    } catch (error) {
+      // Only ParserBreakageError triggers fallback — all other errors
+      // (auth, rate-limit, outage) bubble immediately because the
+      // other route would hit the same infrastructure problem.
+      if (!(error instanceof ParserBreakageError)) throw error;
+
+      this.debugService.warn(
+        `[GitHubService] Primary route '${primaryRoute}' failed for ${context} — trying fallback '${fallbackRoute}'`,
+      );
+    }
+
+    // ── Fallback attempt ───────────────────────────────────────────
+    try {
+      const prs = await this.fetchGitHubData(fallbackUrl, `${context} (fallback)`, (html) =>
+        this.parseForRoute(html, fallbackRoute, context),
+      );
+      this.writeRouteHint(fallbackRoute);
+      return this.avatarService.enrichPRsWithAvatars(prs);
+    } catch (error) {
+      if (error instanceof ParserBreakageError) {
+        // Both routes exhausted — clear the stale hint so the next
+        // cycle probes fresh instead of repeating a known-bad route.
+        this.clearRouteHint();
+      }
+      throw error;
+    }
   }
 
   async fetchMergedPRs(): Promise<PullRequest[]> {

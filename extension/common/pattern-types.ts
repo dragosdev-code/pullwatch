@@ -25,6 +25,22 @@ export interface PatternTypeEntry {
   pattern: PatternEntry;
 }
 
+/**
+ * Patterns for GitHub's new React-based pulls dashboard (CSS Modules DOM).
+ * Kept separate from the legacy patterns so a remote config update to one
+ * parser cannot accidentally break the other.
+ */
+export interface NewExperiencePatterns {
+  pageMarker: PatternEntry;
+  rowSelector: PatternEntry;
+  titleLink: PatternEntry;
+  repoName: PatternEntry;
+  prNumber: PatternEntry;
+  author: PatternEntry;
+  timestamp: PatternEntry[];
+  prType: PatternTypeEntry[];
+}
+
 /** Full set of patterns needed by GitHubHTMLParser (serializable). */
 export interface PatternRegistry {
   pageRecognition: {
@@ -58,6 +74,8 @@ export interface PatternRegistry {
   };
   timestamp: PatternEntry[];
   prType: PatternTypeEntry[];
+  /** Optional — absent in remote configs published before the new-experience parser shipped. */
+  newExperience?: NewExperiencePatterns;
 }
 
 // ── Compiled (runtime-ready) counterparts ────────────────────────────
@@ -77,6 +95,18 @@ export interface CompiledPrRowSelector {
 export interface CompiledPatternTypeEntry {
   type: 'draft' | 'open' | 'merged';
   compiled: RegExp;
+}
+
+/** Compiled counterpart of {@link NewExperiencePatterns}. */
+export interface CompiledNewExperiencePatterns {
+  pageMarker: CompiledPattern;
+  rowSelector: CompiledPattern;
+  titleLink: CompiledPattern;
+  repoName: CompiledPattern;
+  prNumber: CompiledPattern;
+  author: CompiledPattern;
+  timestamp: CompiledPattern[];
+  prType: CompiledPatternTypeEntry[];
 }
 
 /** Runtime-ready compiled patterns consumed by GitHubHTMLParser. */
@@ -112,4 +142,6 @@ export interface CompiledPatterns {
   };
   timestamp: CompiledPattern[];
   prType: CompiledPatternTypeEntry[];
+  /** Optional — undefined when the active registry predates the new-experience parser. */
+  newExperience?: CompiledNewExperiencePatterns;
 }

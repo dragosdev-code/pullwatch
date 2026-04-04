@@ -10,6 +10,7 @@ export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
 export const STORAGE_KEY_PATTERN_REGISTRY = 'parser_pattern_registry';
 export const STORAGE_KEY_PARSER_BREAKAGE = 'parser_breakage';
 export const STORAGE_KEY_GITHUB_OUTAGE = 'github_outage';
+export const STORAGE_KEY_ROUTE_HINT = 'pulls_list_route_hint';
 
 // Remote Pattern Registry
 // Production config — raw file on the main branch, served directly by GitHub.
@@ -20,6 +21,10 @@ export const REMOTE_PATTERNS_URL =
 export const REMOTE_PATTERNS_STAGING_URL =
   'https://raw.githubusercontent.com/dragosdev-code/pr-live-config/staging/patterns.json';
 export const PATTERN_REFRESH_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+// Route hint — remembers whether /pulls/search or /pulls last succeeded so
+// steady-state polling makes one request per list instead of probing both.
+export const ROUTE_HINT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const REMOTE_FETCH_TIMEOUT_MS = 10_000;
 
 // Fetch Intervals

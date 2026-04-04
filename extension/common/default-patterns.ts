@@ -60,6 +60,18 @@ export function compilePatterns(registry: PatternRegistry): CompiledPatterns {
     },
     timestamp: registry.timestamp.map(compileEntry),
     prType: registry.prType.map(compileTypeEntry),
+    ...(registry.newExperience && {
+      newExperience: {
+        pageMarker: compileEntry(registry.newExperience.pageMarker),
+        rowSelector: compileEntry(registry.newExperience.rowSelector),
+        titleLink: compileEntry(registry.newExperience.titleLink),
+        repoName: compileEntry(registry.newExperience.repoName),
+        prNumber: compileEntry(registry.newExperience.prNumber),
+        author: compileEntry(registry.newExperience.author),
+        timestamp: registry.newExperience.timestamp.map(compileEntry),
+        prType: registry.newExperience.prType.map(compileTypeEntry),
+      },
+    }),
   };
 }
 
@@ -234,6 +246,60 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
     { type: 'open', pattern: { regex: 'color-fg-open', flags: 'i' } },
     { type: 'merged', pattern: { regex: 'octicon-git-merge', flags: 'i' } },
   ],
+
+  // ── New-experience patterns (React-based global pulls dashboard) ───
+  newExperience: {
+    // data-testid is a stable React testing attribute unique to the new dashboard.
+    pageMarker: { regex: 'data-testid="listitem-title-link"', flags: 'i' },
+
+    // Partial CSS module class — hash suffix varies per deploy but the
+    // "ListItem-module__listItem" prefix is the stable contract.
+    rowSelector: {
+      regex: '<li\\b[^>]*class="[^"]*ListItem-module__listItem[^"]*"[^>]*>',
+      flags: 'gi',
+    },
+
+    // Lookahead asserts data-testid exists on the <a> without consuming
+    // characters, so href is captured regardless of attribute order.
+    // Group 2 captures the inner HTML (spans); the parser strips tags.
+    titleLink: {
+      regex: '<a(?=[^>]*data-testid="listitem-title-link")[^>]*href="([^"]*)"[^>]*>([\\s\\S]*?)</a>',
+      flags: 'i',
+      captureGroups: { url: 1, titleHtml: 2 },
+    },
+
+    // URL-based extraction — self-contained so remote config changes to
+    // newExperience patterns cannot accidentally alter legacy behavior.
+    repoName: { regex: '/([^/]+/[^/]+)/pull', flags: '', captureGroups: { repoName: 1 } },
+    prNumber: { regex: '/pull/(\\d+)', flags: '', captureGroups: { number: 1 } },
+
+    // Author login appears as a text node immediately before <span>opened.
+    // \w covers [a-zA-Z0-9_]; GitHub disallows underscores but \w is
+    // harmless here and simpler than a custom character class.
+    author: {
+      regex: '([\\w][\\w-]*)\\s*<span[^>]*>\\s*opened\\b',
+      flags: 'i',
+      captureGroups: { login: 1 },
+    },
+
+    timestamp: [
+      { regex: '<relative-time[^>]+datetime="([^"]+)"', flags: 'i', captureGroups: { datetime: 1 } },
+      { regex: '<time[^>]+datetime="([^"]+)"', flags: 'i', captureGroups: { datetime: 1 } },
+      { regex: 'datetime="([^"]+)"', flags: 'i', captureGroups: { datetime: 1 } },
+    ],
+
+    // aria-label and octicon class names are stable across both legacy and
+    // new experience. CSS-module color classes (fgColor-*) are NOT targeted
+    // because their hashes change per deploy.
+    prType: [
+      { type: 'draft', pattern: { regex: 'aria-label="[^"]*Draft[^"]*"', flags: 'i' } },
+      { type: 'open', pattern: { regex: 'aria-label="Open"', flags: 'i' } },
+      { type: 'merged', pattern: { regex: 'aria-label="[^"]*Merged[^"]*"', flags: 'i' } },
+      { type: 'draft', pattern: { regex: 'octicon-git-pull-request-draft', flags: 'i' } },
+      { type: 'open', pattern: { regex: 'octicon-git-pull-request(?!-)', flags: 'i' } },
+      { type: 'merged', pattern: { regex: 'octicon-git-merge', flags: 'i' } },
+    ],
+  },
 };
 
 /** Pre-compiled default patterns — ready for immediate use by the parser. */

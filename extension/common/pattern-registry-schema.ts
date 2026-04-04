@@ -47,6 +47,19 @@ const PatternTypeEntrySchema = v.object({
   pattern: PatternEntrySchema,
 });
 
+// ── New-experience patterns (optional block) ────────────────────────
+
+const NewExperiencePatternsSchema = v.object({
+  pageMarker: PatternEntrySchema,
+  rowSelector: PatternEntrySchema,
+  titleLink: PatternEntrySchema,
+  repoName: PatternEntrySchema,
+  prNumber: PatternEntrySchema,
+  author: PatternEntrySchema,
+  timestamp: v.pipe(v.array(PatternEntrySchema), v.minLength(1)),
+  prType: v.pipe(v.array(PatternTypeEntrySchema), v.minLength(1)),
+});
+
 // ── Composite: full PatternRegistry ─────────────────────────────────
 
 export const PatternRegistrySchema = v.object({
@@ -83,6 +96,8 @@ export const PatternRegistrySchema = v.object({
   }),
   timestamp: v.pipe(v.array(PatternEntrySchema), v.minLength(1)),
   prType: v.pipe(v.array(PatternTypeEntrySchema), v.minLength(1)),
+  // Optional — absent in remote configs published before the new-experience parser shipped.
+  newExperience: v.optional(NewExperiencePatternsSchema),
 });
 
 // ── Wrapper schemas ─────────────────────────────────────────────────
