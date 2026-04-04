@@ -14,7 +14,8 @@
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
     "canary:test": "vitest run --config vitest.canary.config.ts",
-    "test:remote-patterns": "vitest run --config vitest.remote-patterns.config.ts"
+    "test:remote-patterns": "vitest run --config vitest.remote-patterns.config.ts",
+    "test:remote-patterns:staging": "vitest run --config vitest.remote-patterns.config.ts --mode staging"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

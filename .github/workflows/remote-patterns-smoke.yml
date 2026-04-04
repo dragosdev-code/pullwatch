@@ -42,15 +42,8 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
+      # URLs live in extension/common/constants.ts. Staging script uses
+      # `vitest --mode staging` (see vitest.remote-patterns.config.ts). Act 4
+      # parity runs only for staging-style targets (see remote-patterns-smoke-utils).
       - name: Run remote patterns smoke test
-        run: npm run test:remote-patterns
-        env:
-          # When use_staging_url is checked, point at the raw staging branch
-          # file instead of the production GitHub Pages URL.
-          # Mirrors REMOTE_PATTERNS_STAGING_URL in extension/common/constants.ts.
-          # When unchecked (or scheduled), the env var is empty and the test
-          # falls back to REMOTE_PATTERNS_URL (production) from constants.ts.
-          REMOTE_PATTERNS_URL: >-
-            ${{ inputs.use_staging_url == true
-                && 'https://raw.githubusercontent.com/dragosdev-code/pr-live-config/staging/patterns.json'
-                || '' }}
+        run: npm run ${{ github.event_name == 'workflow_dispatch' && inputs.use_staging_url == true && 'test:remote-patterns:staging' || 'test:remote-patterns' }}

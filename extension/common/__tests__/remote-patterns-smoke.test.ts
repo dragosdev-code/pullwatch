@@ -2,52 +2,56 @@
 /**
  * Remote patterns.json — schema smoke test.
  *
- * Organized as a short story: fetch the live config, prove its structure
- * is valid, then prove every regex inside it compiles. Three acts, one
- * question each: "Can we reach it?", "Is the shape correct?", "Do the
- * regexes survive new RegExp()?"
+ * **Acts 1–3 (always):** fetch hosted JSON → Valibot schema → `compilePatterns`
+ * (every `regex` compiles). Same checks the extension relies on.
  *
- * ─── What this proves ───────────────────────────────────────────────
- * The hosted JSON is structurally accepted by the extension: correct
- * types, required keys, valid unions, non-empty arrays, capture-group
- * indices >= 1, and syntactically valid RegExp source strings.
+ * **Act 4 (conditional):** hosted `patterns` must deep-equal bundled
+ * {@link DEFAULT_PATTERNS}. Gating (staging vs production) lives in
+ * `utils/remote-patterns-smoke-utils.ts`.
  *
  * ─── What this does NOT prove ───────────────────────────────────────
- * Whether those regexes actually *match* live GitHub HTML. That is the
- * canary's job (canary/parser.canary.test.ts). The two suites are
- * complementary — this smoke test proves the config won't be *rejected*
- * by the extension; the canary proves it *works*.
+ * Regexes matching live GitHub HTML — that is the canary
+ * (`canary/parser.canary.test.ts`).
  *
  * ─── URL override ───────────────────────────────────────────────────
- * Set REMOTE_PATTERNS_URL env var to validate a staging / fork URL
- * instead of production. See DOM_CHANGE_RUNBOOK.md § 7.5 for details.
+ * `REMOTE_PATTERNS_URL` — staging, fork, or production raw file.
+ * `REMOTE_PATTERNS_COMPARE_DEFAULTS` — force Act 4 on (`true`) or off (`false`)
+ * when the URL heuristic is wrong (e.g. fork not named `staging`).
+ *
+ * `npm run test:remote-patterns:staging` uses the same Vitest config with
+ * `--mode staging` (URLs from `constants.ts`; see vitest.remote-patterns.config.ts).
  */
 
 import { REMOTE_PATTERNS_URL } from '../constants';
 import { validateRemoteConfig, type RemotePatternConfig } from '../pattern-registry-schema';
-import { compilePatterns } from '../default-patterns';
+import { compilePatterns, DEFAULT_PATTERNS } from '../default-patterns';
 import { fetchWithRetry } from './schema-test-helpers';
+import {
+  jsonComparable,
+  shouldRunAct4DefaultsParity,
+} from './utils/remote-patterns-smoke-utils';
 
-// ── Resolve which URL to hit ────────────────────────────────────────
-// Environment variable wins so CI and local overrides work without
-// touching shipped extension code.
 const targetUrl = process.env.REMOTE_PATTERNS_URL || REMOTE_PATTERNS_URL;
+const act4DefaultsParity = shouldRunAct4DefaultsParity(targetUrl);
 
 // ── Shared state ────────────────────────────────────────────────────
-// Each act builds on the previous one's output. Splitting into
-// separate `it` blocks gives focused failure messages (HTTP error vs
-// schema rejection vs regex SyntaxError) instead of one opaque crash.
+// Each act builds on the previous one's output. Splitting into separate
+// `it` blocks gives focused failure messages (HTTP error vs schema
+// rejection vs regex SyntaxError) instead of one opaque crash.
 
 let fetchedJson: unknown;
 let validatedConfig: RemotePatternConfig;
 
 // =====================================================================
-// The remote config journey: fetch → validate → compile
+// The remote config journey: fetch → validate → compile → [parity]
 // =====================================================================
 
 describe('Remote patterns.json smoke test', () => {
   beforeAll(() => {
     console.log(`Target URL: ${targetUrl}`);
+    console.log(
+      `[remote-patterns-smoke] Act 4 (DEFAULT_PATTERNS parity): ${act4DefaultsParity ? 'on' : 'off'}`,
+    );
   });
 
   // ── Act 1: Can we reach the hosted file? ──────────────────────────
@@ -108,4 +112,20 @@ describe('Remote patterns.json smoke test', () => {
       );
     }
   });
+
+  // ── Act 4: Staging must match bundled defaults (when parity is on) ─
+  // JSON round-trip normalizes key order so the diff is about content,
+  // not serialization. Mismatch means someone updated default-patterns.ts
+  // or patterns.json without syncing the other — fix before merging.
+  // Skipped for production URLs — see utils/remote-patterns-smoke-utils.ts.
+
+  it.skipIf(!act4DefaultsParity)(
+    'hosted patterns match DEFAULT_PATTERNS from default-patterns.ts',
+    () => {
+      expect(validatedConfig).toBeDefined();
+      const hosted = jsonComparable(validatedConfig.patterns);
+      const bundled = jsonComparable(DEFAULT_PATTERNS);
+      expect(hosted).toEqual(bundled);
+    },
+  );
 });

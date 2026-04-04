@@ -1,15 +1,33 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
+import {
+  REMOTE_PATTERNS_URL,
+  REMOTE_PATTERNS_STAGING_URL,
+} from './extension/common/constants';
 
 /**
  * Isolated Vitest config for the remote patterns.json smoke test.
- * Run with: npm run test:remote-patterns
+ * Deliberately separate from the main vite.config.ts so `npm test` stays
+ * offline; this suite hits the network.
  *
- * This config is deliberately separate from the main vite.config.ts so that
- * `npm test` stays offline. The smoke test hits the network to validate the
- * live hosted config — it should only run on-demand or in CI.
+ * **URLs** — Single source of truth: `extension/common/constants.ts`
+ * (`REMOTE_PATTERNS_URL`, `REMOTE_PATTERNS_STAGING_URL`). This config picks
+ * one via `--mode` (see npm scripts). If `process.env.REMOTE_PATTERNS_URL` is
+ * already set (e.g. fork / custom raw file), that wins and mode is ignored.
+ *
+ * - `npm run test:remote-patterns` — production (`main`) patterns.json
+ * - `npm run test:remote-patterns:staging` — same test file, `--mode staging`
+ *
+ * Act 4 (DEFAULT_PATTERNS parity) follows from the resolved URL; see
+ * `utils/remote-patterns-smoke-utils.ts`.
  */
-export default defineConfig({
+function resolveRemotePatternsUrlForSmoke(mode: string): string {
+  const fromEnv = process.env.REMOTE_PATTERNS_URL?.trim();
+  if (fromEnv) return fromEnv;
+  return mode === 'staging' ? REMOTE_PATTERNS_STAGING_URL : REMOTE_PATTERNS_URL;
+}
+
+export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       '@extension': path.resolve(__dirname, 'extension'),
@@ -21,9 +39,9 @@ export default defineConfig({
     include: ['extension/common/__tests__/remote-patterns-smoke.test.ts'],
     testTimeout: 30_000,
     reporters: ['verbose'],
-    // Retries are handled *inside* the test with transient-vs-permanent
-    // awareness (5xx/timeout → retry, 4xx → fail immediately). Vitest-level
-    // retry would re-run the entire suite indiscriminately.
     retry: 0,
+    env: {
+      REMOTE_PATTERNS_URL: resolveRemotePatternsUrlForSmoke(mode),
+    },
   },
-});
+}));

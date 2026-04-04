@@ -26,7 +26,8 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 | `extension/common/__tests__/schema-test-helpers.ts` | Factory helpers (`makeValidRemoteConfig`, `makePatternEntry`, etc.) used by the schema tests |
 | `extension/background/services/GitHubHTMLParser.ts` | The parser that consumes compiled patterns — zero hardcoded selectors |
 | `extension/background/services/PatternRegistryService.ts` | Fetches remote `patterns.json`, caches in `chrome.storage.local`, 6-hour TTL |
-| `extension/common/constants.ts` | `REMOTE_PATTERNS_URL`, `PATTERN_REFRESH_TTL_MS` (6h) |
+| `extension/common/constants.ts` | `REMOTE_PATTERNS_URL`, `REMOTE_PATTERNS_STAGING_URL`, `PATTERN_REFRESH_TTL_MS` (6h) — single source of truth for smoke-test fetch targets |
+| `vitest.remote-patterns.config.ts` | Vitest config for the remote schema smoke: sets `REMOTE_PATTERNS_URL` from constants via `--mode` (`staging` vs default production), or respects a pre-set `REMOTE_PATTERNS_URL` for forks |
 | `extension/common/errors.ts` | `ParserBreakageError` definition |
 | `canary/parser.canary.test.ts` | Canary test suite (Tier 1: public, Tier 2: authenticated) |
 | `canary/utils/assertions.ts` | `parseAndAssert()`, `assertPRValid()`, GitHub Status API check |
@@ -273,7 +274,7 @@ staging branch ──→ smoke test passes? ──→ merge to main ──→ ex
      │                  (no) → fix and retry                       │
      │                                                             ▼
      └─── raw.githubusercontent.com/…/staging   raw.githubusercontent.com/…/main
-          (used by smoke test with checkbox)     (used by extension + default smoke)
+          (`test:remote-patterns:staging` / CI checkbox)   (extension + `test:remote-patterns`)
 ```
 
 ### 7.1 — Clone or open the config repo
@@ -383,9 +384,12 @@ This step validates the **actual hosted file** on the `staging` branch — not y
 
 ```bash
 # From the extension repo root (PR-live-extension)
-REMOTE_PATTERNS_URL=https://raw.githubusercontent.com/dragosdev-code/pr-live-config/staging/patterns.json \
-  npm run test:remote-patterns
+npm run test:remote-patterns:staging
 ```
+
+This runs `vitest run --config vitest.remote-patterns.config.ts --mode staging`. The staging raw URL comes from `REMOTE_PATTERNS_STAGING_URL` in `extension/common/constants.ts` (not duplicated in npm scripts). The suite also runs **Act 4**: hosted `patterns` must match bundled `DEFAULT_PATTERNS` in `default-patterns.ts` — catch drift before merging config to `main`.
+
+To hit a **fork** or custom raw URL, set `REMOTE_PATTERNS_URL` in the environment before running; that overrides the mode-based default (see `vitest.remote-patterns.config.ts`).
 
 **Via GitHub Actions (recommended):**
 
@@ -393,7 +397,7 @@ REMOTE_PATTERNS_URL=https://raw.githubusercontent.com/dragosdev-code/pr-live-con
 2. Check the **"Use staging URL"** checkbox (similar to the canary's "force fresh login" checkbox).
 3. Click **"Run workflow"**.
 
-The workflow fetches `patterns.json` from the `staging` branch instead of production (`main` branch) and runs the full schema + compile validation.
+The workflow runs `npm run test:remote-patterns:staging` (vs `npm run test:remote-patterns` for production). URLs are not duplicated in the YAML — they match the constants the extension ships with.
 
 **If the smoke test fails:** fix the issue on the `staging` branch, push again, and re-run. Do not proceed to 7.6 until it passes.
 
@@ -424,22 +428,23 @@ Confirm the version matches what you just promoted.
 Now validate that the production (`main`) URL is serving the correct file:
 
 ```bash
-# From the extension repo root — no env override needed, defaults to production
+# From the extension repo root — production URL from REMOTE_PATTERNS_URL in constants.ts
 npm run test:remote-patterns
 ```
 
-Or via GitHub Actions: run the **"Remote Patterns Schema Smoke"** workflow **without** checking the staging checkbox (it defaults to production).
+Or via GitHub Actions: run the **"Remote Patterns Schema Smoke"** workflow **without** checking the staging checkbox (scheduled runs use production as well).
 
 **What the smoke test proves vs. what it does not:**
 
 | Test | What it validates | What it does NOT validate |
 |------|-------------------|--------------------------|
-| Schema smoke (`npm run test:remote-patterns`) | Hosted JSON is structurally valid — correct types, required keys, valid unions, non-empty arrays, capture group indices >= 1, and all regex strings compile via `new RegExp()` | Whether regexes actually *match* live GitHub HTML |
+| Schema smoke — production (`npm run test:remote-patterns`) | Hosted JSON from `main` passes Valibot + every `regex` compiles (Acts 1–3). No `DEFAULT_PATTERNS` parity — production may hotfix ahead of a store release | Whether regexes actually *match* live GitHub HTML |
+| Schema smoke — staging (`npm run test:remote-patterns:staging`) | Acts 1–3 **plus** Act 4: hosted `patterns` must equal bundled `DEFAULT_PATTERNS` after a JSON round-trip | Whether regexes actually *match* live GitHub HTML |
 | Canary (`npm run canary:test`) | Regexes match real GitHub PR pages end-to-end (login -> navigate -> parse) | JSON structure (assumes bundled defaults are valid) |
 
-Run **both** after a `patterns.json` change: the smoke test catches typos and schema drift, the canary catches DOM-mismatch regressions.
+Run **both** smoke variants when promoting config: staging script before merge to `main`, production script after. Run the **canary** after a `patterns.json` change: the smoke catches typos and schema drift; the canary catches DOM-mismatch regressions.
 
-Both URLs (`REMOTE_PATTERNS_URL` for production and `REMOTE_PATTERNS_STAGING_URL` for staging) are defined as constants in `extension/common/constants.ts` so they stay in sync with the extension.
+Both URLs (`REMOTE_PATTERNS_URL` for production and `REMOTE_PATTERNS_STAGING_URL` for staging) are defined only in `extension/common/constants.ts`. `vitest.remote-patterns.config.ts` selects which one to fetch via Vitest `--mode staging` vs default, unless `REMOTE_PATTERNS_URL` is already set in the environment.
 
 ---
 
@@ -517,7 +522,7 @@ If you are an AI coding agent tasked with fixing a canary failure:
 6. **Run `npm test`** immediately after editing `default-patterns.ts`. The schema test suite at `extension/common/__tests__/pattern-registry-schema.test.ts` validates the bundled defaults — Chapter 1 of the tests imports `DEFAULT_PATTERNS` and runs it through `validatePatternRegistry()`. If you accidentally remove a required field or break the structure, this fails in under a second with the exact dotted path of the problem, before any network request.
 7. **Run `npm run canary:test`** to verify the fix works against live GitHub HTML.
 8. **Update the remote `patterns.json`** on the `staging` branch of the `pr-live-config` repo (see Step 7). Remember to bump `version` and update `updatedAt`. Push to `staging`, not `main`.
-9. **After editing `patterns.json`**, run `npm test` from the extension repo (see Step 7.3b) for offline validation, then run the remote smoke test against staging: `REMOTE_PATTERNS_URL=https://raw.githubusercontent.com/dragosdev-code/pr-live-config/staging/patterns.json npm run test:remote-patterns` (see Step 7.5). This validates the actual hosted file end-to-end with the same schema + regex compilation the extension uses.
+9. **After editing `patterns.json`**, run `npm test` from the extension repo (see Step 7.3b) for offline validation, then run `npm run test:remote-patterns:staging` (see Step 7.5). This validates the actual hosted staging file end-to-end with the same schema + regex compilation the extension uses, and asserts parity with `DEFAULT_PATTERNS`.
 10. **Promote staging to production** once the smoke test passes: `git checkout main && git merge staging && git push origin main` in the config repo (see Step 7.6).
 11. **Run the smoke test against production** to confirm the `main` branch URL is serving the correct file: `npm run test:remote-patterns` (see Step 7.8).
 12. **Commit both repos.**
