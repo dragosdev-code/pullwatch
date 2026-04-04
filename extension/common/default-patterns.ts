@@ -128,7 +128,8 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
       flags: 'gi',
     },
     containerExtract: {
-      regex: '<(?:div|article|li|tr)[^>]*>.*?<a[^>]*href="([^"]*/pull/\\d+)[^"]*"[^>]*>([^<]*)</a>.*?</(?:div|article|li|tr)>',
+      regex:
+        '<(?:div|article|li|tr)[^>]*>.*?<a[^>]*href="([^"]*/pull/\\d+)[^"]*"[^>]*>([^<]*)</a>.*?</(?:div|article|li|tr)>',
       flags: 'gi',
     },
   },
@@ -136,7 +137,8 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
   // ── PR link + title (tried in order, first hit wins) ──
   prLink: [
     {
-      regex: '<a[^>]*href="([^"]*/pull/\\d+)"[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*>([^<]+)</a>',
+      regex:
+        '<a[^>]*href="([^"]*/pull/\\d+)"[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*>([^<]+)</a>',
       flags: 'i',
       captureGroups: { url: 1, title: 2 },
     },
@@ -146,7 +148,8 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
       captureGroups: { url: 1, title: 2 },
     },
     {
-      regex: '<a[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*href="([^"]*/pull/\\d+)"[^>]*>([^<]+)</a>',
+      regex:
+        '<a[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*href="([^"]*/pull/\\d+)"[^>]*>([^<]+)</a>',
       flags: 'i',
       captureGroups: { url: 1, title: 2 },
     },
@@ -174,7 +177,8 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
       captureGroups: { login: 1 },
     },
     {
-      regex: '<a[^>]*data-hovercard-type="user"[^>]*data-hovercard-url="[^"]*/users/([^"/]+)/[^"]*"[^>]*>',
+      regex:
+        '<a[^>]*data-hovercard-type="user"[^>]*data-hovercard-url="[^"]*/users/([^"/]+)/[^"]*"[^>]*>',
       flags: 'i',
       captureGroups: { login: 1 },
     },
@@ -188,7 +192,8 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
   // ── Assignee avatar stack ──
   assigneeAvatar: {
     stackContainer: {
-      regex: '<div\\b(?=[^>]*\\bclass="[^"]*\\bAvatarStack-body\\b[^"]*")(?=[^>]*\\baria-label="Assigned to[^"]*")[^>]*>',
+      regex:
+        '<div\\b(?=[^>]*\\bclass="[^"]*\\bAvatarStack-body\\b[^"]*")(?=[^>]*\\baria-label="Assigned to[^"]*")[^>]*>',
       flags: 'i',
     },
     closeTag: { regex: '</div>', flags: 'i' },
@@ -239,7 +244,10 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
   prType: [
     { type: 'draft', pattern: { regex: 'aria-label="[^"]*Draft Pull Request[^"]*"', flags: 'i' } },
     { type: 'open', pattern: { regex: 'aria-label="[^"]*Open Pull Request[^"]*"', flags: 'i' } },
-    { type: 'merged', pattern: { regex: 'aria-label="[^"]*Merged Pull Request[^"]*"', flags: 'i' } },
+    {
+      type: 'merged',
+      pattern: { regex: 'aria-label="[^"]*Merged Pull Request[^"]*"', flags: 'i' },
+    },
     { type: 'draft', pattern: { regex: 'octicon-git-pull-request-draft', flags: 'i' } },
     { type: 'draft', pattern: { regex: 'color-fg-draft', flags: 'i' } },
     { type: 'open', pattern: { regex: 'octicon-git-pull-request(?!-)', flags: 'i' } },
@@ -263,7 +271,8 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
     // characters, so href is captured regardless of attribute order.
     // Group 2 captures the inner HTML (spans); the parser strips tags.
     titleLink: {
-      regex: '<a(?=[^>]*data-testid="listitem-title-link")[^>]*href="([^"]*)"[^>]*>([\\s\\S]*?)</a>',
+      regex:
+        '<a(?=[^>]*data-testid="listitem-title-link")[^>]*href="([^"]*)"[^>]*>([\\s\\S]*?)</a>',
       flags: 'i',
       captureGroups: { url: 1, titleHtml: 2 },
     },
@@ -283,7 +292,11 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
     },
 
     timestamp: [
-      { regex: '<relative-time[^>]+datetime="([^"]+)"', flags: 'i', captureGroups: { datetime: 1 } },
+      {
+        regex: '<relative-time[^>]+datetime="([^"]+)"',
+        flags: 'i',
+        captureGroups: { datetime: 1 },
+      },
       { regex: '<time[^>]+datetime="([^"]+)"', flags: 'i', captureGroups: { datetime: 1 } },
       { regex: 'datetime="([^"]+)"', flags: 'i', captureGroups: { datetime: 1 } },
     ],
