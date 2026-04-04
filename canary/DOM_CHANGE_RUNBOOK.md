@@ -13,7 +13,14 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 
 **When GitHub changes their DOM**, the regex patterns stop matching, the parser throws `ParserBreakageError`, and users see a "parser breakage" banner. The canary CI catches this within an hour and fires a Discord alert.
 
-**To fix it**, you update the regex in **both** the remote `patterns.json` (immediate hot-fix for live users) and the bundled `default-patterns.ts` (for future builds and canary CI).
+**Two listing experiences** — Production uses different strategies by route:
+
+- **Legacy global pulls** (`/pulls?q=…`) — `GitHubHTMLParser` + the legacy pattern set (`prRowSelectors`, `prLink`, etc.).
+- **New global pulls** (`/pulls/search?q=…`) — `GitHubService` tries `GitHubEmbeddedJsonPullHarvest` first (SSR `<script type="…" data-target="react-app.embeddedData">` payload), then `NewExperienceGitHubHTMLParser` if JSON is missing. The **new experience** uses the optional `patterns.newExperience` block in `patterns.json` (separate from legacy keys).
+
+**Canary layout** — `canary/parser.canary.test.ts` runs **Tier 1** (public repo lists, legacy parser only) and **Tier 2** (authenticated Playwright): **Chapter 1** hits legacy `/pulls?q=…` with `GitHubHTMLParser`; **Chapter 2** hits `/pulls/search?q=…`, asserts embedded JSON, runs `NewExperienceGitHubHTMLParser` as a dual-probe, and **requires matching fields** (title, repo, type, author, number, createdAt) per PR when JSON and HTML row counts agree. Tier 2 uses **two bot accounts** (`GH_CANARY_USERNAME_LEGACY` / `GH_CANARY_USERNAME_NEW`) plus shared `GH_CANARY_PASSWORD`, isolated `storageState` files, and **one shared Chromium** process.
+
+**To fix it**, you update the regex in **both** the remote `patterns.json` (immediate hot-fix for live users) and the bundled `default-patterns.ts` (for future builds and canary CI). If the break is **only** the SSR JSON envelope, you may need to change **`GitHubEmbeddedJsonPullHarvest.ts`** (traversal / mapping), not patterns.
 
 ### Key Files
 
@@ -24,15 +31,19 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 | `extension/common/pattern-registry-schema.ts` | Valibot runtime schema — validates remote JSON and cached storage **before** compilation; produces dotted-path error messages |
 | `extension/common/__tests__/pattern-registry-schema.test.ts` | 48 unit tests for the schema validator — run after any `patterns.json` edit to confirm the extension will accept it |
 | `extension/common/__tests__/schema-test-helpers.ts` | Factory helpers (`makeValidRemoteConfig`, `makePatternEntry`, etc.) used by the schema tests |
-| `extension/background/services/GitHubHTMLParser.ts` | The parser that consumes compiled patterns — zero hardcoded selectors |
+| `extension/background/services/GitHubHTMLParser.ts` | Legacy listing parser — consumes compiled legacy patterns only; zero hardcoded selectors |
+| `extension/background/services/NewExperienceGitHubHTMLParser.ts` | New-dashboard listing parser — consumes `patterns.newExperience` only; zero hardcoded selectors |
+| `extension/background/services/GitHubEmbeddedJsonPullHarvest.ts` | Extracts PR rows from the new pulls dashboard SSR JSON blob (primary path for `/pulls/search`) |
+| `extension/background/services/GitHubService.ts` | Production router: `parseSearchRoute` = JSON harvest then new-experience HTML then legacy fallback |
 | `extension/background/services/PatternRegistryService.ts` | Fetches remote `patterns.json`, caches in `chrome.storage.local`, 6-hour TTL |
 | `extension/common/constants.ts` | `REMOTE_PATTERNS_URL`, `REMOTE_PATTERNS_STAGING_URL`, `PATTERN_REFRESH_TTL_MS` (6h) — single source of truth for smoke-test fetch targets |
 | `vitest.remote-patterns.config.ts` | Vitest config for the remote schema smoke: sets `REMOTE_PATTERNS_URL` from constants via `--mode` (`staging` vs default production), or respects a pre-set `REMOTE_PATTERNS_URL` for forks |
 | `extension/common/errors.ts` | `ParserBreakageError` definition |
-| `canary/parser.canary.test.ts` | Canary test suite (Tier 1: public, Tier 2: authenticated) |
-| `canary/utils/assertions.ts` | `parseAndAssert()`, `assertPRValid()`, GitHub Status API check |
-| `canary/utils/config.ts` | Canary targets (URLs), HTTP headers, credential detection |
-| `.github/workflows/canary-parser-test.yml` | Hourly CI cron, Discord alert on failure |
+| `canary/parser.canary.test.ts` | Canary suite: Tier 1 public; Tier 2 shared browser, Chapter 1 legacy pulls, Chapter 2 `/pulls/search` |
+| `canary/utils/assertions.ts` | `parseAndAssert`, `parseSearchRouteAndAssert`, `observeNewExperienceSearchObservability`, `assertPRValid`, markers `CANARY_EMBEDDED_JSON_DRIFT` / `CANARY_NEW_HTML_FALLBACK_DEGRADED`, JSON-vs-HTML field alignment |
+| `canary/utils/config.ts` | Targets (`PUBLIC_TARGETS`, `AUTH_TARGETS`, `AUTH_TARGETS_SEARCH`), `BROWSER_HEADERS`, dual-bot env flags, `toPullsSearchUrl()` |
+| `canary/utils/github-session.ts` | Playwright login, cached `storageState`, optional shared `Browser`, Gmail OTP for device verification |
+| `.github/workflows/canary-parser-test.yml` | Hourly cron; secrets for legacy/new usernames + password + Gmail; `tee canary.log`; grep markers → CRITICAL JSON drift vs NOTICE HTML degraded Discord; failure alert with outage disambiguation |
 
 ### Remote Config (`patterns.json`)
 
@@ -52,19 +63,37 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 
 When you receive a Discord alert (or see a failing canary run):
 
-1. **Read the Discord message.** If it says "GitHub Outage Detected (Not a DOM Change)" — wait for GitHub to recover, no action needed.
+1. **Read the Discord message.**
+   - **"GitHub Outage Detected (Not a DOM Change)"** — wait for GitHub to recover; no pattern work.
+   - **"CRITICAL: Embedded JSON drift"** — the new-dashboard SSR JSON path failed (`CANARY_EMBEDDED_JSON_DRIFT`); fix `GitHubEmbeddedJsonPullHarvest` and/or login/session (not always a regex issue).
+   - **"NOTICE: New experience HTML fallback degraded"** — tests **passed** but the log contains `CANARY_NEW_HTML_FALLBACK_DEGRADED`: embedded JSON still works, but `NewExperienceGitHubHTMLParser` row count or alignment is wrong; update `patterns.newExperience` before GitHub drops JSON.
+   - **"Possible GitHub DOM Change"** (generic failure) — proceed with pattern / parser diagnosis below.
 2. **Check manually**: <https://www.githubstatus.com>
    - Status is `none` (all operational) → this is a DOM change. Continue to Step 2.
-   - Status is `minor` / `major` / `critical` → wait for recovery. The canary retries once and runs hourly, so it will self-heal.
+   - Status is `minor` / `major` / `critical` → wait for recovery. The canary retries once (`vitest.canary.config.ts` `retry: 1`) and runs hourly, so it will self-heal.
 3. **Check the CI logs** (link is in the Discord embed). The test output includes:
    - `[status] GitHub Status API reports degraded service` — if you see this, it is an outage.
    - `The parser is likely broken due to a GitHub DOM change.` — proceed below.
+   - `CANARY_EMBEDDED_JSON_DRIFT` / `CANARY_NEW_HTML_FALLBACK_DEGRADED` — see Step 2 (canary markers).
 
 ---
 
 ## Step 2 — Identify Which Pattern Broke
 
-Open the failed GitHub Actions run. The CI logs tell you exactly what broke:
+Open the failed GitHub Actions run. The CI logs tell you exactly what broke.
+
+### Canary log markers (Tier 2 / new experience)
+
+| Marker / symptom | Meaning | Likely fix location |
+|------------------|---------|---------------------|
+| `CANARY_EMBEDDED_JSON_DRIFT` | Dashboard HTML looks like the new pulls surface, but `GitHubEmbeddedJsonPullHarvest.extractFromHTML` returned `null` | `GitHubEmbeddedJsonPullHarvest.ts` (script tag / JSON traversal / `mapToPullRequest`), or wrong page HTML (login wall) |
+| `CANARY_NEW_HTML_FALLBACK_DEGRADED` | JSON returned rows, but `NewExperienceGitHubHTMLParser` returned `null`, zero rows, or a **different row count** than JSON | `patterns.newExperience` in `default-patterns.ts` + remote `patterns.json` |
+| Vitest `expect` on `title (HTML vs embedded JSON)`, `repoName`, `type`, `author login`, `number`, `createdAt` | Same row count, but **field mismatch** between JSON and HTML scrape for a matched PR URL | Adjust the specific `newExperience` key (e.g. `titleLink`, `author`, `timestamp`, `prType`) |
+
+**Which chapter failed?**
+
+- **Chapter 1** (`/pulls?q=…`, labels like `Auth: Assigned PRs…`) — legacy `GitHubHTMLParser` + legacy pattern keys (`prRowSelectors`, `prLink`, …).
+- **Chapter 2** (`/pulls/search?q=…`, labels like `Auth (search): …`) — embedded JSON + `NewExperienceGitHubHTMLParser` dual-probe; assertions described in `canary/utils/assertions.ts`.
 
 ### Error: `ParserBreakageError` thrown
 
@@ -98,6 +127,7 @@ This tells you the `prLink` patterns broke. Similarly:
 | `PR type` | `prType` |
 | `createdAt` | `timestamp` |
 | Avatar coverage warning (soft) | `assigneeAvatar` |
+| `HTML vs embedded JSON` / `NewExperienceGitHubHTMLParser dual-probe` / `Auth (search):` in the label | `patterns.newExperience` (and possibly harvester if JSON fields are wrong) |
 
 ### HTML Snippet in Logs
 
@@ -136,6 +166,8 @@ Navigate to the URL → press `F12` → Elements tab. Inspect the PR list markup
 
 **Save the HTML to a file** — you will need it for local testing in the next steps.
 
+For **Chapter 2** (new search route), public `curl` without cookies often returns a login wall — capture HTML while logged in (Playwright “Save as”, DevTools copy outer HTML on `/pulls/search?…`, or run the canary / a small Playwright script with your test account).
+
 ---
 
 ## Step 4 — Reproduce Locally
@@ -146,9 +178,11 @@ Run the canary suite against live GitHub to confirm you see the same failure:
 npm run canary:test
 ```
 
-This runs `vitest run --config vitest.canary.config.ts` which targets `canary/**/*.canary.test.ts` with a 120-second test timeout and 1 retry.
+This runs `vitest run --config vitest.canary.config.ts` which targets `canary/**/*.canary.test.ts` with a 120-second test timeout, 60-second hook timeout, **`maxWorkers: 1`**, and **1 retry**.
 
 The canary uses `DEFAULT_COMPILED_PATTERNS` from `extension/common/default-patterns.ts` — the exact same bundled patterns as CI.
+
+**Tier 2 locally** requires the same env vars as CI if you want Chapter 1 / 2 to run: `GH_CANARY_USERNAME_LEGACY`, `GH_CANARY_USERNAME_NEW`, `GH_CANARY_PASSWORD`, and (for device verification) Gmail OAuth secrets — see `canary/parser.canary.test.ts` and `canary/utils/config.ts`. Without them, Tier 2 is skipped and only Tier 1 runs.
 
 ---
 
@@ -209,6 +243,37 @@ try {
 }
 ```
 
+### Test the new-experience HTML parser against saved HTML
+
+```typescript
+// scratch-new-exp.ts — run with: npx tsx scratch-new-exp.ts
+import { readFileSync } from 'fs';
+import { DEFAULT_COMPILED_PATTERNS } from './extension/common/default-patterns';
+import { NewExperienceGitHubHTMLParser } from './extension/background/services/NewExperienceGitHubHTMLParser';
+import { GitHubEmbeddedJsonPullHarvest } from './extension/background/services/GitHubEmbeddedJsonPullHarvest';
+
+const html = readFileSync('/tmp/github-pulls-search-sample.html', 'utf8');
+const json = GitHubEmbeddedJsonPullHarvest.extractFromHTML(html);
+const ne = NewExperienceGitHubHTMLParser.parseFromHTML(
+  html,
+  'https://github.com',
+  DEFAULT_COMPILED_PATTERNS,
+);
+console.log('JSON rows:', json?.length ?? 'null');
+console.log('NewExperience HTML rows:', ne?.length ?? 'null');
+```
+
+### Test the embedded JSON harvester only
+
+```typescript
+import { readFileSync } from 'fs';
+import { GitHubEmbeddedJsonPullHarvest } from './extension/background/services/GitHubEmbeddedJsonPullHarvest';
+
+const html = readFileSync('/tmp/github-pulls-search-sample.html', 'utf8');
+const prs = GitHubEmbeddedJsonPullHarvest.extractFromHTML(html);
+console.log(prs === null ? 'null (no embedded payload)' : `${prs.length} PR(s)`);
+```
+
 ### Patterns most likely to break
 
 These target GitHub-specific CSS classes and attributes that GitHub may rename:
@@ -223,6 +288,10 @@ These target GitHub-specific CSS classes and attributes that GitHub may rename:
 | `prType[0-2]` | PR type from aria-labels | `aria-label="...Draft/Open/Merged Pull Request..."` |
 | `prType[3-7]` | PR type from icons/colors | `octicon-git-pull-request-draft`, `color-fg-draft`, etc. |
 | `assigneeAvatar.stackContainer` | Assignee stack | `AvatarStack-body` class + `aria-label="Assigned to"` |
+| `newExperience.pageMarker` / `rowSelector` | New dashboard markers / `<li>` row roots | `data-testid`, `ListItem-module` prefixes, etc. |
+| `newExperience.titleLink` | PR URL + title in row | Same row as `NewExperienceGitHubHTMLParser.extractPRData` |
+| `newExperience.timestamp[]` | `createdAt` for HTML path | Must align with JSON `createdAt` in canary field-compare (1s tolerance) |
+| `newExperience.prType[]` | draft / open / merged | Must align with JSON-derived `type` |
 
 ### Tips for writing resilient regex
 
@@ -440,7 +509,7 @@ Or via GitHub Actions: run the **"Remote Patterns Schema Smoke"** workflow **wit
 |------|-------------------|--------------------------|
 | Schema smoke — production (`npm run test:remote-patterns`) | Hosted JSON from `main` passes Valibot + every `regex` compiles (Acts 1–3). No `DEFAULT_PATTERNS` parity — production may hotfix ahead of a store release | Whether regexes actually *match* live GitHub HTML |
 | Schema smoke — staging (`npm run test:remote-patterns:staging`) | Acts 1–3 **plus** Act 4: hosted `patterns` must equal bundled `DEFAULT_PATTERNS` after a JSON round-trip | Whether regexes actually *match* live GitHub HTML |
-| Canary (`npm run canary:test`) | Regexes match real GitHub PR pages end-to-end (login -> navigate -> parse) | JSON structure (assumes bundled defaults are valid) |
+| Canary (`npm run canary:test`) | Tier 1: legacy parser on public repo lists. Tier 2: Playwright → Chapter 1 legacy `/pulls`, Chapter 2 `/pulls/search` with embedded JSON + `newExperience` HTML dual-probe and per-field JSON/HTML alignment when counts match | Remote `patterns.json` schema parity with production smoke (canary uses **bundled** `DEFAULT_COMPILED_PATTERNS` only) |
 
 Run **both** smoke variants when promoting config: staging script before merge to `main`, production script after. Run the **canary** after a `patterns.json` change: the smoke catches typos and schema drift; the canary catches DOM-mismatch regressions.
 
@@ -450,10 +519,12 @@ Both URLs (`REMOTE_PATTERNS_URL` for production and `REMOTE_PATTERNS_STAGING_URL
 
 ## Step 8 — Commit to the Extension Repo
 
-Back in this repo, commit the updated `extension/common/default-patterns.ts`:
+Back in this repo, commit the updated parser assets (patterns and, if needed, harvester code):
 
 ```bash
 git add extension/common/default-patterns.ts
+# If SSR JSON traversal changed:
+# git add extension/background/services/GitHubEmbeddedJsonPullHarvest.ts
 git commit -m "fix: update parser patterns for GitHub DOM change YYYY-MM-DD"
 git push origin main
 ```
@@ -505,7 +576,16 @@ PatternRegistry
 │   ├── loginFromAria        → extract login from aria-label
 │   └── avatarImg            → extract avatar image src
 ├── timestamp[]             → ordered: extract datetime from <relative-time>/<time>
-└── prType[]                → ordered: detect draft/open/merged from aria-labels and icons
+├── prType[]                → ordered: detect draft/open/merged from aria-labels and icons
+└── newExperience?          → optional; new `/pulls/search` HTML fallback only
+    ├── pageMarker          → detect new-dashboard document
+    ├── rowSelector         → opening `<li>` (balanced extraction)
+    ├── titleLink           → PR URL + title HTML fragment
+    ├── repoName            → from PR URL
+    ├── prNumber            → from PR URL
+    ├── author              → login in row
+    ├── timestamp[]         → createdAt for row
+    └── prType[]            → draft / open / merged
 ```
 
 ---
@@ -514,18 +594,18 @@ PatternRegistry
 
 If you are an AI coding agent tasked with fixing a canary failure:
 
-1. **Read the CI logs first** to identify the specific assertion or error. The log contains the HTML snippet.
-2. **Fetch a fresh HTML sample** using the curl command from Step 3, Option A. Save it locally.
-3. **Identify the broken pattern** using the mapping table in Step 2.
-4. **Inspect the HTML** around where PR rows, links, or status icons appear. Look for changed class names, attribute names, or structural changes.
-5. **Edit `extension/common/default-patterns.ts`** with the fixed regex. The pattern shape is `{ regex: string, flags: string, captureGroups?: Record<string, number> }`.
-6. **Run `npm test`** immediately after editing `default-patterns.ts`. The schema test suite at `extension/common/__tests__/pattern-registry-schema.test.ts` validates the bundled defaults — Chapter 1 of the tests imports `DEFAULT_PATTERNS` and runs it through `validatePatternRegistry()`. If you accidentally remove a required field or break the structure, this fails in under a second with the exact dotted path of the problem, before any network request.
-7. **Run `npm run canary:test`** to verify the fix works against live GitHub HTML.
+1. **Read the CI logs first** to identify the specific assertion, marker, or error. The log may contain an HTML snippet and lines like `Chapter 1:` vs `Chapter 2:`.
+2. **Fetch a fresh HTML sample** using the curl command from Step 3, Option A for **Tier 1 / legacy** pages. For **`/pulls/search`**, prefer an authenticated capture (Step 3 note) because anonymous responses may omit the embedded JSON blob.
+3. **Identify the broken component** using Step 2: legacy pattern keys vs `newExperience` vs `GitHubEmbeddedJsonPullHarvest` / `CANARY_EMBEDDED_JSON_DRIFT`.
+4. **Inspect the HTML** around PR rows, `react-app.embeddedData`, links, timestamps, and status markers.
+5. **Edit `extension/common/default-patterns.ts`** for regex fixes. For SSR JSON envelope drift, edit **`GitHubEmbeddedJsonPullHarvest.ts`** (not patterns).
+6. **Run `npm test`** immediately after editing `default-patterns.ts` (and after harvester edits if TypeScript broke types). The schema suite validates `DEFAULT_PATTERNS`; harvester changes should still pass `npm test` for the whole project.
+7. **Run `npm run canary:test`** (with Tier 2 secrets if you need Chapter 2 locally) to verify against live GitHub.
 8. **Update the remote `patterns.json`** on the `staging` branch of the `pr-live-config` repo (see Step 7). Remember to bump `version` and update `updatedAt`. Push to `staging`, not `main`.
 9. **After editing `patterns.json`**, run `npm test` from the extension repo (see Step 7.3b) for offline validation, then run `npm run test:remote-patterns:staging` (see Step 7.5). This validates the actual hosted staging file end-to-end with the same schema + regex compilation the extension uses, and asserts parity with `DEFAULT_PATTERNS`.
 10. **Promote staging to production** once the smoke test passes: `git checkout main && git merge staging && git push origin main` in the config repo (see Step 7.6).
 11. **Run the smoke test against production** to confirm the `main` branch URL is serving the correct file: `npm run test:remote-patterns` (see Step 7.8).
-12. **Commit both repos.**
+12. **Commit both repos.** If the harvester changed, commit the extension repo even when `patterns.json` did not.
 
 Key constraints:
 - The `patterns.json` structure MUST match the `PatternRegistry` interface in `extension/common/pattern-types.ts` exactly. The Valibot schema in `extension/common/pattern-registry-schema.ts` is the enforced definition — any deviation is rejected before compilation with a dotted-path error in the extension console.
@@ -534,7 +614,7 @@ Key constraints:
 - Regex strings in JSON use double-escaped backslashes (`\\d` not `\d`).
 - The `captureGroups` map MUST be correct — the parser indexes into match results using these numbers. Values must be positive integers ≥ 1 (group 0 is the full match, which is never a named group).
 - Arrays `prRowSelectors`, `prLink`, `author`, `timestamp`, and `prType` MUST each have at least one entry — the schema enforces `minLength(1)` on all of them.
-- **Never hardcode selectors in `GitHubHTMLParser.ts`** — all extraction logic is pattern-driven.
+- **Never hardcode selectors in `GitHubHTMLParser.ts` or `NewExperienceGitHubHTMLParser.ts`** — all extraction logic is pattern-driven from `PatternRegistry` / `newExperience`.
 
 ### Understanding validation errors vs. compilation errors
 
