@@ -11,16 +11,35 @@
 
 export const GITHUB_BASE = 'https://github.com';
 
-/** Persisted Playwright cookies/localStorage so subsequent runs skip login. */
-export const STATE_FILE = 'playwright-state.json';
+/**
+ * Separate `storageState` paths per bot so CI cache and local runs never mix cookies
+ * between accounts. GitHub’s pulls UI depends on account feature flags — sharing one
+ * file would make Chapter 2 see Chapter 1’s session and invalidate the test signal.
+ */
+export const STATE_FILE_LEGACY = 'playwright-state-legacy.json';
+
+/** Same rationale as legacy: new-experience bot must not inherit the other account’s cookies. */
+export const STATE_FILE_NEW = 'playwright-state-new.json';
 
 // ── Canary bot credentials (Tier 2 only) ─────────────────────────────────
 
-export const CANARY_USERNAME = process.env.GH_CANARY_USERNAME ?? '';
+export const CANARY_LEGACY_USERNAME = process.env.GH_CANARY_USERNAME_LEGACY ?? '';
+export const CANARY_NEW_USERNAME = process.env.GH_CANARY_USERNAME_NEW ?? '';
 export const CANARY_PASSWORD = process.env.GH_CANARY_PASSWORD ?? '';
 
-/** When false, the entire Tier 2 describe block is skipped via vitest's skipIf. */
-export const HAS_CREDENTIALS = CANARY_USERNAME.length > 0 && CANARY_PASSWORD.length > 0;
+/** When false, Chapter 1 is skipped — no legacy bot configured. */
+export const HAS_LEGACY_CREDENTIALS =
+  CANARY_LEGACY_USERNAME.length > 0 && CANARY_PASSWORD.length > 0;
+
+/** When false, Chapter 2 is skipped — no new-dashboard bot configured. */
+export const HAS_NEW_CREDENTIALS =
+  CANARY_NEW_USERNAME.length > 0 && CANARY_PASSWORD.length > 0;
+
+/**
+ * Parent Tier 2 describe runs only if at least one chapter can authenticate.
+ * Why: avoid launching Chromium when both usernames are missing (faster, clearer logs).
+ */
+export const HAS_ANY_AUTH_CREDENTIALS = HAS_LEGACY_CREDENTIALS || HAS_NEW_CREDENTIALS;
 
 export const HAS_GMAIL_SECRETS =
   (process.env.GMAIL_CLIENT_ID ?? '').length > 0 &&
@@ -46,6 +65,17 @@ export const BROWSER_HEADERS: Record<string, string> = {
   'Sec-Fetch-User': '?1',
 };
 
+/**
+ * Same transform as the extension’s search-route URL in {@link GitHubService}: the new
+ * global pulls experience is served from `/pulls/search?q=…`. Chapter 2 must hit that path
+ * so the HTML we parse matches what the waterfall probes first in production.
+ * Idempotent if the URL already uses `/pulls/search?`.
+ */
+export function toPullsSearchUrl(url: string): string {
+  if (url.includes('/pulls/search?')) return url;
+  return url.replace('/pulls?', '/pulls/search?');
+}
+
 // ── Canary targets ───────────────────────────────────────────────────────
 
 export interface CanaryTarget {
@@ -57,6 +87,13 @@ export interface CanaryTarget {
    * review-requested:@me when the bot has no pending reviews).
    */
   requireResults: boolean;
+  /**
+   * Chapter 2 only: when true and the page looks like the new dashboard, we hard-require
+   * a non-null result from `GitHubEmbeddedJsonPullHarvest` before accepting HTML fallback.
+   * Why: merged `@me` is a high-signal target (usually non-empty); proving the SSR blob
+   * path works there catches envelope drift without flaking on legitimately empty queries.
+   */
+  requireEmbeddedJson?: boolean;
 }
 
 export const PUBLIC_TARGETS: CanaryTarget[] = [
@@ -72,6 +109,11 @@ export const PUBLIC_TARGETS: CanaryTarget[] = [
   },
 ];
 
+/**
+ * Chapter 1 — URLs shaped like the legacy global pulls list (`/pulls?q=…`).
+ * Why: production’s legacy route uses `GitHubHTMLParser` only; the canary must exercise
+ * that same document shape for users who are not on the new dashboard.
+ */
 export const AUTH_TARGETS: CanaryTarget[] = [
   {
     label: 'Auth: Assigned PRs (review-requested:@me)',
@@ -85,11 +127,27 @@ export const AUTH_TARGETS: CanaryTarget[] = [
   },
 ];
 
-// ── Env-var diagnostics (side-effect at import time) ─────────────────────
-// Printed once at the very top of CI output so operators can immediately
-// tell which tiers will run without scrolling through test results.
+/**
+ * Chapter 2 — same filters as {@link AUTH_TARGETS} but `/pulls/search?q=…`.
+ * `requireEmbeddedJson` is enabled only where `requireResults` is true so we assert SSR JSON
+ * on the merged list (expected data) and not on assigned reviews (often empty for the bot).
+ */
+export const AUTH_TARGETS_SEARCH: CanaryTarget[] = AUTH_TARGETS.map((t) => ({
+  ...t,
+  label: t.label.replace(/^Auth:/, 'Auth (search):'),
+  url: toPullsSearchUrl(t.url),
+  requireEmbeddedJson: t.requireResults ? true : t.requireEmbeddedJson,
+}));
 
-console.log(`\n[env] GH_CANARY_USERNAME present: ${CANARY_USERNAME.length > 0}`);
+// ── Env-var diagnostics (side-effect at import time) ─────────────────────
+
+const ch1 = HAS_LEGACY_CREDENTIALS ? 'RUN' : 'SKIP';
+const ch2 = HAS_NEW_CREDENTIALS ? 'RUN' : 'SKIP';
+const tier2 = HAS_ANY_AUTH_CREDENTIALS ? 'RUN (browser if any chapter)' : 'SKIP';
+
+console.log(`\n[env] GH_CANARY_USERNAME_LEGACY present: ${CANARY_LEGACY_USERNAME.length > 0}`);
+console.log(`[env] GH_CANARY_USERNAME_NEW present: ${CANARY_NEW_USERNAME.length > 0}`);
 console.log(`[env] GH_CANARY_PASSWORD present: ${CANARY_PASSWORD.length > 0}`);
-console.log(`[env] HAS_CREDENTIALS: ${HAS_CREDENTIALS} → Tier 2 will ${HAS_CREDENTIALS ? 'RUN' : 'SKIP'}`);
+console.log(`[env] Chapter 1 (legacy): ${ch1} | Chapter 2 (new): ${ch2}`);
+console.log(`[env] Tier 2 parent: ${tier2}`);
 console.log(`[env] GMAIL secrets present: ${HAS_GMAIL_SECRETS} → Device verification bypass ${HAS_GMAIL_SECRETS ? 'ENABLED' : 'DISABLED'}\n`);

@@ -1,7 +1,11 @@
 import type { IPatternRegistryService } from '../interfaces/IPatternRegistryService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type { PatternRegistry, CompiledPatterns } from '../../common/pattern-types';
-import { compilePatterns, DEFAULT_PATTERNS, DEFAULT_COMPILED_PATTERNS } from '../../common/default-patterns';
+import {
+  compilePatterns,
+  DEFAULT_PATTERNS,
+  DEFAULT_COMPILED_PATTERNS,
+} from '../../common/default-patterns';
 import {
   STORAGE_KEY_PATTERN_REGISTRY,
   REMOTE_PATTERNS_URL,
@@ -122,9 +126,7 @@ export class PatternRegistryService implements IPatternRegistryService {
 
       const validated = validateRemoteConfig(raw);
       if (!validated.success) {
-        this.debugService.warn(
-          `[PatternRegistry] Remote config rejected: ${validated.message}`
-        );
+        this.debugService.warn(`[PatternRegistry] Remote config rejected: ${validated.message}`);
         return;
       }
       const config = validated.data;
@@ -149,7 +151,9 @@ export class PatternRegistryService implements IPatternRegistryService {
 
       const compiled = this.safeCompile(config.patterns);
       if (!compiled) {
-        this.debugService.error('[PatternRegistry] Remote patterns failed to compile — keeping current');
+        this.debugService.error(
+          '[PatternRegistry] Remote patterns failed to compile — keeping current'
+        );
         return;
       }
 
@@ -189,9 +193,7 @@ export class PatternRegistryService implements IPatternRegistryService {
     // version/timestamp would poison staleness and version comparisons.
     const result = validateStoredPatternData(stored);
     if (!result.success) {
-      this.debugService.warn(
-        `[PatternRegistry] Stored data rejected: ${result.message}`
-      );
+      this.debugService.warn(`[PatternRegistry] Stored data rejected: ${result.message}`);
       return null;
     }
     return result.data;

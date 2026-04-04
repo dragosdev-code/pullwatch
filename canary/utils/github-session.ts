@@ -5,24 +5,43 @@
  * credential login, device-verification bypass (via Gmail OTP),
  * and authenticated page fetching. The test file only sees a clean
  * `launch() → getPageHTML() → close()` surface.
+ *
+ * When a shared `browser` is injected, this class only creates a new
+ * `BrowserContext` so legacy and new-experience accounts never share cookies.
+ * Why contexts, not just two tabs: a second `Page` on the same context shares
+ * `document.cookie` and storage — the new bot would inherit the legacy session
+ * and GitHub would route the wrong UI variant.
  */
 
 import fs from 'node:fs';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { getGitHubVerificationCode } from './gmail-fetcher';
-import {
-  CANARY_USERNAME,
-  CANARY_PASSWORD,
-  HAS_GMAIL_SECRETS,
-  REALISTIC_UA,
-  STATE_FILE,
-} from './config';
+import { HAS_GMAIL_SECRETS, REALISTIC_UA } from './config';
+
+export interface GitHubSessionOptions {
+  username: string;
+  password: string;
+  stateFile: string;
+  /**
+   * When set, do not launch Chromium here — Tier 2’s parent already did. We only
+   * attach a fresh context so each chapter keeps isolated auth state on one process.
+   */
+  browser?: Browser;
+  /** Shown in login errors so operators fix the right GitHub Actions secret name. */
+  usernameEnvHint: string;
+}
 
 export class GitHubSession {
   private browser!: Browser;
   private context!: BrowserContext;
   private page!: Page;
   private _isLoggedIn = false;
+  /** Only the session that called `chromium.launch()` may close the browser — shared-browser chapters must not. */
+  private readonly ownsBrowser: boolean;
+
+  constructor(private readonly options: GitHubSessionOptions) {
+    this.ownsBrowser = options.browser === undefined;
+  }
 
   get isLoggedIn(): boolean {
     return this._isLoggedIn;
@@ -31,29 +50,36 @@ export class GitHubSession {
   // ── Lifecycle ────────────────────────────────────────────────────────
 
   /**
-   * Spins up Chromium, restores cached cookies if available, and either
-   * validates the cached session or performs a full login flow.
+   * Spins up Chromium (or attaches to a shared browser), restores cached
+   * cookies if available, and either validates the cached session or performs
+   * a full login flow.
    *
    * Intentionally does NOT throw on login failure — it sets `isLoggedIn`
    * to false so individual tests can gracefully skip with a clear log
    * message instead of blowing up the entire suite.
    */
   async launch(): Promise<void> {
-    console.log('\n── Tier 2: beforeAll — Starting Playwright session ──');
+    const { stateFile, usernameEnvHint } = this.options;
+    console.log(`\n── Tier 2: beforeAll — Starting Playwright session (${usernameEnvHint}) ──`);
 
-    const hasCachedState = fs.existsSync(STATE_FILE);
-    console.log(`  [state] ${STATE_FILE} exists: ${hasCachedState}`);
+    const hasCachedState = fs.existsSync(stateFile);
+    console.log(`  [state] ${stateFile} exists: ${hasCachedState}`);
 
-    console.log('  [pw] Launching Chromium (headless)...');
-    this.browser = await chromium.launch({ headless: true });
-    console.log('  [pw] Chromium launched');
+    if (this.ownsBrowser) {
+      console.log('  [pw] Launching Chromium (headless)...');
+      this.browser = await chromium.launch({ headless: true });
+      console.log('  [pw] Chromium launched');
+    } else {
+      this.browser = this.options.browser!;
+      console.log('  [pw] Using shared browser instance (new isolated context)');
+    }
 
     const contextOptions = {
       userAgent: REALISTIC_UA,
       viewport: { width: 1920, height: 1080 } as const,
       locale: 'en-US',
       timezoneId: 'America/New_York',
-      ...(hasCachedState ? { storageState: STATE_FILE } : {}),
+      ...(hasCachedState ? { storageState: stateFile } : {}),
     };
     console.log(`  [pw] Creating browser context (storageState: ${hasCachedState ? 'CACHED' : 'NONE'})...`);
     this.context = await this.browser.newContext(contextOptions);
@@ -97,12 +123,18 @@ export class GitHubSession {
     return html;
   }
 
+  /**
+   * Closes this session's context (and browser only when this instance launched it).
+   */
   async close(): Promise<void> {
-    console.log('\n── Tier 2: afterAll — Closing Playwright ──');
+    const { usernameEnvHint } = this.options;
+    console.log(`\n── Tier 2: afterAll — Closing Playwright (${usernameEnvHint}) ──`);
     await this.context?.close();
     console.log('  [pw] Browser context closed');
-    await this.browser?.close();
-    console.log('  [pw] Browser closed');
+    if (this.ownsBrowser) {
+      await this.browser?.close();
+      console.log('  [pw] Browser closed');
+    }
     console.log('── Tier 2: afterAll — Done ──\n');
   }
 
@@ -135,17 +167,18 @@ export class GitHubSession {
   // ── Private: fresh login ─────────────────────────────────────────────
 
   private async performFreshLogin(): Promise<void> {
+    const { username, password, stateFile, usernameEnvHint } = this.options;
     console.log('  [login] Proceeding with fresh login flow...');
 
     console.log('  [login] Waiting for #login_field selector...');
     await this.page.waitForSelector('#login_field', { timeout: 10_000 });
     console.log('  [login] Login form found');
 
-    console.log(`  [login] Filling username: ${CANARY_USERNAME}`);
-    await this.page.fill('#login_field', CANARY_USERNAME);
+    console.log(`  [login] Filling username: ${username}`);
+    await this.page.fill('#login_field', username);
 
     console.log('  [login] Filling password: ****');
-    await this.page.fill('#password', CANARY_PASSWORD);
+    await this.page.fill('#password', password);
 
     console.log('  [login] Clicking submit button...');
     await this.page.click('input[type="submit"], input[name="commit"]');
@@ -188,16 +221,16 @@ export class GitHubSession {
         '\n  ✗ [login] LOGIN FAILED — incorrect username or password\n' +
           `    Post-login URL: ${postLoginUrl}\n` +
           `    Page title: "${postLoginTitle}"\n` +
-          '    Action: Verify GH_CANARY_USERNAME and GH_CANARY_PASSWORD secrets.\n',
+          `    Action: Verify ${usernameEnvHint} and GH_CANARY_PASSWORD secrets.\n`,
       );
       return;
     }
 
     this._isLoggedIn = true;
-    console.log(`  ✓ [login] Successfully logged in as @${CANARY_USERNAME} (fresh login)`);
+    console.log(`  ✓ [login] Successfully logged in as @${username} (fresh login)`);
 
-    console.log(`  [state] Saving session cookies to ${STATE_FILE}...`);
-    await this.context.storageState({ path: STATE_FILE });
+    console.log(`  [state] Saving session cookies to ${stateFile}...`);
+    await this.context.storageState({ path: stateFile });
     console.log(`  [state] Session state saved`);
 
     console.log('── Tier 2: beforeAll — Fresh login complete ──\n');

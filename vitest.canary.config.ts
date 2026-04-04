@@ -21,6 +21,10 @@ export default defineConfig({
     testTimeout: 120_000,
     hookTimeout: 60_000,
     pool: 'forks',
+    // Tier 2 shares one `Browser` across sequential chapters; parallel `it` blocks would
+    // race on the same `Page` / context. `maxWorkers: 1` matches `describe.sequential` intent
+    // for Vitest 4 (no deprecated poolOptions.singleFork).
+    maxWorkers: 1,
     reporters: ['verbose'],
     // One retry filters out single-request flakes (e.g. brief GitHub 502)
     // without masking real DOM-change breakage. Higher values would delay

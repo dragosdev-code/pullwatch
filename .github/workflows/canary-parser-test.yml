@@ -55,39 +55,83 @@ jobs:
         run: npx playwright install-deps chromium
         if: steps.pw-cache.outputs.cache-hit == 'true'
 
-      # ── Playwright session state caching ─────────────────────────
+      # ── Playwright session state caching (legacy + new bot) ─────
       - name: Restore Playwright session state
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.force_fresh_login == true) }}
         uses: actions/cache@v4
         id: pw-state
         with:
-          path: playwright-state.json
+          path: |
+            playwright-state-legacy.json
+            playwright-state-new.json
           key: playwright-state-${{ github.run_id }}
           restore-keys: |
             playwright-state-
 
       - name: Delete cached session state (force fresh login)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_fresh_login == true }}
-        run: rm -f playwright-state.json
+        run: rm -f playwright-state-legacy.json playwright-state-new.json
 
-      # ── Run canary tests ────────────────────────────────────────
+      # ── Run canary tests (tee log for observability markers) ─────
       - name: Run canary parser tests
-        run: npm run canary:test
+        id: canary-tests
+        run: |
+          set -o pipefail
+          npm run canary:test 2>&1 | tee canary.log
         env:
           GH_CANARY_PAT: ${{ secrets.GH_CANARY_PAT }}
-          GH_CANARY_USERNAME: ${{ secrets.GH_CANARY_USERNAME }}
+          GH_CANARY_USERNAME_LEGACY: ${{ secrets.GH_CANARY_USERNAME_LEGACY }}
+          GH_CANARY_USERNAME_NEW: ${{ secrets.GH_CANARY_USERNAME_NEW }}
           GH_CANARY_PASSWORD: ${{ secrets.GH_CANARY_PASSWORD }}
           GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
           GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
           GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
 
-      # ── Discord alert on failure ────────────────────────────────
+      - name: Parse canary observability markers
+        id: canary-markers
+        if: always()
+        run: |
+          JSON_DRIFT=false
+          HTML_DEGRADED=false
+          if [ -f canary.log ]; then
+            grep -q 'CANARY_EMBEDDED_JSON_DRIFT' canary.log && JSON_DRIFT=true || true
+            grep -q 'CANARY_NEW_HTML_FALLBACK_DEGRADED' canary.log && HTML_DEGRADED=true || true
+          fi
+          echo "json_drift=$JSON_DRIFT" >> "$GITHUB_OUTPUT"
+          echo "html_degraded=$HTML_DEGRADED" >> "$GITHUB_OUTPUT"
 
-      # We check the status API as a separate step rather than relying
-      # solely on the test exit code — the test itself cannot easily
-      # communicate *why* it failed to the workflow, and the status API
-      # is the cheapest way to add context without coupling test code
-      # to CI alerting.
+      - name: Discord notice — HTML fallback degraded (JSON still OK)
+        if: always() && steps.canary-tests.outcome == 'success' && steps.canary-markers.outputs.html_degraded == 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          CONTENT='@here **Parser Canary NOTICE — new pulls HTML fallback is degraded (JSON path still works).**'
+          TITLE='NOTICE: New experience HTML fallback degraded'
+          DESC='The canary logged `CANARY_NEW_HTML_FALLBACK_DEGRADED`. Embedded JSON still extracted PRs, but `NewExperienceGitHubHTMLParser` / `newExperience` patterns are out of sync. Users are not blocked yet; fix before GitHub changes or removes the JSON blob.'
+          COLOR=16776960
+
+          cat <<EOF | curl -sf -X POST "$DISCORD_WEBHOOK_URL" -H "Content-Type: application/json" -d @-
+          {
+            "content": "${CONTENT}",
+            "embeds": [
+              {
+                "title": "${TITLE}",
+                "url": "${RUN_URL}",
+                "color": ${COLOR},
+                "description": "${DESC}",
+                "fields": [
+                  { "name": "Branch", "value": "\`${{ github.ref_name }}\`", "inline": true },
+                  { "name": "Run", "value": "\`#${{ github.run_number }}\`", "inline": true },
+                  { "name": "Time (UTC)", "value": "\`${TIMESTAMP}\`", "inline": true }
+                ]
+              }
+            ]
+          }
+          EOF
+
+      # ── Discord alert on failure ────────────────────────────────
       - name: Check GitHub status
         if: failure()
         id: gh-status
@@ -103,15 +147,20 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
 
-          if [ "${{ steps.gh-status.outputs.indicator }}" != "none" ]; then
-            CONTENT="@here **Parser Canary FAILED — likely a GitHub outage (not a DOM change).**"
-            TITLE="GitHub Outage Detected (Not a DOM Change)"
+          if [ "${{ steps.canary-markers.outputs.json_drift }}" = "true" ]; then
+            CONTENT='@here **Parser Canary FAILED — CRITICAL: new pulls embedded JSON / SSR path broken.**'
+            TITLE='CRITICAL: Embedded JSON drift'
+            DESC='The canary failed with `CANARY_EMBEDDED_JSON_DRIFT`. `GitHubEmbeddedJsonPullHarvest` could not read the dashboard SSR payload — the primary data path for the new experience is broken. Update the harvester / JSON traversal. Inspect the run log for HTML snippets.'
+            COLOR=15158332
+          elif [ "${{ steps.gh-status.outputs.indicator }}" != "none" ]; then
+            CONTENT='@here **Parser Canary FAILED — likely a GitHub outage (not a DOM change).**'
+            TITLE='GitHub Outage Detected (Not a DOM Change)'
             DESC="GitHub is reporting degraded status (\`${{ steps.gh-status.outputs.indicator }}\`). The canary failure is likely due to a GitHub outage, NOT a DOM change. Monitor https://www.githubstatus.com and wait for recovery."
             COLOR=16776960
           else
-            CONTENT="@here **Parser Canary FAILED. GitHub may have changed their DOM.**"
-            TITLE="Possible GitHub DOM Change"
-            DESC="The hourly parser canary detected a possible GitHub DOM change. Inspect the run log and update \`patterns.json\` if needed."
+            CONTENT='@here **Parser Canary FAILED. GitHub may have changed their DOM.**'
+            TITLE='Possible GitHub DOM Change'
+            DESC='The hourly parser canary detected a possible GitHub DOM change. Inspect the run log and update patterns / parsers as needed.'
             COLOR=16711680
           fi
 
