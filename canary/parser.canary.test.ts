@@ -134,15 +134,19 @@ describe.skipIf(!HAS_ANY_AUTH_CREDENTIALS)('Tier 2: Authenticated PR journeys', 
     // does not run JS, so /pulls?q= must still yield classic scrapable HTML.
 
     describe.skipIf(!HAS_LEGACY_CREDENTIALS)('Chapter 1: The Legacy Path', () => {
-      const session = new GitHubSession({
-        username: CANARY_LEGACY_USERNAME,
-        password: CANARY_PASSWORD,
-        stateFile: STATE_FILE_LEGACY,
-        browser,
-        usernameEnvHint: 'GH_CANARY_USERNAME_LEGACY',
-      });
+      // Construct the session inside beforeAll — at describe registration time `browser` is still
+      // undefined (parent beforeAll has not run), so eager `new GitHubSession({ browser })` would
+      // always launch a second Chromium per chapter instead of reusing the shared instance.
+      let session!: GitHubSession;
 
       beforeAll(async () => {
+        session = new GitHubSession({
+          username: CANARY_LEGACY_USERNAME,
+          password: CANARY_PASSWORD,
+          stateFile: STATE_FILE_LEGACY,
+          browser,
+          usernameEnvHint: 'GH_CANARY_USERNAME_LEGACY',
+        });
         await session.launch();
       });
 
@@ -176,15 +180,16 @@ describe.skipIf(!HAS_ANY_AUTH_CREDENTIALS)('Tier 2: Authenticated PR journeys', 
     // Observability splits CRITICAL JSON drift vs WARN-only HTML fallback drift.
 
     describe.skipIf(!HAS_NEW_CREDENTIALS)('Chapter 2: The New Experience', () => {
-      const session = new GitHubSession({
-        username: CANARY_NEW_USERNAME,
-        password: CANARY_PASSWORD,
-        stateFile: STATE_FILE_NEW,
-        browser,
-        usernameEnvHint: 'GH_CANARY_USERNAME_NEW',
-      });
+      let session!: GitHubSession;
 
       beforeAll(async () => {
+        session = new GitHubSession({
+          username: CANARY_NEW_USERNAME,
+          password: CANARY_PASSWORD,
+          stateFile: STATE_FILE_NEW,
+          browser,
+          usernameEnvHint: 'GH_CANARY_USERNAME_NEW',
+        });
         await session.launch();
       });
 

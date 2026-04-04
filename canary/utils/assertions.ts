@@ -72,8 +72,15 @@ export function observeNewExperienceSearchObservability(html: string, targetLabe
     DEFAULT_COMPILED_PATTERNS
   );
 
-  // No PR rows from JSON — nothing meaningful to compare counts with HTML; avoid noisy WARNs.
+  const htmlCountLabel =
+    htmlPrs === null ? 'null (new-experience HTML patterns did not match this document)' : `${htmlPrs.length} PR(s)`;
+
+  // No PR rows from JSON — skip count parity (would be noise), but still log the HTML probe so
+  // CI proves NewExperienceGitHubHTMLParser ran on the same snapshot as the harvester.
   if (jsonPrs.length === 0) {
+    console.log(
+      `  [parse] NewExperienceGitHubHTMLParser dual-probe "${targetLabel}": embedded JSON=0 PRs, HTML=${htmlCountLabel} — count alignment not evaluated when JSON list is empty.`,
+    );
     return;
   }
 
@@ -85,6 +92,12 @@ export function observeNewExperienceSearchObservability(html: string, targetLabe
       `${CANARY_MARKER_NEW_HTML_FALLBACK_DEGRADED} ` +
         `target="${targetLabel}" jsonPrs=${jsonPrs.length} newExperienceHtmlPrs=${htmlLen === null ? 'null' : htmlLen} ` +
         `— primary JSON path works; update NewExperienceGitHubHTMLParser / newExperience patterns before JSON changes.`
+    );
+  } else {
+    // Visible proof in logs that the HTML fallback path still parses the live DOM (dual-path §2e),
+    // even though parseSearchRouteAndAssert stops after JSON — production only hits HTML when JSON is null.
+    console.log(
+      `  [parse] NewExperienceGitHubHTMLParser dual-probe "${targetLabel}": ${htmlPrs!.length} PR(s) — count matches embedded JSON; HTML fallback path exercised on same page.`,
     );
   }
 }
