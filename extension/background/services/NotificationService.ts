@@ -11,6 +11,7 @@ import {
 import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../common/settings-test-notification-copy';
 import { isPlayableSound } from '../../common/sound-config';
 import { effectiveAssignedNotifyOnDrafts } from '../../common/effective-assigned-draft-notify';
+import { getNotificationIconUrl } from '../../common/extension-assets';
 
 /**
  * NotificationService handles Chrome extension notifications with sound integration.
@@ -168,7 +169,7 @@ export class NotificationService implements INotificationService {
     const copy = SETTINGS_TEST_NOTIFICATION_COPY[category];
     const sound: NotificationSound =
       category === 'assigned' ? settings.assigned.sound : settings.merged.sound;
-    const localIconUrl = chrome.runtime.getURL('logo.png');
+    const localIconUrl = getNotificationIconUrl();
     const notificationId = `extension-settings-test|${category}`;
 
     await this.createNotification(
@@ -206,7 +207,7 @@ export class NotificationService implements INotificationService {
     category: 'assigned' | 'merged'
   ): Promise<void> {
     const isMerged = category === 'merged';
-    const localIconUrl = chrome.runtime.getURL('logo.png');
+    const localIconUrl = getNotificationIconUrl();
 
     for (const pr of prs) {
       const title = isMerged

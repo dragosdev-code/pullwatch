@@ -4,13 +4,26 @@
   "description": "A Chrome extension for real-time PR updates",
   "version": "1.0.0",
   "icons": {
-    "128": "logo.png"
+    "16": "logo-16.png",
+    "32": "logo-32.png",
+    "48": "logo-48.png",
+    "128": "logo-128.png"
   },
   "action": {
-    "default_popup": "index.html"
+    "default_popup": "index.html",
+    "default_icon": {
+      "16": "logo-16.png",
+      "32": "logo-32.png",
+      "48": "logo-48.png",
+      "128": "logo-128.png"
+    }
   },
   "permissions": ["storage", "notifications", "alarms", "offscreen"],
-  "host_permissions": ["https://github.com/*", "https://avatars.githubusercontent.com/*", "https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*"],
+  "host_permissions": [
+    "https://github.com/*",
+    "https://avatars.githubusercontent.com/*",
+    "https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"

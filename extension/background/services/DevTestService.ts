@@ -12,6 +12,7 @@ import type {
   PullRequest,
   NotificationSound,
 } from '../../common/types';
+import { getNotificationIconUrl } from '../../common/extension-assets';
 import {
   GITHUB_BASE_URL,
   GITHUB_REVIEW_REQUESTS_URL_TEMPLATE,
@@ -81,7 +82,7 @@ export class DevTestService implements IDevTestService {
     await this.notificationService.createNotification(
       {
         type: 'basic',
-        iconUrl: chrome.runtime.getURL('logo.png'),
+        iconUrl: getNotificationIconUrl(),
         title,
         message,
         requireInteraction: false,
