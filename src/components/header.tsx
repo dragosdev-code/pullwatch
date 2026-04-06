@@ -9,7 +9,7 @@ import { useRefreshAuthoredPRs } from '../hooks/use-refresh-authored-prs';
 import { useRateLimitedRefresh } from '../hooks/use-rate-limited-refresh';
 import { CountBadge } from './ui/count-badge';
 import { useActiveTab, useSetActiveTab } from '../stores/tab-control';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { NamedLogo } from './ui/named-logo';
 import { useDebugMode, useResetDebugMode } from '../stores/debug';
 import { useHeaderStorageSignals } from '../hooks/use-header-storage-signals';
@@ -34,7 +34,6 @@ export const Header = ({ prCount }: HeaderProps) => {
   const activeTab = useActiveTab();
   const setActiveTab = useSetActiveTab();
   const isAssignedTabActive = activeTab === 'assigned';
-  const [namedLogoHoverResetKey, setNamedLogoHoverResetKey] = useState(0);
   const handleCountClick = () => {
     if (!isAssignedTabActive) {
       setActiveTab('assigned');
@@ -73,20 +72,13 @@ export const Header = ({ prCount }: HeaderProps) => {
   }, [queryError, queryErrorMerged, queryErrorAuthored, setGlobalError]);
 
   return (
-    <div className="flex justify-between items-center gap-3 px-5 py-3.5 border-b border-base-300/90 bg-base-100 relative">
+    <div className="flex justify-between items-center gap-3 px-5 py-3 border-b border-base-300/90 bg-base-100 relative">
       <div className="min-w-0 flex-1 flex items-start gap-3  ">
         <div className="min-w-0 flex-1 flex flex-col gap-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="flex items-baseline gap-2 flex-wrap min-w-0 m-0 leading-none">
-              <button
-                type="button"
-                onMouseLeave={() => setNamedLogoHoverResetKey((k) => k + 1)}
-                aria-label="Pullwatch"
-                className="text-left rounded-md -my-0.5 -mx-1 px-1 py-0.5 transition-colors duration-200 group hover:bg-primary/5"
-              >
-                <NamedLogo hoverResetKey={namedLogoHoverResetKey} />
-              </button>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-base-content/35 shrink-0">
+              <NamedLogo />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-base-content/35 shrink-0 cursor-default">
                 for GitHub
               </span>
             </h1>
