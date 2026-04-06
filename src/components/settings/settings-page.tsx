@@ -14,6 +14,7 @@ import { useSavedIndicator } from './use-saved-indicator';
 import { SavedIndicator } from './saved-indicator';
 import { useAssignedDraftNotifyListSync } from './use-assigned-draft-notify-list-sync';
 import { AssignedDraftNotifySettingsBlock } from './assigned-draft-notify-settings-block';
+import { SettingsSponsorLounge } from './settings-sponsor-lounge';
 import { useShowDraftsListHiddenHint } from './use-show-drafts-list-hidden-hint';
 import { InfoCircleIcon } from '../ui/icons';
 
@@ -212,6 +213,8 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
           <SettingsSection title="Appearance">
             <ThemePicker />
           </SettingsSection>
+
+          <SettingsSponsorLounge linkBehavior={linkBehavior} />
         </div>
       </div>
     </FormProvider>
