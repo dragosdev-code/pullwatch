@@ -1,7 +1,10 @@
 export interface DebugState {
   isDebugMode: boolean;
-  clickCount: number;
-  isDebugPending: boolean;
-  handleGithubClick: () => void;
+  setDebugMode: (value: boolean) => void;
   resetDebugMode: () => void;
+  chordSlotElement: HTMLButtonElement | null;
+  bindChordSlot: (el: HTMLButtonElement | null) => void;
+  diagnosticsPromptOpen: boolean;
+  openDiagnosticsPrompt: () => void;
+  closeDiagnosticsPrompt: () => void;
 }

@@ -54,7 +54,7 @@ export const RefreshGlyph = ({
   });
 
   return (
-    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+    <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
       <svg
         className="pointer-events-none absolute inset-0 h-full w-full -rotate-90"
         viewBox="0 0 44 44"
@@ -107,7 +107,7 @@ export const RefreshGlyph = ({
       {showSeconds && (
         <span
           className={clsx(
-            'pointer-events-none absolute right-0 top-full z-2 -mt-0.5 whitespace-nowrap text-right',
+            'pointer-events-none absolute -right-1 top-full z-2 -mt-0.5 whitespace-nowrap text-right',
             'text-[10px] leading-none tabular-nums tracking-tight',
             manualFetchInProgress && 'text-primary/90',
             lastInteractionWasThrottled && 'text-warning',

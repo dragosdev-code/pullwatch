@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { TabIndicator } from './tab-indicator';
 import { AnimatedTabButton } from './animated-tab-button';
 import { useTabControlStore } from '../../../stores/tab-control/store';
+import { useDebugStore } from '../../../stores/debug';
 import type { Tab, UseTabsOptions } from './types';
+import { TAB_IDS } from '../../../constants/tabs';
 
 interface TabsProps extends Omit<UseTabsOptions, 'tabs' | 'defaultTab'> {
   tabs: Tab[];
@@ -10,12 +12,7 @@ interface TabsProps extends Omit<UseTabsOptions, 'tabs' | 'defaultTab'> {
   className?: string;
 }
 
-export const Tabs: React.FC<TabsProps> = ({
-  tabs,
-  children,
-  className = '',
-  onChange,
-}) => {
+export const Tabs: React.FC<TabsProps> = ({ tabs, children, className = '', onChange }) => {
   const activeTab = useTabControlStore((state) => state.activeTab);
   const setActiveTab = useTabControlStore((state) => state.setActiveTab);
   const registerTabs = useTabControlStore((state) => state.registerTabs);
@@ -43,11 +40,13 @@ export const Tabs: React.FC<TabsProps> = ({
     } else {
       tabRefsMap.current.delete(id);
     }
+    if (id === TAB_IDS.MERGED) {
+      useDebugStore.getState().bindChordSlot(el);
+    }
   };
 
   return (
     <div className={`w-full overflow-hidden ${className}`}>
-      {/* Tab Navigation */}
       <div
         role="tablist"
         className="tabs w-full relative border-b border-base-300 justify-between flex"
@@ -65,7 +64,6 @@ export const Tabs: React.FC<TabsProps> = ({
         <TabIndicator activeTab={activeTab} tabs={tabs} tabRefsMap={tabRefsMap} />
       </div>
 
-      {/* Tab Content */}
       <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">{children}</div>
     </div>
   );

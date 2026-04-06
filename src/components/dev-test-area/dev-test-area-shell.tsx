@@ -11,6 +11,7 @@ import {
   useNotificationRevision,
 } from './store/dev-test-settings-store';
 import type { DevTestSectionKey } from './types';
+import { DIAGNOSTICS_SURFACE_TITLE } from '../../diagnostics-surface';
 
 export function DevTestAreaShell() {
   const [open, setOpen] = useState<Record<DevTestSectionKey, boolean>>({
@@ -28,11 +29,13 @@ export function DevTestAreaShell() {
 
   return (
     <div className="border-b-2 border-warning/60 bg-warning/5">
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-warning/15 border-b border-warning/30">
-        <ExclamationTriangleIcon className="w-3.5 h-3.5 text-warning shrink-0" />
-        <span className="text-[10px] font-bold text-warning uppercase tracking-widest">
-          Developer Test Area
-        </span>
+      <div className="px-3 py-2 bg-warning/15 border-b border-warning/30 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <ExclamationTriangleIcon className="w-3.5 h-3.5 text-warning shrink-0" />
+          <span className="text-[10px] font-bold text-warning uppercase tracking-widest">
+            {DIAGNOSTICS_SURFACE_TITLE}
+          </span>
+        </div>
       </div>
 
       <div className="px-3 py-2 space-y-1 max-h-[200px] overflow-y-auto">

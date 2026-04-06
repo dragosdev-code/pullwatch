@@ -19,9 +19,7 @@ export const useStorageSync = () => {
           const savedDebugMode = result['pr-extension-debug-mode'] || false;
 
           if (savedDebugMode !== debugMode) {
-            useDebugStore.setState({
-              isDebugMode: savedDebugMode,
-            });
+            useDebugStore.getState().setDebugMode(Boolean(savedDebugMode));
           }
         }
       } catch (error) {

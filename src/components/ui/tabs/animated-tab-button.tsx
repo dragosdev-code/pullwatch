@@ -89,7 +89,7 @@ export const AnimatedTabButton: React.FC<AnimatedTabButtonProps> = ({
       role="tab"
       style={BUTTON_PHASE_STYLES[phase]}
       className={clsx(
-        'tab group relative overflow-hidden flex-1 text-xs font-medium',
+        'tab group relative overflow-hidden flex-1 text-xs font-medium min-w-0',
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
       )}
       onClick={handleClick}

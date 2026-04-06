@@ -16,6 +16,7 @@ import { useStorageSync } from './hooks/use-storage-sync';
 import { usePrListsStorageSync } from './hooks/use-pr-lists-storage-sync';
 import { useGlobalError, useClearGlobalError } from './stores/global-error';
 import { useDebugMode } from './stores/debug';
+import { DiagnosticsSurface } from './diagnostics-surface';
 import { SettingsOverlay } from './components/settings/settings-overlay';
 import { ParserBreakageBanner } from './components/parser-breakage-banner';
 import { GitHubOutageBanner } from './components/github-outage-banner';
@@ -64,6 +65,7 @@ const App = () => {
 
   return (
     <div className="w-[380px] h-[400px] bg-base-100 relative overflow-hidden border-0 shadow-none flex flex-col">
+      <DiagnosticsSurface />
       <Header prCount={pendingPRCount} />
 
       {error && (
