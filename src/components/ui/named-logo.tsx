@@ -23,29 +23,93 @@ const LETTER_HOVER_TEXT_CLASSES = [
 
 const LIFT_PX = 4;
 const HOVER_SCALE = 1.04;
+/** Per-letter delay for the “new PR” sweep; short enough to read as one gesture, long enough to register each step. */
+const CELEBRATE_MS_PER_LETTER = 72;
+/** How long all letters stay in hover colors during reduced-motion celebration (no staggered motion). */
+const CELEBRATE_REDUCED_MOTION_MS = 420;
+
+export type NamedLogoProps = {
+  /**
+   * Increments when the parent detects a new `isNew` PR in assigned/merged data; each bump runs one celebration pass.
+   * **Why a counter:** the same number of new PRs could produce the same key twice across unrelated updates; monotonic bumps give a reliable effect dependency.
+   */
+  celebrateSignal?: number;
+};
 
 /**
  * "Pullwatch" wordmark: default `text-base-content`; each letter shows its pastel DaisyUI color only while hovered.
  * Per-letter hover motion via react-spring. Leaving the wrapper clears the active letter state.
  */
-export const NamedLogo = () => {
+export const NamedLogo = ({ celebrateSignal = 0 }: NamedLogoProps) => {
   const reducedMotion = usePrefersReducedMotion();
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [hoverResetKey, setHoverResetKey] = useState(0);
+  const [celebrationIndex, setCelebrationIndex] = useState<number | null>(null);
+  /** **Why:** reduced-motion users skip staggered transform motion; a simultaneous color pulse conveys the same “something happened” cue without vestibular load. */
+  const [celebrateAllColors, setCelebrateAllColors] = useState(false);
 
   useEffect(() => {
     setHoveredIndex(null);
   }, [hoverResetKey]);
 
+  const activeIndex = celebrationIndex ?? hoveredIndex;
+
+  useEffect(() => {
+    if (celebrateSignal === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutIds: ReturnType<typeof setTimeout>[] = [];
+
+    if (reducedMotion) {
+      setCelebrateAllColors(true);
+      timeoutIds.push(
+        setTimeout(() => {
+          if (!cancelled) {
+            setCelebrateAllColors(false);
+          }
+        }, CELEBRATE_REDUCED_MOTION_MS)
+      );
+    } else {
+      let delay = 0;
+      for (let i = 0; i < LETTERS.length; i++) {
+        const letterIndex = i;
+        timeoutIds.push(
+          setTimeout(() => {
+            if (!cancelled) {
+              setCelebrationIndex(letterIndex);
+            }
+          }, delay)
+        );
+        delay += CELEBRATE_MS_PER_LETTER;
+      }
+      timeoutIds.push(
+        setTimeout(() => {
+          if (!cancelled) {
+            setCelebrationIndex(null);
+          }
+        }, delay)
+      );
+    }
+
+    return () => {
+      cancelled = true;
+      timeoutIds.forEach(clearTimeout);
+      setCelebrationIndex(null);
+      setCelebrateAllColors(false);
+    };
+  }, [celebrateSignal, reducedMotion]);
+
   const [springs] = useSprings(
     LETTERS.length,
     (i) => ({
-      y: reducedMotion ? 0 : hoveredIndex === i ? -LIFT_PX : 0,
-      scale: reducedMotion ? 1 : hoveredIndex === i ? HOVER_SCALE : 1,
+      y: reducedMotion ? 0 : activeIndex === i ? -LIFT_PX : 0,
+      scale: reducedMotion ? 1 : activeIndex === i ? HOVER_SCALE : 1,
       config: config.gentle,
       immediate: reducedMotion,
     }),
-    [hoveredIndex, reducedMotion]
+    [activeIndex, reducedMotion]
   );
 
   return (
@@ -57,6 +121,7 @@ export const NamedLogo = () => {
         {LETTERS.map((char, i) => {
           const s = springs[i];
           if (!s) return null;
+          const showHoverColor = celebrateAllColors || activeIndex === i;
           return (
             <animated.span
               key={`${char}-${i}`}
@@ -76,7 +141,7 @@ export const NamedLogo = () => {
               <span
                 className={clsx(
                   'font-semibold text-[15px] tracking-tight duration-300 ease-out',
-                  hoveredIndex === i ? LETTER_HOVER_TEXT_CLASSES[i] : 'text-base-content',
+                  showHoverColor ? LETTER_HOVER_TEXT_CLASSES[i] : 'text-base-content',
                   reducedMotion
                     ? 'opacity-90 transition-[color,opacity] hover:opacity-100'
                     : 'transition-colors'

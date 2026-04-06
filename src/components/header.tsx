@@ -12,15 +12,21 @@ import { NamedLogo } from './ui/named-logo';
 import { useDebugMode, useResetDebugMode } from '../stores/debug';
 import { useHeaderStorageSignals } from '../hooks/use-header-storage-signals';
 import { HeaderLastUpdatedLabel } from './header-last-updated-label';
+import { useNamedLogoCelebrateOnNewPr } from '../hooks/use-named-logo-celebrate-on-new-pr';
 
 export const Header = () => {
   const isDebugMode = useDebugMode();
   const resetDebugMode = useResetDebugMode();
   const setGlobalError = useSetGlobalError();
   const clearGlobalError = useClearGlobalError();
-  const { isLoading: isLoadingPRs, error: queryError } = useAssignedPRs();
+  const { data: assignedPRs = [], isLoading: isLoadingPRs, error: queryError } = useAssignedPRs();
   const refreshPRsMutation = useRefreshAssignedPRs();
-  const { isLoading: isLoadingMergedPRs, error: queryErrorMerged } = useMergedPRs();
+  const {
+    data: mergedPRs = [],
+    isLoading: isLoadingMergedPRs,
+    error: queryErrorMerged,
+  } = useMergedPRs();
+  const celebrateSignal = useNamedLogoCelebrateOnNewPr(assignedPRs, mergedPRs);
   const refreshMergedPRsMutation = useRefreshMergedPRs();
   const { isLoading: isLoadingAuthoredPRs, error: queryErrorAuthored } = useAuthoredPRs();
   const refreshAuthoredPRsMutation = useRefreshAuthoredPRs();
@@ -62,7 +68,7 @@ export const Header = () => {
         <div className="min-w-0 flex-1 flex flex-col gap-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="flex items-baseline gap-2 flex-wrap min-w-0 m-0 leading-none">
-              <NamedLogo />
+              <NamedLogo celebrateSignal={celebrateSignal} />
               <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-base-content/35 shrink-0 cursor-default">
                 for GitHub
               </span>
