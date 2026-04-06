@@ -41,6 +41,13 @@ describe('Chapter 1: The bundled defaults are always valid', () => {
     expect(result.success).toBe(true);
   });
 
+  it('rejects newExperience object missing resultsCount', () => {
+    const patterns = cloneLoose(DEFAULT_PATTERNS);
+    delete patterns.newExperience.resultsCount;
+    const result = validatePatternRegistry(patterns);
+    expect(result.success).toBe(false);
+  });
+
   it('DEFAULT_PATTERNS wrapped as stored data passes validateStoredPatternData', () => {
     const stored = makeValidStoredData();
     const result = validateStoredPatternData(stored);

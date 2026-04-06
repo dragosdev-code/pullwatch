@@ -63,6 +63,7 @@ export function compilePatterns(registry: PatternRegistry): CompiledPatterns {
     ...(registry.newExperience && {
       newExperience: {
         pageMarker: compileEntry(registry.newExperience.pageMarker),
+        resultsCount: compileEntry(registry.newExperience.resultsCount),
         rowSelector: compileEntry(registry.newExperience.rowSelector),
         titleLink: compileEntry(registry.newExperience.titleLink),
         repoName: compileEntry(registry.newExperience.repoName),
@@ -260,19 +261,26 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
     // data-testid is a stable React testing attribute unique to the new dashboard.
     pageMarker: { regex: 'data-testid="listitem-title-link"', flags: 'i' },
 
-    // Partial CSS module class — hash suffix varies per deploy but the
-    // "ListItem-module__listItem" prefix is the stable contract.
+    // Multiline-safe: production HTML may break between the digit and "results".
+    resultsCount: {
+      regex:
+        '<span(?=[^>]*data-testid="results-count")[^>]*>\\s*(\\d+)[\\s\\S]*?\\bresults\\b',
+      flags: 'i',
+      captureGroups: { count: 1 },
+    },
+
+    // Partial CSS module class — hash suffix varies; match stable substrings.
     rowSelector: {
-      regex: '<li\\b[^>]*class="[^"]*ListItem-module__listItem[^"]*"[^>]*>',
+      regex:
+        '<li\\b[^>]*class="[^"]*(?:PullsListItem-module__listItem|ListItem-module__listItem)[^"]*"[^>]*>',
       flags: 'gi',
     },
 
-    // Lookahead asserts data-testid exists on the <a> without consuming
-    // characters, so href is captured regardless of attribute order.
-    // Group 2 captures the inner HTML (spans); the parser strips tags.
+    // Lookaheads assert data-testid and href exist on the <a>; href capture works
+    // regardless of attribute order. Group 2 is inner HTML (spans); parser strips tags.
     titleLink: {
       regex:
-        '<a(?=[^>]*data-testid="listitem-title-link")[^>]*href="([^"]*)"[^>]*>([\\s\\S]*?)</a>',
+        '<a(?=[^>]*data-testid="listitem-title-link")(?=[^>]*\\bhref=)[^>]*href="([^"]*)"[^>]*>([\\s\\S]*?)</a>',
       flags: 'i',
       captureGroups: { url: 1, titleHtml: 2 },
     },

@@ -2,8 +2,10 @@ import type { PullRequest } from '../../common/types';
 import type {
   CompiledPatterns,
   CompiledNewExperiencePatterns,
+  CompiledPattern,
   CompiledPatternTypeEntry,
 } from '../../common/pattern-types';
+import { ParserBreakageError } from '../../common/errors';
 
 /**
  * Pure static utility for parsing GitHub's **new** React-based global pulls
@@ -19,6 +21,11 @@ import type {
  * GitHub's new DOM uses CSS Modules with hashed class suffixes
  * (e.g. `ListItem-module__listItem__wBJcm`). The default patterns target
  * **stable prefixes** and `data-testid` attributes, not hashes.
+ *
+ * The same parser runs on **full HTML documents** (`/pulls`) and **smaller
+ * fragments** (`/pulls/search`). Markers must live in the list subtree
+ * (`pageMarker`, `results-count`, row selectors), not only in wrappers that
+ * appear on full-page responses.
  */
 export class NewExperienceGitHubHTMLParser {
   /**
@@ -28,7 +35,11 @@ export class NewExperienceGitHubHTMLParser {
    *          structural markers OR when the compiled patterns for the
    *          new experience are not available (pre-upgrade remote config).
    *          An empty array means the markers were found but no PR rows
-   *          exist (a valid result that should NOT trigger fallback).
+   *          were extracted and GitHub did not advertise a non-zero result count
+   *          (`data-testid="results-count"`) — a valid empty list that should
+   *          NOT trigger fallback.
+   * @throws {ParserBreakageError} when `resultsCount` matches a positive integer
+   *         but row extraction produced zero PRs (row CSS / selectors are broken).
    */
   static parseFromHTML(
     html: string,
@@ -56,11 +67,39 @@ export class NewExperienceGitHubHTMLParser {
       }
     }
 
+    const advertised = NewExperienceGitHubHTMLParser.parseAdvertisedResultsCount(
+      html,
+      ne.resultsCount,
+    );
+    if (advertised !== null && advertised > 0 && prs.length === 0) {
+      throw new ParserBreakageError('NewExperience row selectors broken');
+    }
+
     prs.sort(
       (a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime(),
     );
 
     return prs;
+  }
+
+  /**
+   * Parses the integer from `patterns.newExperience.resultsCount` when the regex
+   * matches. Returns `null` when there is no `results-count` signal in this HTML.
+   */
+  private static parseAdvertisedResultsCount(html: string, rc: CompiledPattern): number | null {
+    const groupIdx = rc.captureGroups?.count;
+    if (groupIdx === undefined) return null;
+    const re = rc.compiled;
+    const savedLast = re.lastIndex;
+    re.lastIndex = 0;
+    try {
+      const m = re.exec(html);
+      if (!m?.[groupIdx]) return null;
+      const n = parseInt(m[groupIdx], 10);
+      return Number.isFinite(n) ? n : null;
+    } finally {
+      re.lastIndex = savedLast;
+    }
   }
 
   /**

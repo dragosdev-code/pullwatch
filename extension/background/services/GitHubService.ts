@@ -290,8 +290,9 @@ export class GitHubService implements IGitHubService {
    * follow the URL under feature-flag rollout: JSON may be missing or reshaped
    * while new-experience HTML is still present — skipping
    * {@link NewExperienceGitHubHTMLParser} on the “legacy” URL produced silent
-   * empty lists. If {@link GitHubHTMLParser} throws {@link ParserBreakageError},
-   * it propagates so {@link fetchPRs} can try the alternate URL.
+   * empty lists. {@link ParserBreakageError} from {@link GitHubHTMLParser} or
+   * {@link NewExperienceGitHubHTMLParser} propagates so {@link fetchPRs} can try
+   * the alternate URL.
    */
   private parsePullsListHTML(html: string): PullRequest[] {
     const jsonResult = GitHubEmbeddedJsonPullHarvest.extractFromHTML(html);

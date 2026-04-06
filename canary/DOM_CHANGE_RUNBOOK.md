@@ -288,7 +288,8 @@ These target GitHub-specific CSS classes and attributes that GitHub may rename:
 | `prType[0-2]` | PR type from aria-labels | `aria-label="...Draft/Open/Merged Pull Request..."` |
 | `prType[3-7]` | PR type from icons/colors | `octicon-git-pull-request-draft`, `color-fg-draft`, etc. |
 | `assigneeAvatar.stackContainer` | Assignee stack | `AvatarStack-body` class + `aria-label="Assigned to"` |
-| `newExperience.pageMarker` / `rowSelector` | New dashboard markers / `<li>` row roots | `data-testid`, `ListItem-module` prefixes, etc. |
+| `newExperience.pageMarker` / `rowSelector` | New dashboard markers / `<li>` row roots | `data-testid`, `PullsListItem-module` / `ListItem-module` prefixes, etc. |
+| `newExperience.resultsCount` | `data-testid="results-count"` (advertised hit count) | **Multiline-safe:** GitHub may put a newline between the digit and the word `results`; regex must allow `\s` / `[\s\S]*?` in that gap. If count > 0 but row extraction yields 0 rows, the parser throws `ParserBreakageError`. |
 | `newExperience.titleLink` | PR URL + title in row | Same row as `NewExperienceGitHubHTMLParser.extractPRData` |
 | `newExperience.timestamp[]` | `createdAt` for HTML path | Must align with JSON `createdAt` in canary field-compare (1s tolerance) |
 | `newExperience.prType[]` | draft / open / merged | Must align with JSON-derived `type` |
@@ -299,6 +300,7 @@ These target GitHub-specific CSS classes and attributes that GitHub may rename:
 - Use non-greedy quantifiers (`.*?`) to avoid runaway matches across PR rows.
 - Test against multiple pages: `facebook/react/pulls` and `microsoft/vscode/pulls` at minimum.
 - Keep the `captureGroups` mapping correct — the parser relies on these indices to extract named fields.
+- For `newExperience.resultsCount`, use a pattern anchored on `data-testid="results-count"` that still matches when the count and the word `results` are split across lines inside the span.
 
 ---
 

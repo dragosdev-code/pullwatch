@@ -51,6 +51,7 @@ const PatternTypeEntrySchema = v.object({
 
 const NewExperiencePatternsSchema = v.object({
   pageMarker: PatternEntrySchema,
+  resultsCount: PatternEntrySchema,
   rowSelector: PatternEntrySchema,
   titleLink: PatternEntrySchema,
   repoName: PatternEntrySchema,

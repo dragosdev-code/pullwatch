@@ -32,6 +32,8 @@ export interface PatternTypeEntry {
  */
 export interface NewExperiencePatterns {
   pageMarker: PatternEntry;
+  /** `data-testid="results-count"` — advertised list size; multiline-safe regex. */
+  resultsCount: PatternEntry;
   rowSelector: PatternEntry;
   titleLink: PatternEntry;
   repoName: PatternEntry;
@@ -100,6 +102,7 @@ export interface CompiledPatternTypeEntry {
 /** Compiled counterpart of {@link NewExperiencePatterns}. */
 export interface CompiledNewExperiencePatterns {
   pageMarker: CompiledPattern;
+  resultsCount: CompiledPattern;
   rowSelector: CompiledPattern;
   titleLink: CompiledPattern;
   repoName: CompiledPattern;
