@@ -28,7 +28,7 @@ const HOVER_SCALE = 1.04;
  * "Pullwatch" wordmark: default `text-base-content`; each letter shows its pastel DaisyUI color only while hovered.
  * Per-letter hover motion via react-spring. Leaving the wrapper clears the active letter state.
  */
-export function NamedLogo() {
+export const NamedLogo = () => {
   const reducedMotion = usePrefersReducedMotion();
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [hoverResetKey, setHoverResetKey] = useState(0);
@@ -90,4 +90,4 @@ export function NamedLogo() {
       </span>
     </div>
   );
-}
+};
