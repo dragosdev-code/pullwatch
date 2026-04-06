@@ -26,9 +26,9 @@ import { NewExperienceGitHubHTMLParser } from './NewExperienceGitHubHTMLParser';
 import { delay } from '../../common/utils';
 
 /**
- * Which GitHub pulls dashboard experience the user is on.
- * - `'search'`: New React-based `/pulls/search` (has embedded JSON + new HTML)
- * - `'legacy'`: Classic server-rendered `/pulls` (parsed by GitHubHTMLParser)
+ * Which pulls *list URL* shape {@link GitHubService.fetchPRs} prefers first
+ * (from the route hint). DOM shape is not tied to this — {@link GitHubService.parsePullsListHTML}
+ * runs the same parser gauntlet for both.
  */
 type RouteType = 'search' | 'legacy';
 
@@ -44,8 +44,7 @@ interface RouteHint {
 // PRService preserve cached data and show an "outage" banner instead of
 // the misleading "parser broken" banner.
 const TRANSIENT_STATUS_CODES = new Set([
-  500, 502, 503, 504,
-  520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530,
+  500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530,
 ]);
 
 function isTransientStatus(status: number): boolean {
@@ -60,7 +59,8 @@ const TRANSIENT_MAX_RETRIES = 1;
 
 /**
  * GitHubService handles GitHub HTTP operations for fetching pull requests.
- * Delegates HTML parsing to GitHubHTMLParser and avatar enrichment to AvatarService.
+ * Pulls-list HTML is parsed via {@link GitHubService.parsePullsListHTML} (JSON,
+ * new-experience HTML, then classic HTML); avatars are enriched by AvatarService.
  */
 export class GitHubService implements IGitHubService {
   private debugService: IDebugService;
@@ -80,7 +80,7 @@ export class GitHubService implements IGitHubService {
   constructor(
     debugService: IDebugService,
     avatarService: IAvatarService,
-    patternRegistryService: IPatternRegistryService,
+    patternRegistryService: IPatternRegistryService
   ) {
     this.debugService = debugService;
     this.avatarService = avatarService;
@@ -152,7 +152,9 @@ export class GitHubService implements IGitHubService {
 
         if (!response.ok) {
           if (response.status === 401 || response.status === 403) {
-            throw new Error('AuthenticationError: Not logged in or insufficient permissions on GitHub.');
+            throw new Error(
+              'AuthenticationError: Not logged in or insufficient permissions on GitHub.'
+            );
           }
           if (response.status === 429) {
             const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
@@ -161,7 +163,7 @@ export class GitHubService implements IGitHubService {
           if (isTransientStatus(response.status)) {
             if (attempt < TRANSIENT_MAX_RETRIES) {
               this.debugService.warn(
-                `[GitHubService] Transient HTTP ${response.status} during ${context} — retrying in ${TRANSIENT_RETRY_DELAY_MS}ms`,
+                `[GitHubService] Transient HTTP ${response.status} during ${context} — retrying in ${TRANSIENT_RETRY_DELAY_MS}ms`
               );
               await delay(TRANSIENT_RETRY_DELAY_MS);
               continue;
@@ -210,7 +212,7 @@ export class GitHubService implements IGitHubService {
 
         if (isNetworkFailure && attempt < TRANSIENT_MAX_RETRIES) {
           this.debugService.warn(
-            `[GitHubService] Network error during ${context} — retrying in ${TRANSIENT_RETRY_DELAY_MS}ms`,
+            `[GitHubService] Network error during ${context} — retrying in ${TRANSIENT_RETRY_DELAY_MS}ms`
           );
           await delay(TRANSIENT_RETRY_DELAY_MS);
           continue;
@@ -280,50 +282,35 @@ export class GitHubService implements IGitHubService {
     return url.replace('/pulls?', '/pulls/search?');
   }
 
-  // ─── Parse pipelines per route ──────────────────────────────────────────
+  // ─── Parse pipeline (URL-agnostic) ───────────────────────────────────────
 
   /**
-   * Dispatches to the correct parse pipeline based on the route.
-   * Keeps the waterfall's try/catch clean by consolidating the
-   * route → parser mapping here.
+   * Single gauntlet for every pulls-list HTML response, regardless of whether
+   * {@link fetchPRs} used `/pulls` or `/pulls/search`. GitHub’s DOM does not
+   * follow the URL under feature-flag rollout: JSON may be missing or reshaped
+   * while new-experience HTML is still present — skipping
+   * {@link NewExperienceGitHubHTMLParser} on the “legacy” URL produced silent
+   * empty lists. If {@link GitHubHTMLParser} throws {@link ParserBreakageError},
+   * it propagates so {@link fetchPRs} can try the alternate URL.
    */
-  private parseForRoute(html: string, route: RouteType, context: string): PullRequest[] {
-    return route === 'search'
-      ? this.parseSearchRoute(html, context)
-      : this.parseLegacyRoute(html, context);
-  }
-
-  /**
-   * Search-route pipeline: tries the JSON Harvester first (most reliable
-   * when present), then falls back to the new-experience HTML parser.
-   *
-   * The JSON Harvester already provides **absolute** permalinks in each
-   * entry, so it does NOT receive `baseURL`. The HTML parser still needs
-   * `baseURL` to resolve relative `href` attributes on anchor elements.
-   */
-  private parseSearchRoute(html: string, context: string): PullRequest[] {
-    // Primary probe: embedded JSON — structured data, immune to CSS churn.
+  private parsePullsListHTML(html: string): PullRequest[] {
     const jsonResult = GitHubEmbeddedJsonPullHarvest.extractFromHTML(html);
     if (jsonResult !== null) return jsonResult;
 
-    // Secondary probe: new-experience HTML patterns (CSS-module selectors).
     const patterns = this.patternRegistryService.getPatterns();
-    const htmlResult = NewExperienceGitHubHTMLParser.parseFromHTML(html, this.baseURL, patterns);
-    if (htmlResult !== null) return htmlResult;
+    const newExpResult = NewExperienceGitHubHTMLParser.parseFromHTML(html, this.baseURL, patterns);
+    if (newExpResult !== null) return newExpResult;
 
-    // Neither probe recognized the page — signal the waterfall to try
-    // the other route rather than returning an ambiguous empty array.
-    throw new ParserBreakageError(context);
+    return GitHubHTMLParser.parseFromHTML(html, this.baseURL, patterns);
   }
 
   /**
-   * Legacy-route pipeline: delegates entirely to {@link GitHubHTMLParser},
-   * which throws {@link ParserBreakageError} internally when the HTML
-   * doesn't match any known structure.
+   * Parses HTML for the route implied by the current URL attempt. Parsing is
+   * identical for both routes; the `route` argument is unused but kept so
+   * call sites stay explicit.
    */
-  private parseLegacyRoute(html: string, _context: string): PullRequest[] {
-    const patterns = this.patternRegistryService.getPatterns();
-    return GitHubHTMLParser.parseFromHTML(html, this.baseURL, patterns);
+  private parseForRoute(html: string, _route: RouteType, _context: string): PullRequest[] {
+    return this.parsePullsListHTML(html);
   }
 
   // ─── Waterfall fetch orchestrator ───────────────────────────────────────
@@ -335,6 +322,10 @@ export class GitHubService implements IGitHubService {
    * 1. Determines the primary route from the cached hint (defaults to
    *    `'search'` because GitHub is actively rolling out the new experience).
    * 2. Fetches + parses the primary route. On success, caches the hint.
+   * 2b. If the primary route is `legacy`, the parsed list is empty, and the
+   *     search URL differs, fetches `/pulls/search` once and uses that result.
+   *     New experience may return a 200 shell on `/pulls` that parses as zero
+   *     PRs without throwing — this escapes a stuck `legacy` hint until TTL.
    * 3. If the primary route throws {@link ParserBreakageError}, fetches the
    *    fallback route. On success, caches the corrected hint.
    * 4. If both routes fail, clears the hint so the next cycle probes fresh.
@@ -359,11 +350,39 @@ export class GitHubService implements IGitHubService {
     const primaryUrl = primaryRoute === 'search' ? GitHubService.toSearchUrl(url) : url;
     const fallbackUrl = fallbackRoute === 'search' ? GitHubService.toSearchUrl(url) : url;
 
+    const hintSource: 'search' | 'legacy' | 'none' = hint ?? 'none';
+
     // ── Primary attempt ────────────────────────────────────────────
     try {
-      const prs = await this.fetchGitHubData(primaryUrl, context, (html) =>
-        this.parseForRoute(html, primaryRoute, context),
+      this.debugService.log(
+        `[GitHubService] fetchPRs routing (${context}): route=${primaryRoute}, url=${primaryUrl}, hint=${hintSource}, template=${url}`
       );
+      let prs = await this.fetchGitHubData(primaryUrl, context, (html) =>
+        this.parseForRoute(html, primaryRoute, context)
+      );
+
+      if (prs.length === 0 && primaryRoute === 'legacy' && primaryUrl !== fallbackUrl) {
+        this.debugService.log(
+          `[GitHubService] fetchPRs empty list on legacy URL — reprobing search (${context})`
+        );
+        try {
+          prs = await this.fetchGitHubData(
+            fallbackUrl,
+            `${context} (empty legacy → search reprobe)`,
+            (html) => this.parseForRoute(html, 'search', context)
+          );
+          this.writeRouteHint('search');
+          return this.avatarService.enrichPRsWithAvatars(prs);
+        } catch (reprobeError) {
+          if (!(reprobeError instanceof ParserBreakageError)) throw reprobeError;
+          this.debugService.warn(
+            `[GitHubService] Search reprobe failed after empty legacy (${context}) — clearing route hint`
+          );
+          this.clearRouteHint();
+          return this.avatarService.enrichPRsWithAvatars(prs);
+        }
+      }
+
       this.writeRouteHint(primaryRoute);
       return this.avatarService.enrichPRsWithAvatars(prs);
     } catch (error) {
@@ -373,14 +392,17 @@ export class GitHubService implements IGitHubService {
       if (!(error instanceof ParserBreakageError)) throw error;
 
       this.debugService.warn(
-        `[GitHubService] Primary route '${primaryRoute}' failed for ${context} — trying fallback '${fallbackRoute}'`,
+        `[GitHubService] Primary route '${primaryRoute}' failed for ${context} — trying fallback '${fallbackRoute}'`
       );
     }
 
     // ── Fallback attempt ───────────────────────────────────────────
     try {
+      this.debugService.log(
+        `[GitHubService] fetchPRs fallback routing (${context}): route=${fallbackRoute}, url=${fallbackUrl}, template=${url}`
+      );
       const prs = await this.fetchGitHubData(fallbackUrl, `${context} (fallback)`, (html) =>
-        this.parseForRoute(html, fallbackRoute, context),
+        this.parseForRoute(html, fallbackRoute, context)
       );
       this.writeRouteHint(fallbackRoute);
       return this.avatarService.enrichPRsWithAvatars(prs);
@@ -396,7 +418,7 @@ export class GitHubService implements IGitHubService {
 
   async fetchMergedPRs(): Promise<PullRequest[]> {
     this.debugService.log(
-      '[GitHubService] Attempting to fetch merged PRs from:',
+      '[GitHubService] fetchMergedPRs — list template (effective URL in fetchPRs routing):',
       this.mergedPRsURL
     );
     try {
@@ -419,7 +441,7 @@ export class GitHubService implements IGitHubService {
 
   async fetchAssignedPRs(): Promise<PullRequest[]> {
     this.debugService.log(
-      '[GitHubService] Attempting to fetch assigned PRs from:',
+      '[GitHubService] fetchAssignedPRs — list template (effective URL in fetchPRs routing):',
       this.reviewRequestsURL
     );
     try {
@@ -448,7 +470,7 @@ export class GitHubService implements IGitHubService {
 
   async fetchReviewedPRs(): Promise<PullRequest[]> {
     this.debugService.log(
-      '[GitHubService] Attempting to fetch reviewed PRs from:',
+      '[GitHubService] fetchReviewedPRs — list template (effective URL in fetchPRs routing):',
       this.reviewedPRsURL
     );
 
@@ -538,7 +560,9 @@ export class GitHubService implements IGitHubService {
     url: string,
     authorReviewStatus: 'approved' | 'changes_requested' | 'pending' | 'commented' | 'draft'
   ): Promise<PullRequest[]> {
-    this.debugService.log(`[GitHubService] Fetching ${authorReviewStatus} PRs from: ${url}`);
+    this.debugService.log(
+      `[GitHubService] Fetching ${authorReviewStatus} PRs — template (effective URL in fetchPRs routing): ${url}`
+    );
 
     try {
       const prs = await this.fetchPRs(url, `${authorReviewStatus} authored PR fetch`);
