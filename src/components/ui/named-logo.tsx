@@ -25,8 +25,8 @@ const LIFT_PX = 4;
 const HOVER_SCALE = 1.04;
 
 /**
- * "Pullwatch" as a `button`: default `text-base-content`; each letter shows its pastel DaisyUI color only while hovered.
- * Per-letter hover motion via react-spring. Leaving the button clears the active letter state.
+ * "Pullwatch" wordmark: default `text-base-content`; each letter shows its pastel DaisyUI color only while hovered.
+ * Per-letter hover motion via react-spring. Leaving the wrapper clears the active letter state.
  */
 export function NamedLogo() {
   const reducedMotion = usePrefersReducedMotion();
@@ -49,10 +49,9 @@ export function NamedLogo() {
   );
 
   return (
-    <button
-      type="button"
+    <div
       onMouseLeave={() => setHoverResetKey((k) => k + 1)}
-      className="text-left rounded-md -my-0.5 -mx-1 px-1 py-0.5 transition-colors duration-200"
+      className="inline-block text-left rounded-md -my-0.5 -mx-1 px-1 py-0.5 transition-colors duration-200"
     >
       <span className="inline-flex items-baseline select-none">
         {LETTERS.map((char, i) => {
@@ -89,6 +88,6 @@ export function NamedLogo() {
           );
         })}
       </span>
-    </button>
+    </div>
   );
 }
