@@ -25,6 +25,18 @@ const LIFT_PX = 4;
 const HOVER_SCALE = 1.04;
 /** Per-letter delay for the “new PR” sweep; short enough to read as one gesture, long enough to register each step. */
 const CELEBRATE_MS_PER_LETTER = 72;
+
+/**
+ * Out-and-back sweep: forward 0..n-1, then n-1..0.
+ * **Why n-1 appears twice in a row:** the return leg is defined from the end; re-firing the last index
+ * holds the peak one beat before the wave walks back to the first letter, then we clear.
+ */
+const celebrateLetterSequence = (): number[] => {
+  const n = LETTERS.length;
+  const forward = Array.from({ length: n }, (_, i) => i);
+  const backward = Array.from({ length: n }, (_, k) => n - 1 - k);
+  return [...forward, ...backward];
+};
 /** How long all letters stay in hover colors during reduced-motion celebration (no staggered motion). */
 const CELEBRATE_REDUCED_MOTION_MS = 420;
 
@@ -73,8 +85,7 @@ export const NamedLogo = ({ celebrateSignal = 0 }: NamedLogoProps) => {
       );
     } else {
       let delay = 0;
-      for (let i = 0; i < LETTERS.length; i++) {
-        const letterIndex = i;
+      for (const letterIndex of celebrateLetterSequence()) {
         timeoutIds.push(
           setTimeout(() => {
             if (!cancelled) {
