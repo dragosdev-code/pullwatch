@@ -7,7 +7,7 @@ export interface IBadgeService extends IService {
   /**
    * Updates the badge with a count or text.
    */
-  updateBadge(countOrText: number | string, color?: string): Promise<void>;
+  updateBadge(countOrText: number | string, color?: string, textColor?: string): Promise<void>;
 
   /**
    * Sets the badge to loading state.

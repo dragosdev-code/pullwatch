@@ -3,6 +3,8 @@ import type { IDebugService } from '../interfaces/IDebugService';
 import {
   BADGE_COLOR_ACTIVE,
   BADGE_COLOR_INACTIVE,
+  BADGE_TEXT_COLOR_ACTIVE,
+  BADGE_TEXT_COLOR_INACTIVE,
   BADGE_TEXT_LOADING,
 } from '../../common/constants';
 
@@ -27,12 +29,18 @@ export class BadgeService implements IBadgeService {
     this.debugService.log('[BadgeService] Badge service initialized');
   }
 
-  async updateBadge(countOrText: number | string, color?: string): Promise<void> {
+  async updateBadge(
+    countOrText: number | string,
+    color?: string,
+    textColor?: string
+  ): Promise<void> {
     try {
       const badgeColor = color || BADGE_COLOR_ACTIVE;
+      const badgeTextColor = textColor || BADGE_TEXT_COLOR_ACTIVE;
       const badgeText = String(countOrText);
 
       await chrome.action.setBadgeBackgroundColor({ color: badgeColor });
+      await chrome.action.setBadgeTextColor({ color: badgeTextColor });
       await chrome.action.setBadgeText({ text: badgeText });
 
       this.debugService.log(`[BadgeService] Badge updated: "${badgeText}", Color: ${badgeColor}`);
@@ -56,7 +64,7 @@ export class BadgeService implements IBadgeService {
   async setErrorBadge(): Promise<void> {
     try {
       this.clearPendingRestore();
-      await this.updateBadge('!', BADGE_COLOR_INACTIVE);
+      await this.updateBadge('!', BADGE_COLOR_INACTIVE, BADGE_TEXT_COLOR_INACTIVE);
       this.debugService.log('[BadgeService] Badge set to error state');
     } catch (error) {
       this.debugService.error('[BadgeService] Error setting error badge:', error);
@@ -67,7 +75,7 @@ export class BadgeService implements IBadgeService {
   async setDefaultBadge(): Promise<void> {
     try {
       this.clearPendingRestore();
-      await this.updateBadge('', BADGE_COLOR_INACTIVE);
+      await this.updateBadge('', BADGE_COLOR_INACTIVE, BADGE_TEXT_COLOR_INACTIVE);
       this.debugService.log('[BadgeService] Badge set to default state');
     } catch (error) {
       this.debugService.error('[BadgeService] Error setting default badge:', error);
@@ -84,7 +92,7 @@ export class BadgeService implements IBadgeService {
       }
 
       const displayText = count > 99 ? '99+' : String(count);
-      await this.updateBadge(displayText, BADGE_COLOR_ACTIVE);
+      await this.updateBadge(displayText, BADGE_COLOR_ACTIVE, BADGE_TEXT_COLOR_ACTIVE);
       this.debugService.log(
         `[BadgeService] Badge set to PR count: ${count} (displayed as "${displayText}")`
       );
@@ -113,6 +121,7 @@ export class BadgeService implements IBadgeService {
   async showTemporaryBadge(
     text: string,
     color: string = BADGE_COLOR_ACTIVE,
+    textColor: string = BADGE_TEXT_COLOR_ACTIVE,
     duration: number = 3000
   ): Promise<void> {
     try {
@@ -126,7 +135,7 @@ export class BadgeService implements IBadgeService {
         clearTimeout(this.restoreTimer);
       }
 
-      await this.updateBadge(text, color);
+      await this.updateBadge(text, color, textColor);
 
       this.restoreTimer = setTimeout(async () => {
         try {

@@ -110,8 +110,10 @@ export const GITHUB_AUTHORED_DRAFT_URL_TEMPLATE = (baseUrl: string) =>
   `${baseUrl}/pulls?q=is%3Aopen+draft%3Atrue+is%3Apr+author%3A%40me`;
 
 // Badge
-export const BADGE_COLOR_ACTIVE = '#007bff'; // Blue
+export const BADGE_COLOR_ACTIVE = '#ac52e0'; // Lavender
+export const BADGE_TEXT_COLOR_ACTIVE = '#ffffff'; // White
 export const BADGE_COLOR_INACTIVE = '#6c757d'; // Gray
+export const BADGE_TEXT_COLOR_INACTIVE = '#ffffff'; // White
 export const BADGE_TEXT_LOADING = '...';
 
 // Misc
