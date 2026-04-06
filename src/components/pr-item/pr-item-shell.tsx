@@ -40,8 +40,7 @@ export function PrItemShell({
         titleTooltipStackLift ? 'z-10' : 'hover:z-10',
         isReviewed
           ? 'bg-base-200 text-base-content/70 opacity-90 border-l-2 hover:opacity-100'
-          : 'bg-base-100 text-base-content border-l-2 hover:bg-base-200',
-        isNew && !isReviewed && 'shadow-sm'
+          : 'bg-base-100 text-base-content border-l-2 hover:bg-base-200'
       )}
     >
       <PrItemHeaderRow
