@@ -7,19 +7,13 @@ import { useRefreshMergedPRs } from '../hooks/use-refresh-merged-prs';
 import { useRefreshAssignedPRs } from '../hooks/use-refresh-assigned-prs';
 import { useRefreshAuthoredPRs } from '../hooks/use-refresh-authored-prs';
 import { useRateLimitedRefresh } from '../hooks/use-rate-limited-refresh';
-import { CountBadge } from './ui/count-badge';
-import { useActiveTab, useSetActiveTab } from '../stores/tab-control';
 import { useEffect } from 'react';
 import { NamedLogo } from './ui/named-logo';
 import { useDebugMode, useResetDebugMode } from '../stores/debug';
 import { useHeaderStorageSignals } from '../hooks/use-header-storage-signals';
 import { HeaderLastUpdatedLabel } from './header-last-updated-label';
 
-interface HeaderProps {
-  prCount: number;
-}
-
-export const Header = ({ prCount }: HeaderProps) => {
+export const Header = () => {
   const isDebugMode = useDebugMode();
   const resetDebugMode = useResetDebugMode();
   const setGlobalError = useSetGlobalError();
@@ -30,15 +24,6 @@ export const Header = ({ prCount }: HeaderProps) => {
   const refreshMergedPRsMutation = useRefreshMergedPRs();
   const { isLoading: isLoadingAuthoredPRs, error: queryErrorAuthored } = useAuthoredPRs();
   const refreshAuthoredPRsMutation = useRefreshAuthoredPRs();
-
-  const activeTab = useActiveTab();
-  const setActiveTab = useSetActiveTab();
-  const isAssignedTabActive = activeTab === 'assigned';
-  const handleCountClick = () => {
-    if (!isAssignedTabActive) {
-      setActiveTab('assigned');
-    }
-  };
 
   const { lastFetchMs, backgroundFetchInProgress } = useHeaderStorageSignals();
 
@@ -82,19 +67,6 @@ export const Header = ({ prCount }: HeaderProps) => {
                 for GitHub
               </span>
             </h1>
-            {prCount > 0 ? (
-              <CountBadge
-                value={prCount}
-                size="md"
-                tone={isAssignedTabActive ? 'primary' : 'neutral'}
-                onClick={handleCountClick}
-                clickable={!isAssignedTabActive}
-              />
-            ) : (
-              <span className="inline-flex items-center rounded-full bg-success/12 text-success text-[11px] font-medium px-2 py-0.5 border border-success/20">
-                All caught up
-              </span>
-            )}
             {isDebugMode ? (
               <button
                 type="button"

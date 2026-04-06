@@ -24,16 +24,11 @@ const LETTER_HOVER_TEXT_CLASSES = [
 const LIFT_PX = 4;
 const HOVER_SCALE = 1.04;
 
-export interface NamedLogoProps {
-  /** Merged onto the wrapping `button` (hit area and layout). */
-  className?: string;
-}
-
 /**
  * "Pullwatch" as a `button`: default `text-base-content`; each letter shows its pastel DaisyUI color only while hovered.
  * Per-letter hover motion via react-spring. Leaving the button clears the active letter state.
  */
-export function NamedLogo({ className }: NamedLogoProps) {
+export function NamedLogo() {
   const reducedMotion = usePrefersReducedMotion();
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [hoverResetKey, setHoverResetKey] = useState(0);
@@ -57,10 +52,7 @@ export function NamedLogo({ className }: NamedLogoProps) {
     <button
       type="button"
       onMouseLeave={() => setHoverResetKey((k) => k + 1)}
-      className={clsx(
-        'text-left rounded-md -my-0.5 -mx-1 px-1 py-0.5 transition-colors duration-200',
-        className
-      )}
+      className="text-left rounded-md -my-0.5 -mx-1 px-1 py-0.5 transition-colors duration-200"
     >
       <span className="inline-flex items-baseline select-none">
         {LETTERS.map((char, i) => {

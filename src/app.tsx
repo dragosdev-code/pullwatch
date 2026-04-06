@@ -66,7 +66,7 @@ const App = () => {
   return (
     <div className="w-[380px] h-[400px] bg-base-100 relative overflow-hidden border-0 shadow-none flex flex-col">
       <DiagnosticsSurface />
-      <Header prCount={pendingPRCount} />
+      <Header />
 
       {error && (
         <div className="px-5 py-3 bg-error/10 border-b border-error/30">
