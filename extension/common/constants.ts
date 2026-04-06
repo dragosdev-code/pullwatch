@@ -5,6 +5,8 @@ export const STORAGE_KEY_ASSIGNED_PRS = 'github_assigned_prs';
 export const STORAGE_KEY_MERGED_PRS = 'github_merged_prs';
 export const STORAGE_KEY_AUTHORED_PRS = 'github_authored_prs';
 export const STORAGE_KEY_LAST_FETCH = 'last_fetch_time';
+/** True while the background is running an alarm or manual GitHub fetch cycle (popup reads via storage.onChanged). */
+export const STORAGE_KEY_PR_FETCH_IN_PROGRESS = 'pr_fetch_in_progress';
 export const STORAGE_KEY_SETTINGS = 'settings'; // As per requirements
 export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
 export const STORAGE_KEY_PATTERN_REGISTRY = 'parser_pattern_registry';

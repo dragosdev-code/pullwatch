@@ -12,8 +12,8 @@ import { useActiveTab, useSetActiveTab } from '../stores/tab-control';
 import { useEffect, useState } from 'react';
 import { NamedLogo } from './ui/named-logo';
 import { useDebugMode, useResetDebugMode } from '../stores/debug';
-
-const HEADER_DEMO_LAST_UPDATED = 'Updated 2m ago';
+import { useHeaderStorageSignals } from '../hooks/use-header-storage-signals';
+import { HeaderLastUpdatedLabel } from './header-last-updated-label';
 
 interface HeaderProps {
   prCount: number;
@@ -40,6 +40,8 @@ export const Header = ({ prCount }: HeaderProps) => {
       setActiveTab('assigned');
     }
   };
+
+  const { lastFetchMs, backgroundFetchInProgress } = useHeaderStorageSignals();
 
   const {
     handleRefresh,
@@ -111,9 +113,10 @@ export const Header = ({ prCount }: HeaderProps) => {
               </button>
             ) : null}
           </div>
-          <p className="text-[11px] leading-snug text-base-content/50 tabular-nums m-0 pr-1">
-            {HEADER_DEMO_LAST_UPDATED}
-          </p>
+          <HeaderLastUpdatedLabel
+            lastFetchMs={lastFetchMs}
+            isUpdating={manualFetchInProgress || backgroundFetchInProgress}
+          />
         </div>
       </div>
 

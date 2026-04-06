@@ -2,6 +2,7 @@
 import type {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_LAST_FETCH,
+  STORAGE_KEY_PR_FETCH_IN_PROGRESS,
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
   STORAGE_KEY_MERGED_PRS,
@@ -94,6 +95,7 @@ export interface StorageItems {
   [STORAGE_KEY_MERGED_PRS]?: StoredPRs;
   [STORAGE_KEY_AUTHORED_PRS]?: StoredPRs;
   [STORAGE_KEY_LAST_FETCH]?: number; // Timestamp
+  [STORAGE_KEY_PR_FETCH_IN_PROGRESS]?: boolean;
   [STORAGE_KEY_SETTINGS]?: ExtensionSettings;
   [STORAGE_KEY_USER_DATA]?: UserData;
   // Allow any string as a key for flexibility

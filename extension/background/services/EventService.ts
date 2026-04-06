@@ -14,6 +14,7 @@ import type {
 import {
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
+  STORAGE_KEY_PR_FETCH_IN_PROGRESS,
 } from '../../common/constants';
 import {
   BROADCAST_ACTION,
@@ -45,6 +46,11 @@ export class EventService implements IEventService {
   private initialized = false;
   /** Coalesces parallel manual refresh messages (assigned/merged/authored) into one alarm reset. */
   private fetchAlarmPushBackInFlight: Promise<void> | null = null;
+  /**
+   * Count of overlapping PR fetch operations (manual messages run in parallel; alarm is one block).
+   * WHY: a single boolean per handler would clear `pr_fetch_in_progress` while sibling fetches still run.
+   */
+  private prUiFetchDepth = 0;
   private readonly dispatchTable: Map<RequestRuntimeAction, MessageHandler>;
 
   constructor(debugService: IDebugService, serviceContainer: ServiceContainer) {
@@ -170,9 +176,11 @@ export class EventService implements IEventService {
         // Always bypass cache for alarm-triggered fetches.
         // The alarm interval itself is the rate limiter; the cache exists to
         // prevent double-fetching when the popup opens shortly after an alarm.
-        await prService.fetchAndUpdateAssignedPRs(false, true);
-        await prService.updateMergedPRs(false, true);
-        await prService.updateAuthoredPRs(false, true);
+        await this.withPrUiFetchIndicator(async () => {
+          await prService.fetchAndUpdateAssignedPRs(false, true);
+          await prService.updateMergedPRs(false, true);
+          await prService.updateAuthoredPRs(false, true);
+        });
 
         this.debugService.log('[EventService] Completed alarm fetch for all PR types');
       } else {
@@ -273,7 +281,9 @@ export class EventService implements IEventService {
         // fetchAssignedPRs: Fetch fresh data from GitHub and update storage (manual refresh)
         this.debugService.log('[EventService] Manual refresh - fetching fresh assigned PRs from GitHub');
         await this.coalescedPushBackFetchAlarm();
-        const prs = await prService.fetchAndUpdateAssignedPRs(true); // force refresh
+        const prs = await this.withPrUiFetchIndicator(() =>
+          prService.fetchAndUpdateAssignedPRs(true)
+        );
         this.debugService.log(`[EventService] fetchAndUpdateAssignedPRs returned ${prs.length} PRs`);
 
         const response = { success: true, data: prs };
@@ -319,13 +329,33 @@ export class EventService implements IEventService {
           '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
         );
         await this.coalescedPushBackFetchAlarm();
-        const merged = await prService.updateMergedPRs(true); // force refresh
+        const merged = await this.withPrUiFetchIndicator(() => prService.updateMergedPRs(true));
         this.debugService.log(`[EventService] updateMergedPRs returned ${merged.length} PRs`);
         sendResponse({ success: true, data: merged });
       }
     } catch (error) {
       this.debugService.error('[EventService] Error handling merged PR data actions:', error);
       sendResponse({ success: false, error: 'Failed to handle merged PR action' });
+    }
+  }
+
+  /**
+   * Mirrors in-flight PR fetches to `chrome.storage.local` so an open popup can show “Updating…”
+   * for alarm ticks (no React Query mutations) and keeps the flag true until parallel manual handlers finish.
+   */
+  private async withPrUiFetchIndicator<T>(fn: () => Promise<T>): Promise<T> {
+    const storageService = this.serviceContainer.getService('storageService');
+    if (this.prUiFetchDepth === 0) {
+      await storageService.set(STORAGE_KEY_PR_FETCH_IN_PROGRESS, true);
+    }
+    this.prUiFetchDepth += 1;
+    try {
+      return await fn();
+    } finally {
+      this.prUiFetchDepth -= 1;
+      if (this.prUiFetchDepth === 0) {
+        await storageService.set(STORAGE_KEY_PR_FETCH_IN_PROGRESS, false);
+      }
     }
   }
 
@@ -404,7 +434,7 @@ export class EventService implements IEventService {
           '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
         );
         await this.coalescedPushBackFetchAlarm();
-        const authored = await prService.updateAuthoredPRs(true);
+        const authored = await this.withPrUiFetchIndicator(() => prService.updateAuthoredPRs(true));
         sendResponse({ success: true, data: authored });
       }
     } catch (error) {
