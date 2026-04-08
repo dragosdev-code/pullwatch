@@ -8,7 +8,13 @@ export const LAST_FETCH_PREFIX = 'Updated ' as const;
 
 export type LastFetchMainLine =
   | { variant: 'plain'; text: string }
-  | { variant: 'withSuffix'; prefix: typeof LAST_FETCH_PREFIX; suffix: string };
+  | {
+      variant: 'withSuffix';
+      prefix: typeof LAST_FETCH_PREFIX;
+      suffix: string;
+      /** True when the suffix is the minute form; UI shows min+sec detail in a tooltip only then. */
+      detailTooltip: boolean;
+    };
 
 /**
  * Whole seconds from last fetch to `now`, floored and non-negative.
@@ -19,7 +25,7 @@ export function elapsedWholeSeconds(lastFetchMs: number, nowMs: number): number 
 }
 
 /**
- * Visible main line: either a single message (no hover target) or `Updated ` + age suffix (tooltip on suffix only).
+ * Visible main line: either a single message (no hover target) or `Updated ` + age suffix.
  */
 export function formatLastFetchMainLine(
   lastFetchMs: number | null,
@@ -33,7 +39,8 @@ export function formatLastFetchMainLine(
     return {
       variant: 'withSuffix',
       prefix: LAST_FETCH_PREFIX,
-      suffix: `~${totalSec}s ago`,
+      suffix: `${totalSec}s ago`,
+      detailTooltip: false,
     };
   }
   const mins = Math.floor(totalSec / 60);
@@ -41,6 +48,7 @@ export function formatLastFetchMainLine(
     variant: 'withSuffix',
     prefix: LAST_FETCH_PREFIX,
     suffix: `${mins} min ago`,
+    detailTooltip: true,
   };
 }
 

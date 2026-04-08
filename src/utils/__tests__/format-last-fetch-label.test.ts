@@ -18,12 +18,14 @@ describe('formatLastFetchMainLine', () => {
     expect(formatLastFetchMainLine(t0, t0 + 0)).toEqual({
       variant: 'withSuffix',
       prefix: LAST_FETCH_PREFIX,
-      suffix: '~0s ago',
+      suffix: '0s ago',
+      detailTooltip: false,
     });
     expect(formatLastFetchMainLine(t0, t0 + 59_999)).toEqual({
       variant: 'withSuffix',
       prefix: LAST_FETCH_PREFIX,
-      suffix: '~59s ago',
+      suffix: '59s ago',
+      detailTooltip: false,
     });
   });
 
@@ -33,6 +35,7 @@ describe('formatLastFetchMainLine', () => {
       variant: 'withSuffix',
       prefix: LAST_FETCH_PREFIX,
       suffix: '1 min ago',
+      detailTooltip: true,
     });
   });
 
@@ -42,11 +45,13 @@ describe('formatLastFetchMainLine', () => {
       variant: 'withSuffix',
       prefix: LAST_FETCH_PREFIX,
       suffix: '3 min ago',
+      detailTooltip: true,
     });
     expect(formatLastFetchMainLine(t0, t0 + 125 * 60_000)).toEqual({
       variant: 'withSuffix',
       prefix: LAST_FETCH_PREFIX,
       suffix: '125 min ago',
+      detailTooltip: true,
     });
   });
 
@@ -55,7 +60,8 @@ describe('formatLastFetchMainLine', () => {
     expect(formatLastFetchMainLine(t0, t0 - 5000)).toEqual({
       variant: 'withSuffix',
       prefix: LAST_FETCH_PREFIX,
-      suffix: '~0s ago',
+      suffix: '0s ago',
+      detailTooltip: false,
     });
   });
 });

@@ -71,8 +71,9 @@ const UpdatingNowInline = () => {
 };
 
 /**
- * Subtitle row: static “Updated ” + hoverable age suffix. Uses DaisyUI’s built-in tooltip
- * (:hover / :focus-visible) so the bubble appears immediately—no delayed `tooltip-open` bridge.
+ * Subtitle row: “Updated ” + age suffix. Seconds are exact on the line; the min+sec breakdown
+ * appears in a DaisyUI tooltip only on “N min ago”, where the main text hides sub-minute remainder.
+ * WHY native tooltip: :hover / :focus-visible shows the bubble immediately—no `tooltip-open` bridge.
  */
 export const HeaderLastUpdatedLabel = ({
   lastFetchMs,
@@ -99,11 +100,8 @@ export const HeaderLastUpdatedLabel = ({
     return <p className={ROW_CLASS}>{main.text}</p>;
   }
 
-  const detailText = lastFetchMs !== null ? formatLastFetchDetail(lastFetchMs, nowMs) : '';
-
-  return (
-    <div className={clsx(ROW_CLASS, 'flex flex-wrap items-baseline gap-x-1')}>
-      <span className="cursor-default">{main.prefix}</span>
+  const suffixEl =
+    main.detailTooltip && lastFetchMs !== null ? (
       <div
         className={clsx(
           'tooltip tooltip-bottom tooltip-neutral inline-flex max-w-full cursor-default rounded px-0.5 -mx-0.5 outline-none transition-colors duration-200',
@@ -113,13 +111,21 @@ export const HeaderLastUpdatedLabel = ({
       >
         <div className="tooltip-content z-9999 max-w-56 px-0 py-0 text-left shadow-lg">
           <div className="rounded-md px-2.5 py-1.5 text-[11px] font-normal leading-snug whitespace-normal text-neutral-content">
-            {detailText}
+            {formatLastFetchDetail(lastFetchMs, nowMs)}
           </div>
         </div>
         <span className="cursor-default underline-offset-2 decoration-primary/30">
           {main.suffix}
         </span>
       </div>
+    ) : (
+      <span className="cursor-default">{main.suffix}</span>
+    );
+
+  return (
+    <div className={clsx(ROW_CLASS, 'flex flex-wrap items-baseline gap-x-1')}>
+      <span className="cursor-default">{main.prefix}</span>
+      {suffixEl}
     </div>
   );
 };
