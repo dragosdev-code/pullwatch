@@ -1,4 +1,11 @@
-import { useState, useCallback, useRef, useEffect, type MutableRefObject, type ReactNode } from 'react';
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
 import type { ExtensionSettings } from '../types';
 import type { NotificationSound, CustomSoundId } from '../../../../extension/common/types';
@@ -38,6 +45,55 @@ interface SoundSelectFieldInnerProps extends SoundFieldControllerProps {
   pendingSoundRef: MutableRefObject<CustomSoundId | null>;
 }
 
+type SoundPickerTriggerButtonProps = {
+  displayName: string;
+  disabled?: boolean;
+  onClick: () => void;
+};
+
+/**
+ * WHY [UX]: Invisible grid “ghosts” size the pill to max(idle row, Change-only row) so short
+ * names still fit “Change”, and long names don’t collapse on hover. Icon collapses with the name
+ * swap.
+ */
+function SoundPickerTriggerButton({
+  displayName,
+  disabled,
+  onClick,
+}: SoundPickerTriggerButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="group relative isolate inline-grid max-w-full cursor-pointer grid-cols-1 rounded-full bg-primary/10 py-1 text-xs font-semibold text-primary ring-1 ring-primary/20 transition-[background-color,box-shadow] duration-200 hover:bg-primary/15 hover:ring-primary/40 hover:shadow-sm disabled:cursor-not-allowed"
+    >
+      {/* Sizing only: cell width = max(icon+name, Change) so the pill never clips “Change” or shrinks past the idle label. */}
+      <span className="col-start-1 row-start-1 flex min-w-0 items-center gap-1.5 px-2.5 opacity-0 pointer-events-none">
+        <MusicIcon className="size-3 shrink-0" />
+        <span className="min-w-0 max-w-48 truncate">{displayName}</span>
+      </span>
+      <span className="col-start-1 row-start-1 flex min-w-0 items-center px-2.5 opacity-0 pointer-events-none">
+        <span className="whitespace-nowrap font-semibold tracking-wide">Change</span>
+      </span>
+
+      <span className="col-start-1 row-start-1 z-10 flex min-w-0 items-center gap-1.5 px-2.5 transition-[gap] duration-300 ease-out motion-reduce:duration-0 group-hover:gap-0">
+        <span className="flex w-3 shrink-0 justify-center overflow-hidden transition-[width,opacity] duration-300 ease-out motion-reduce:duration-0 group-hover:w-0 group-hover:opacity-0">
+          <MusicIcon className="size-3 shrink-0" />
+        </span>
+        <span className="relative min-h-[1.25em] min-w-0 max-w-48 flex-1 overflow-hidden">
+          <span className="block truncate transition-[transform,opacity] duration-300 ease-out motion-reduce:duration-0 translate-y-0 opacity-100 group-hover:-translate-y-full group-hover:opacity-0">
+            {displayName}
+          </span>
+          <span className="absolute inset-y-0 left-0 right-0 flex items-center justify-center transition-[transform,opacity] duration-300 ease-out motion-reduce:duration-0 translate-y-full opacity-0 group-hover:translate-y-0 group-hover:opacity-100">
+            <span className="whitespace-nowrap tracking-wide">Change</span>
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
 /**
  * Holds picker/editor UI and react-hook-form field wiring. Separated from the outer field
  * so we can use hooks (orphan custom migration) that must not run inside Controller’s render fn.
@@ -75,7 +131,7 @@ function SoundSelectFieldInner({
   if (soundEnabled) {
     lastPlayableSoundRef.current = resolvePlayableSoundOrFallback(
       soundValue,
-      customSounds,
+      customSounds
     ) as Exclude<NotificationSound, 'off'>;
   }
 
@@ -90,7 +146,7 @@ function SoundSelectFieldInner({
     if (soundEnabled) {
       lastPlayableSoundRef.current = resolvePlayableSoundOrFallback(
         soundValue,
-        customSounds,
+        customSounds
       ) as Exclude<NotificationSound, 'off'>;
       onChange('off');
     } else {
@@ -132,16 +188,11 @@ function SoundSelectFieldInner({
         >
           <SoundPreviewButton sound={displaySound} disabled={disabled} size="sm" />
 
-          <button
-            type="button"
-            onClick={openPicker}
+          <SoundPickerTriggerButton
+            displayName={displayName}
             disabled={!soundEnabled || disabled}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary ring-1 ring-primary/20 transition-all duration-200 hover:bg-primary/15 hover:ring-primary/40 hover:shadow-sm cursor-pointer"
-            aria-label={`Current sound: ${displayName}. Click to change.`}
-          >
-            <MusicIcon className="size-3" />
-            {displayName}
-          </button>
+            onClick={openPicker}
+          />
         </div>
       </div>
 
