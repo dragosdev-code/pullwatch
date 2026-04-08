@@ -14,7 +14,8 @@ const queryClient = new QueryClient({
       gcTime: 1000 * 60 * 5, // 5 minutes
       retry: 2,
       refetchOnWindowFocus: false, // Extensions don't need window focus refetching
-      refetchOnMount: true, // Always refetch when component mounts (popup opens)
+      // PR list queries override with refetchOnMount: false — they use storage hydration + onChanged.
+      refetchOnMount: true,
     },
     mutations: {
       retry: 1,

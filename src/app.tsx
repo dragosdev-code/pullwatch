@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Header } from './components/header';
 import { Tabs } from './components/ui/tabs/tabs';
 import { TabPanel } from './components/ui/tabs/tab-panel';
@@ -10,7 +10,6 @@ import { DevTestArea } from './components/dev-test-area';
 import { useAssignedPRs } from './hooks/use-assigned-prs';
 import { useMergedPRs } from './hooks/use-merged-prs';
 import { useAuthoredPRs } from './hooks/use-authored-prs';
-import { usePRUpdates } from './hooks/use-pr-updates';
 import { usePrEntranceViewedState } from './hooks/use-pr-entrance-viewed-state';
 import { useStorageSync } from './hooks/use-storage-sync';
 import { usePrListsStorageSync } from './hooks/use-pr-lists-storage-sync';
@@ -33,12 +32,6 @@ const App = () => {
   const { data: assignedPRs = [], isSuccess } = useAssignedPRs();
   const { data: mergedPRs = [] } = useMergedPRs();
   const { data: authoredPRs = [] } = useAuthoredPRs();
-  const prUpdates = usePRUpdates();
-
-  useEffect(() => {
-    const cleanup = prUpdates.setupListener();
-    return cleanup;
-  }, [prUpdates]);
 
   const hasEverLoaded = isSuccess || assignedPRs.length > 0;
 

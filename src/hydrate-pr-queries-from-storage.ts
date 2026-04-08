@@ -10,8 +10,9 @@ import { queryKeys } from './constants/query-keys';
 import { isExtensionContext } from './utils/is-extension-context';
 
 /**
- * Prefills React Query from chrome.storage.local so the popup first paint matches
- * cached PR lists without waiting on the service worker + sendMessage.
+ * Prefills TanStack Query from chrome.storage.local before the first React paint. The background
+ * is the writer for these keys; the popup never needs sendMessage to show the last persisted lists.
+ * While the popup stays open, usePrListsStorageSync applies further writes via storage.onChanged.
  */
 export const hydratePrQueriesFromStorage = async (
   queryClient: QueryClient

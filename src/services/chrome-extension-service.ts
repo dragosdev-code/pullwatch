@@ -7,7 +7,14 @@ import type {
   DevTestAlarmOverrideState,
   ScraperUrl,
   RuntimeMessage,
+  StoredPRs,
 } from '../../extension/common/types';
+import {
+  STORAGE_KEY_ASSIGNED_PRS,
+  STORAGE_KEY_AUTHORED_PRS,
+  STORAGE_KEY_MERGED_PRS,
+} from '../../extension/common/constants';
+import { runWithTransientStorageRetry } from '../../extension/common/transient-storage-retry';
 import {
   DEV_TEST_ACTION,
   EVENT_SETTINGS_UPDATED,
@@ -18,8 +25,9 @@ import {
 } from '../../extension/common/runtime-actions';
 
 /**
- * Service to handle Chrome extension communication.
- * Provides promise-based API for background script communication.
+ * Single entry point from the popup for Chrome extension APIs:
+ * - **Background** — `sendMessage` for work that must run in the service worker.
+ * - **Local storage** — direct `chrome.storage.local` reads for persisted PR lists; no message, no SW wake.
  */
 export class ChromeExtensionService {
   /**
@@ -32,6 +40,41 @@ export class ChromeExtensionService {
       typeof chrome.runtime.sendMessage === 'function'
     );
   }
+
+  private canReadLocalStorage(): boolean {
+    return this.isExtensionContext() && typeof chrome.storage?.local?.get === 'function';
+  }
+
+  private prsFromStoredEnvelope(value: unknown): PullRequest[] {
+    return (value as StoredPRs | undefined)?.prs ?? [];
+  }
+
+  private async readPrListKey(storageKey: string): Promise<PullRequest[]> {
+    if (!this.canReadLocalStorage()) {
+      throw new Error('Extension local storage not available');
+    }
+    const result = await runWithTransientStorageRetry(() => chrome.storage.local.get(storageKey));
+    return this.prsFromStoredEnvelope(result[storageKey]);
+  }
+
+  // ─── PR lists: chrome.storage.local (same envelopes as StorageService / hydrate) ────────────
+
+  /** Snapshot for React Query; does not call the background. */
+  readAssignedPrsFromLocalStorage(): Promise<PullRequest[]> {
+    return this.readPrListKey(STORAGE_KEY_ASSIGNED_PRS);
+  }
+
+  /** @see {@link readAssignedPrsFromLocalStorage} */
+  readMergedPrsFromLocalStorage(): Promise<PullRequest[]> {
+    return this.readPrListKey(STORAGE_KEY_MERGED_PRS);
+  }
+
+  /** @see {@link readAssignedPrsFromLocalStorage} */
+  readAuthoredPrsFromLocalStorage(): Promise<PullRequest[]> {
+    return this.readPrListKey(STORAGE_KEY_AUTHORED_PRS);
+  }
+
+  // ─── Background: chrome.runtime.sendMessage ─────────────────────────────────────────────────
 
   /**
    * Sends a message to the background script and returns a promise.
@@ -62,45 +105,18 @@ export class ChromeExtensionService {
   }
 
   /**
-   * Gets stored assigned/review PRs from the background script.
-   * This returns immediately with cached data.
-   */
-  async getStoredAssignedPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.getAssignedPRs);
-  }
-
-  /**
-   * Gets stored merged PRs from the background script.
-   */
-  async getStoredMergedPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.getMergedPRs);
-  }
-
-  /**
-   * Gets stored authored PRs from the background script.
-   */
-  async getStoredAuthoredPRs(): Promise<PullRequest[]> {
-    return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.getAuthoredPRs);
-  }
-
-  /**
-   * Fetches fresh assigned/review PRs from GitHub via the background script.
-   * This forces a network request to GitHub.
+   * User-initiated refresh: background fetches GitHub, updates storage, reschedules the alarm.
    */
   async fetchFreshAssignedPRs(): Promise<PullRequest[]> {
     return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.fetchAssignedPRs);
   }
 
-  /**
-   * Fetches fresh merged PRs from GitHub via the background script.
-   */
+  /** User-initiated merged PR refresh — same as {@link fetchFreshAssignedPRs}. */
   async fetchFreshMergedPRs(): Promise<PullRequest[]> {
     return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.fetchMergedPRs);
   }
 
-  /**
-   * Fetches fresh authored PRs from GitHub via the background script.
-   */
+  /** User-initiated authored PR refresh — same as {@link fetchFreshAssignedPRs}. */
   async fetchFreshAuthoredPRs(): Promise<PullRequest[]> {
     return this.sendMessage<PullRequest[]>(PR_DATA_ACTION.fetchAuthoredPRs);
   }

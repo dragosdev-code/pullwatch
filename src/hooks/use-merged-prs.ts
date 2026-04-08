@@ -1,26 +1,25 @@
 import { useQuery } from '@tanstack/react-query';
 import type { PullRequest } from '../../extension/common/types';
-import { chromeExtensionService } from '../services/chrome-extension-service';
 import { queryKeys } from '../constants/query-keys';
+import { chromeExtensionService } from '../services/chrome-extension-service';
 import { isExtensionContext } from '../utils/is-extension-context';
 import mergedPRsMock from '../mocks/merged-prs.json';
 
 /**
- * Hook to get stored merged PRs with automatic background refresh.
- * Uses mock data when not running in browser extension context.
+ * Merged PR list — same data flow as useAssignedPRs: hydrate, storage read, then storage.onChanged.
  */
 export const useMergedPRs = () => {
   return useQuery({
     queryKey: queryKeys.mergedPrs,
     queryFn: () =>
       isExtensionContext()
-        ? chromeExtensionService.getStoredMergedPRs()
+        ? chromeExtensionService.readMergedPrsFromLocalStorage()
         : Promise.resolve(mergedPRsMock as PullRequest[]),
-    staleTime: 1000 * 30,
+    staleTime: Number.POSITIVE_INFINITY,
     gcTime: 1000 * 60 * 5,
-    refetchOnMount: 'always',
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
-    placeholderData: (previousData) => previousData, // Keep showing old data while fetching
+    placeholderData: (previousData) => previousData,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });

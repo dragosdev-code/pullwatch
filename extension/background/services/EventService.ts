@@ -6,7 +6,6 @@ import type {
   RuntimeRequestMessage,
   MessageResponse,
   ExtensionSettings,
-  PullRequest,
   NotificationSound,
   DevTestNotificationOverrides,
   SettingsNotificationTestPayload,
@@ -17,8 +16,6 @@ import {
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
 } from '../../common/constants';
 import {
-  BROADCAST_ACTION,
-  type BroadcastAction,
   DEV_TEST_ACTION,
   EVENT_FETCH_PRS,
   EVENT_OFFSCREEN_READY,
@@ -173,9 +170,7 @@ export class EventService implements IEventService {
 
         const prService = this.serviceContainer.getService('prService');
 
-        // Always bypass cache for alarm-triggered fetches.
-        // The alarm interval itself is the rate limiter; the cache exists to
-        // prevent double-fetching when the popup opens shortly after an alarm.
+        // Alarm cadence is the rate limiter; each tick should observe GitHub, not short TTL cache.
         await this.withPrUiFetchIndicator(async () => {
           await prService.fetchAndUpdateAssignedPRs(false, true);
           await prService.updateMergedPRs(false, true);
@@ -248,7 +243,9 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Handles assigned PR data related actions (getAssignedPRs, fetchAssignedPRs).
+   * Assigned PR actions: `get*` returns the persisted snapshot only (for tools or callers that
+   * still message the background). The popup list UI reads `chrome.storage.local` directly so it
+   * does not wake the service worker. `fetch*` is user-initiated refresh: GitHub + storage + alarm pushback.
    */
   async handleAssignedPRDataActions(
     message: RuntimeMessage,
@@ -258,25 +255,11 @@ export class EventService implements IEventService {
       const prService = this.serviceContainer.getService('prService');
 
       if (this.isMessageAction(message, PR_DATA_ACTION.getAssignedPRs)) {
-        this.debugService.log('[EventService] Getting stored assigned PRs and fetching fresh data');
-
-        // 1. Get stored PRs immediately for fast response
         const storedPRs = await prService.getStoredAssignedPRs();
-        this.debugService.log(`[EventService] getStoredAssignedPRs returned ${storedPRs.length} PRs`);
-
-        // 2. Send stored PRs immediately
-        const response = { success: true, data: storedPRs };
-        this.debugService.log(`[EventService] Sending immediate response with stored assigned PRs`);
-        sendResponse(response);
-
-        // 3. Fetch fresh data in background (don't wait for response)
-        this.fetchFreshInBackground({
-          category: 'assigned',
-          fetchFn: () => prService.fetchAndUpdateAssignedPRs(),
-          storedPRs,
-          broadcastAction: BROADCAST_ACTION.assignedPrDataUpdated,
-          summarize: (prs) => prs.map((pr) => ({ id: pr.id, title: pr.title, reviewStatus: pr.reviewStatus })),
-        });
+        this.debugService.log(
+          `[EventService] getAssignedPRs: returning ${storedPRs.length} stored assigned PRs`
+        );
+        sendResponse({ success: true, data: storedPRs });
       } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchAssignedPRs)) {
         // fetchAssignedPRs: Fetch fresh data from GitHub and update storage (manual refresh)
         this.debugService.log('[EventService] Manual refresh - fetching fresh assigned PRs from GitHub');
@@ -297,7 +280,8 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Handles merged PR data related actions (getMergedPRs, fetchMergedPRs).
+   * Merged PR actions — same contract as {@link handleAssignedPRDataActions}: get is snapshot-only,
+   * fetch is manual GitHub refresh with alarm reschedule.
    */
   async handleMergedPRDataActions(
     message: RuntimeMessage,
@@ -307,23 +291,9 @@ export class EventService implements IEventService {
       const prService = this.serviceContainer.getService('prService');
 
       if (this.isMessageAction(message, PR_DATA_ACTION.getMergedPRs)) {
-        this.debugService.log('[EventService] Getting stored merged PRs and fetching fresh data');
-
-        // 1. Get stored merged PRs immediately for fast response
         const storedPRs = await prService.getStoredMergedPRs();
-        this.debugService.log(`[EventService] getStoredMergedPRs returned ${storedPRs.length} PRs`);
-
-        // 2. Send stored PRs immediately
+        this.debugService.log(`[EventService] getMergedPRs: returning ${storedPRs.length} stored merged PRs`);
         sendResponse({ success: true, data: storedPRs });
-
-        // 3. Fetch fresh data in background (don't wait for response)
-        this.fetchFreshInBackground({
-          category: 'merged',
-          fetchFn: () => prService.updateMergedPRs(),
-          storedPRs,
-          broadcastAction: BROADCAST_ACTION.mergedPrDataUpdated,
-          summarize: (prs) => prs.map((pr) => ({ id: pr.id, title: pr.title })),
-        });
       } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchMergedPRs)) {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
@@ -375,38 +345,7 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Generic background fetch: calls a PRService method, compares old vs new via
-   * a caller-supplied summarizer, and broadcasts to the popup if data changed.
-   */
-  private async fetchFreshInBackground(config: {
-    category: string;
-    fetchFn: () => Promise<PullRequest[]>;
-    storedPRs: PullRequest[];
-    broadcastAction: BroadcastAction;
-    summarize: (prs: PullRequest[]) => unknown[];
-  }): Promise<void> {
-    try {
-      const freshPRs = await config.fetchFn();
-      const hasChanges =
-        JSON.stringify(config.summarize(config.storedPRs)) !==
-        JSON.stringify(config.summarize(freshPRs));
-
-      if (hasChanges) {
-        try {
-          await chrome.runtime.sendMessage({ action: config.broadcastAction, data: freshPRs });
-        } catch {
-          this.debugService.log(
-            `[EventService] Could not notify popup for ${config.category} (likely closed)`
-          );
-        }
-      }
-    } catch (error) {
-      this.debugService.error(`[EventService] Error in background ${config.category} fetch:`, error);
-    }
-  }
-
-  /**
-   * Handles authored PR data related actions (getAuthoredPRs, fetchAuthoredPRs).
+   * Authored PR actions — same contract as {@link handleAssignedPRDataActions}.
    */
   async handleAuthoredPRDataActions(
     message: RuntimeMessage,
@@ -416,19 +355,11 @@ export class EventService implements IEventService {
       const prService = this.serviceContainer.getService('prService');
 
       if (this.isMessageAction(message, PR_DATA_ACTION.getAuthoredPRs)) {
-        this.debugService.log('[EventService] Getting stored authored PRs and fetching fresh data');
-
         const storedPRs = await prService.getStoredAuthoredPRs();
+        this.debugService.log(
+          `[EventService] getAuthoredPRs: returning ${storedPRs.length} stored authored PRs`
+        );
         sendResponse({ success: true, data: storedPRs });
-
-        // Background refresh
-        this.fetchFreshInBackground({
-          category: 'authored',
-          fetchFn: () => prService.updateAuthoredPRs(),
-          storedPRs,
-          broadcastAction: BROADCAST_ACTION.authoredPrDataUpdated,
-          summarize: (prs) => prs.map((pr) => ({ id: pr.id, title: pr.title })),
-        });
       } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchAuthoredPRs)) {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'

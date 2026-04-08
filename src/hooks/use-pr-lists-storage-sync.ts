@@ -34,23 +34,10 @@ const prListFromStorageValue = (value: unknown): PullRequest[] => {
 };
 
 /**
- * Subscribes the popup to **local** PR list writes so the UI updates while the popup stays open.
- *
- * **Architectural gap this closes:** `usePRUpdates` listens for background `runtime` broadcasts
- * emitted only from `fetchFreshInBackground` (after `get*PRs` from the popup). The fetch **alarm**
- * updates storage via `PRService` but never sends those broadcasts, so an open popup would keep
- * stale cache until closed and reopened.
- *
- * **Why `chrome.storage.onChanged` instead of widening background messaging:** storage is the
- * single source of truth already used for first paint; any writer (now or future) triggers a sync
- * without coupling UI to every background code path.
- *
- * **Why `setQueryData` instead of `invalidateQueries`:** applying the persisted snapshot avoids an
- * extra `sendMessage` round-trip and does not schedule refetches that could fight with in-flight
- * queries; it matches hydration semantics.
- *
- * **Lifecycle:** the listener is removed on effect cleanup so popup teardown does not leak
- * listeners across open/close cycles (MV3 popups are ephemeral documents).
+ * Keeps TanStack Query in sync with `chrome.storage.local` while the popup is open. The background
+ * writes PR list envelopes on alarm ticks, install/startup fetch, and manual refresh; this listener
+ * applies those snapshots with `setQueryData` (same semantics as hydrate — no sendMessage, no
+ * invalidateQueries). Unsubscribes on unmount because the popup document is recreated each open.
  */
 export const usePrListsStorageSync = (): void => {
   const queryClient = useQueryClient();
