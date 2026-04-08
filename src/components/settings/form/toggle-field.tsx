@@ -42,7 +42,7 @@ export const ToggleFieldLayout = ({
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 transition-opacity duration-200 ${
+      className={`flex items-center justify-between gap-3 ${
         disabled ? 'opacity-40 pointer-events-none' : ''
       }`}
     >

@@ -53,8 +53,9 @@ type SoundPickerTriggerButtonProps = {
 
 /**
  * WHY [UX]: Invisible grid “ghosts” size the pill to max(idle row, Change-only row) so short
- * names still fit “Change”, and long names don’t collapse on hover. Icon collapses with the name
- * swap.
+ * names still fit “Change”, and long names don’t collapse on hover. Hover keeps animated
+ * opacity/gap/icon width (no translateY on label — that was worse for compositing). `contain:layout`
+ * limits invalidation; document-level grayscale AA is set on `#root` in app.css for the popup.
  */
 function SoundPickerTriggerButton({
   displayName,
@@ -66,7 +67,7 @@ function SoundPickerTriggerButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="group relative isolate inline-grid max-w-full cursor-pointer grid-cols-1 rounded-full bg-primary/10 py-1 text-xs font-semibold text-primary ring-1 ring-primary/20 transition-[background-color,box-shadow] duration-200 hover:bg-primary/15 hover:ring-primary/40 hover:shadow-sm disabled:cursor-not-allowed"
+      className="group relative inline-grid max-w-full cursor-pointer grid-cols-1 rounded-full bg-primary/10 py-1 text-xs font-semibold text-primary ring-1 ring-primary/20 transition-[background-color,box-shadow] duration-200 contain-[layout] hover:bg-primary/15 hover:ring-primary/40 hover:shadow-sm disabled:cursor-not-allowed"
     >
       {/* Sizing only: cell width = max(icon+name, Change) so the pill never clips “Change” or shrinks past the idle label. */}
       <span className="col-start-1 row-start-1 flex min-w-0 items-center gap-1.5 px-2.5 opacity-0 pointer-events-none">
@@ -82,11 +83,11 @@ function SoundPickerTriggerButton({
           <MusicIcon className="size-3 shrink-0" />
         </span>
         <span className="relative min-h-[1.25em] min-w-0 max-w-48 flex-1 overflow-hidden">
-          <span className="block truncate transition-[transform,opacity] duration-300 ease-out motion-reduce:duration-0 translate-y-0 opacity-100 group-hover:-translate-y-full group-hover:opacity-0">
+          <span className="block truncate transition-opacity duration-300 ease-out motion-reduce:duration-0 opacity-100 group-hover:opacity-0">
             {displayName}
           </span>
-          <span className="absolute inset-y-0 left-0 right-0 flex items-center justify-center transition-[transform,opacity] duration-300 ease-out motion-reduce:duration-0 translate-y-full opacity-0 group-hover:translate-y-0 group-hover:opacity-100">
-            <span className="whitespace-nowrap tracking-wide">Change</span>
+          <span className="pointer-events-none absolute inset-y-0 left-0 right-0 flex items-center justify-center transition-opacity duration-300 ease-out motion-reduce:duration-0 opacity-0 group-hover:opacity-100">
+            <span className="whitespace-nowrap font-semibold tracking-wide">Change</span>
           </span>
         </span>
       </span>
@@ -175,14 +176,14 @@ function SoundSelectFieldInner({
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 transition-opacity duration-200 ${
+      className={`flex items-center justify-between gap-3 ${
         disabled ? 'opacity-40 pointer-events-none' : ''
       }`}
     >
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium text-base-content">{label}</span>
         <div
-          className={`flex items-center gap-2 transition-opacity duration-200 ${
+          className={`flex items-center gap-2 ${
             soundEnabled ? '' : 'opacity-40 pointer-events-none'
           }`}
         >

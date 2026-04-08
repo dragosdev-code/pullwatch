@@ -47,6 +47,13 @@
   background-color: #5b616b;
 }
 
+/* Chromium (extension popup): opacity/width animations on one control can retarget subpixel
+   smoothing for unrelated text; grayscale AA on the whole UI stays visually stable. */
+#root {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 :where(
   :root:has(
     .modal-open,

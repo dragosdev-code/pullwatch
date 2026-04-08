@@ -59,7 +59,7 @@ export const SettingsNotificationTestButton = ({
       type="button"
       onClick={handleClick}
       disabled={disabled || pending || cooldown}
-      className={`mt-[2px] inline-flex h-4.5 min-h-0 shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-base-100 px-1.5 py-0 text-[10px] font-medium leading-none text-primary transition-opacity ${
+      className={`mt-[2px] inline-flex h-4.5 min-h-0 shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-base-100 px-1.5 py-0 text-[10px] font-medium leading-none text-primary ${
         disabled || pending || cooldown
           ? 'opacity-55 hover:cursor-default'
           : 'hover:bg-base-200 hover:cursor-pointer'

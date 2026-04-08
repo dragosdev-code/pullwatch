@@ -155,7 +155,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
             />
 
             <div
-              className={`border-l-2 border-primary/20 pl-3 ml-1 flex flex-col gap-3 transition-opacity duration-200 ${
+              className={`border-l-2 border-primary/20 pl-3 ml-1 flex flex-col gap-3 ${
                 assignedEnabled ? '' : 'opacity-40 pointer-events-none'
               }`}
             >
@@ -198,7 +198,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
             />
 
             <div
-              className={`border-l-2 border-primary/20 pl-3 ml-1 flex flex-col gap-3 transition-opacity duration-200 ${
+              className={`border-l-2 border-primary/20 pl-3 ml-1 flex flex-col gap-3 ${
                 mergedEnabled ? '' : 'opacity-40 pointer-events-none'
               }`}
             >
