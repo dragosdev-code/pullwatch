@@ -36,6 +36,14 @@ export class NotificationService implements INotificationService {
    */
   private lastSettingsTestAtMs: { assigned: number; merged: number } = { assigned: 0, merged: 0 };
 
+  /**
+   * WHY [macOS + preview UX]: Reusing one Chrome notification id maps to an in-place update on the host OS,
+   * which often refreshes Notification Center without a new banner. Preview must be a distinct id each time;
+   * we still clear the prior preview id here so repeated tests do not stack rows. Scoped to settings preview only —
+   * real PR toasts keep deterministic `pr-alert|…` ids in `showPRNotificationsInternal` (click handler + dedup).
+   */
+  private lastSettingsTestNotificationId: Partial<Record<'assigned' | 'merged', string>> = {};
+
   constructor(deps: {
     debugService: IDebugService;
     storageService: IStorageService;
@@ -150,6 +158,7 @@ export class NotificationService implements INotificationService {
    * Sample notification for end users (settings page). Separate from Dev Test: ID must not use the
    * `pr-alert|` prefix so handleNotificationClick skips tabs.create and only clears the toast.
    * `silent: true` matches real PR alerts — OS does not double-play; extension owns sound via SoundService.
+   * Each successful fire uses a new id suffix so the host OS treats it as a new deliverable banner.
    */
   async fireSettingsTestNotification(category: 'assigned' | 'merged'): Promise<void> {
     const now = Date.now();
@@ -170,7 +179,15 @@ export class NotificationService implements INotificationService {
     const sound: NotificationSound =
       category === 'assigned' ? settings.assigned.sound : settings.merged.sound;
     const localIconUrl = getNotificationIconUrl();
-    const notificationId = `extension-settings-test|${category}`;
+
+    // WHY [ordering]: Drop the last preview for this category before allocating a new id so Notification Center
+    // does not accumulate one row per cooldown window; `createNotification` still clears the new id (no-op first time).
+    const previousPreviewId = this.lastSettingsTestNotificationId[category];
+    if (previousPreviewId) {
+      await this.clearNotification(previousPreviewId);
+    }
+
+    const notificationId = `extension-settings-test|${category}|${Date.now()}`;
 
     await this.createNotification(
       {
@@ -186,6 +203,7 @@ export class NotificationService implements INotificationService {
       notificationId
     );
 
+    this.lastSettingsTestNotificationId[category] = notificationId;
     this.lastSettingsTestAtMs[category] = Date.now();
 
     if (isPlayableSound(sound)) {

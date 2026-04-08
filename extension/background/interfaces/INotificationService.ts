@@ -25,6 +25,8 @@ export interface INotificationService extends IService {
   /**
    * Fires a sample notification + sound from settings (To Review vs Merged).
    * Uses non-`pr-alert` IDs so clicks dismiss without opening a tab.
+   * Each successful fire uses a fresh notification id (timestamp suffix) so macOS shows a new banner instead of
+   * silently updating the prior preview in Notification Center.
    * On failure throws `Error` whose message is `SETTINGS_TEST_ERROR_COOLDOWN` or `SETTINGS_TEST_ERROR_DISABLED`.
    */
   fireSettingsTestNotification(category: 'assigned' | 'merged'): Promise<void>;
