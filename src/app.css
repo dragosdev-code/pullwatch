@@ -89,15 +89,11 @@
 }
 
 /* —— Settings: Founders’ lounge / sponsor section (scoped) —— */
-@property --pw-sponsor-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
-@keyframes pw-sponsor-spin {
+/* WHY [compositor]: Rotating via transform on a layer keeps work on the compositor; animating a custom property
+   inside conic-gradient(var(...)) forces frequent style recalc + repaint (see CSS Properties & Values / var() substitution). */
+@keyframes pw-sponsor-frame-rotate {
   to {
-    --pw-sponsor-angle: 360deg;
+    transform: rotate(360deg);
   }
 }
 
@@ -125,21 +121,32 @@
 }
 
 .pw-sponsor-frame {
-  background: conic-gradient(
-    from var(--pw-sponsor-angle),
-    color-mix(in oklch, var(--color-primary) 58%, transparent),
-    transparent 32%,
-    color-mix(in oklch, var(--color-primary) 42%, transparent) 56%,
-    transparent 78%
-  );
-  animation: pw-sponsor-spin 10s linear infinite;
+  position: relative;
+  overflow: hidden;
   box-shadow:
     0 0 28px -10px color-mix(in oklch, var(--color-primary) 22%, transparent),
     0 12px 40px -20px color-mix(in oklch, var(--color-neutral) 25%, transparent);
 }
 
+.pw-sponsor-frame::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: -50%;
+  background: conic-gradient(
+    from 0deg,
+    color-mix(in oklch, var(--color-primary) 58%, transparent),
+    transparent 32%,
+    color-mix(in oklch, var(--color-primary) 42%, transparent) 56%,
+    transparent 78%
+  );
+  transform-origin: center;
+  animation: pw-sponsor-frame-rotate 10s linear infinite;
+}
+
 .pw-sponsor-inner {
   position: relative;
+  z-index: 1;
   /* Opaque fill so the rotating frame gradient is not visible through the panel (blur was smearing it). */
   background: var(--color-base-100);
   border: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
@@ -291,9 +298,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pw-sponsor-frame {
+  .pw-sponsor-frame::before {
     animation: none;
-    --pw-sponsor-angle: 42deg;
+    transform: rotate(42deg);
   }
 
   .pw-sponsor-orb {

@@ -15,7 +15,10 @@ export const SettingsSponsorLounge = ({ linkBehavior }: SettingsSponsorLoungePro
   const noiseFilterId = `pw-sponsor-noise-${rawId.replace(/:/g, '')}`;
 
   const [revealed, setRevealed] = useState(false);
+  const [noiseMounted, setNoiseMounted] = useState(false);
 
+  // WHY [scroll UX]: Fire the staggered reveal only once the card is near the viewport; disconnect immediately so
+  // scrolling back through settings does not re-run observers or replay the entrance transition.
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
@@ -27,13 +30,38 @@ export const SettingsSponsorLounge = ({ linkBehavior }: SettingsSponsorLoungePro
           io.disconnect();
         }
       },
-      { threshold: 0.18, rootMargin: '0px 0px -8% 0px' }
+      {
+        // WHY [timing]: Slight bottom inset avoids triggering while the block is barely peeking; threshold keeps
+        // the reveal tied to intentional scroll-into-view rather than a sliver intersection.
+        threshold: 0.18,
+        rootMargin: '0px 0px -8% 0px',
+      }
     );
 
     io.observe(el);
     return () => io.disconnect();
   }, []);
 
+  // WHY [popup perf]: feTurbulence is expensive to rasterize; mounting it on the same frame as `revealed` competes
+  // with the opacity/transform entrance. Double rAF defers until after the first paint of that transition.
+  useEffect(() => {
+    if (!revealed) return;
+
+    const rafIds = { outer: 0, inner: 0 };
+    rafIds.outer = requestAnimationFrame(() => {
+      rafIds.inner = requestAnimationFrame(() => {
+        setNoiseMounted(true);
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(rafIds.outer);
+      cancelAnimationFrame(rafIds.inner);
+    };
+  }, [revealed]);
+
+  // WHY [extension]: In the extension popup, `target=_blank` behavior is awkward; `chrome.tabs.create` honors
+  // settings’ “open links in background” without relying on the popup staying open.
   const handleSponsorClick = (e: MouseEvent<HTMLAnchorElement>) => {
     if (linkBehavior === 'background' && isExtensionContext()) {
       e.preventDefault();
@@ -49,22 +77,24 @@ export const SettingsSponsorLounge = ({ linkBehavior }: SettingsSponsorLoungePro
 
       <div className="pw-sponsor-frame rounded-2xl p-px">
         <div className="pw-sponsor-inner overflow-hidden rounded-[0.9rem] px-4 py-5">
-          <svg
-            className="pointer-events-none absolute inset-0 size-full opacity-[0.045] mix-blend-overlay"
-            aria-hidden
-          >
-            <filter id={noiseFilterId} x="0%" y="0%" width="100%" height="100%">
-              <feTurbulence
-                type="fractalNoise"
-                baseFrequency="0.9"
-                numOctaves="4"
-                stitchTiles="stitch"
-                result="noise"
-              />
-              <feColorMatrix type="saturate" values="0" in="noise" />
-            </filter>
-            <rect width="100%" height="100%" filter={`url(#${noiseFilterId})`} />
-          </svg>
+          {noiseMounted ? (
+            <svg
+              className="pointer-events-none absolute inset-0 size-full opacity-[0.045] mix-blend-overlay"
+              aria-hidden
+            >
+              <filter id={noiseFilterId} x="0%" y="0%" width="100%" height="100%">
+                <feTurbulence
+                  type="fractalNoise"
+                  baseFrequency="0.9"
+                  numOctaves="2"
+                  stitchTiles="stitch"
+                  result="noise"
+                />
+                <feColorMatrix type="saturate" values="0" in="noise" />
+              </filter>
+              <rect width="100%" height="100%" filter={`url(#${noiseFilterId})`} />
+            </svg>
+          ) : null}
 
           <span className="pw-sponsor-orb pw-sponsor-orb--a" aria-hidden />
           <span className="pw-sponsor-orb pw-sponsor-orb--b" aria-hidden />
