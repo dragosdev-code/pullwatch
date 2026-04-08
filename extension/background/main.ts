@@ -29,9 +29,10 @@ import type { RuntimeMessage, MessageResponse } from '../common/types';
  * A routine alarm wake does NOT fire `onInstalled` or `onStartup`. This
  * means `performInitialSetup` (called via `initPromise`) is the only code
  * guaranteed to run before every event handler. It must restrict itself to
- * idempotent infrastructure work (permissions, alarms, badge) and must NOT
- * fetch or seed PR data — see BackgroundManager.performInitialSetup for
- * the full explanation.
+ * idempotent infrastructure work (permissions, alarms, and
+ * `PRService.syncBadgeFromStorage` — badge derived from storage/settings, not from the
+ * handler that follows) and must NOT fetch or seed PR data — see
+ * BackgroundManager.performInitialSetup for the full explanation.
  *
  * ### Pattern: "Initialization Gate"
  *

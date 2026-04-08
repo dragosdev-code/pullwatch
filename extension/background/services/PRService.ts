@@ -12,10 +12,24 @@ import {
   REQUEST_DELAY_MS,
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
+  STORAGE_KEY_GITHUB_OUTAGE,
   STORAGE_KEY_MERGED_PRS,
+  STORAGE_KEY_PARSER_BREAKAGE,
 } from '../../common/constants';
 import { RateLimitError, ParserBreakageError, GitHubOutageError } from '../../common/errors';
 import { delay } from '../../common/utils';
+
+/**
+ * WHY [invariant]: One place for “which pending assigned PRs count toward the badge” —
+ * same draft filter as {@link PRService.mergeAndFilterAssignedPRs} so storage-backed badge
+ * updates and {@link PRService.persistAndNotifyAssigned} always agree.
+ */
+function filterPendingAssignedByDraftSetting(
+  pendingPRs: PullRequest[],
+  showDraftsInList: boolean
+): PullRequest[] {
+  return showDraftsInList ? pendingPRs : pendingPRs.filter((pr) => pr.type !== 'draft');
+}
 
 /**
  * PRService handles pull request management and coordination between services.
@@ -206,9 +220,7 @@ export class PRService implements IPRService {
     const settings = await this.storageService.getExtensionSettings();
     const showDrafts = settings.assigned.showDraftsInList;
 
-    const filteredPending = showDrafts
-      ? pendingPRsWithStatus
-      : pendingPRsWithStatus.filter((pr) => pr.type !== 'draft');
+    const filteredPending = filterPendingAssignedByDraftSetting(pendingPRsWithStatus, showDrafts);
 
     const filteredReviewed = showDrafts
       ? freshReviewed
@@ -326,6 +338,36 @@ export class PRService implements IPRService {
   async getStoredAssignedPRs(): Promise<PullRequest[]> {
     const stored = await this.storageService.getStoredPRs(STORAGE_KEY_ASSIGNED_PRS);
     return stored?.prs || [];
+  }
+
+  /**
+   * WHY [ordering + source of truth]: Invoked from `BackgroundManager.performInitialSetup`
+   * before `EventService` handlers. Event handlers are heterogeneous; this step aligns the
+   * toolbar badge with persisted state (`chrome.storage.local` assigned PRs, sync settings,
+   * health flags) up front. Precedence matches fetch error handling: parser / outage flags
+   * imply error badge; otherwise pending count respects `assigned.showDraftsInList`.
+   */
+  async syncBadgeFromStorage(): Promise<void> {
+    const [parserBreakage, githubOutage] = await Promise.all([
+      this.storageService.get(STORAGE_KEY_PARSER_BREAKAGE),
+      this.storageService.get(STORAGE_KEY_GITHUB_OUTAGE),
+    ]);
+
+    if (parserBreakage != null || githubOutage != null) {
+      await this.badgeService.setErrorBadge();
+      return;
+    }
+
+    const [prs, settings] = await Promise.all([
+      this.getStoredAssignedPRs(),
+      this.storageService.getExtensionSettings(),
+    ]);
+    const pending = prs.filter((pr) => pr.reviewStatus !== 'reviewed');
+    const count = filterPendingAssignedByDraftSetting(
+      pending,
+      settings.assigned.showDraftsInList
+    ).length;
+    await this.badgeService.setPRCountBadge(count);
   }
 
   async getStoredAuthoredPRs(): Promise<PullRequest[]> {

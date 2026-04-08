@@ -35,7 +35,7 @@ export class BackgroundManager {
   }
 
   /**
-   * Performs infrastructure setup: permissions, alarms, and badge.
+   * Performs infrastructure setup: permissions, alarms, and badge hydration from storage.
    *
    * WHY this method must NOT fetch or seed PR data:
    *
@@ -49,8 +49,7 @@ export class BackgroundManager {
    * to chrome.storage.local while suppressing notifications. The alarm
    * handler that runs moments later would then compare fresh GitHub data
    * against that just-seeded storage — finding zero new PRs and never
-   * firing a notification (the badge updates correctly because it is
-   * unconditional, but the desktop alert is silently lost).
+   * firing a notification (the desktop alert is silently lost).
    *
    * Initial PR seeding belongs exclusively in the `onInstalled` (install /
    * update) and `onStartup` (browser profile start) handlers in
@@ -61,12 +60,15 @@ export class BackgroundManager {
   private async performInitialSetup(): Promise<void> {
     const permissionService = this.serviceContainer.getService('permissionService');
     const alarmService = this.serviceContainer.getService('alarmService');
-    const badgeService = this.serviceContainer.getService('badgeService');
+    const prService = this.serviceContainer.getService('prService');
 
     try {
       await permissionService.checkAllPermissions();
       await alarmService.setupFetchAlarm();
-      await badgeService.setDefaultBadge();
+      // WHY [ordering]: This runs on every wake before `EventService`; derive the badge from
+      // storage here so it matches persisted PRs and health flags without coupling init to
+      // GitHub or to whichever handler runs next.
+      await prService.syncBadgeFromStorage();
 
       this.debugLog('[BackgroundManager] Initial setup completed');
     } catch (error) {

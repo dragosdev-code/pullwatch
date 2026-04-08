@@ -18,6 +18,13 @@ export interface IPRService extends IService {
   getStoredAssignedPRs(): Promise<PullRequest[]>;
 
   /**
+   * Sets the action badge from persisted assigned PRs, sync extension settings, and local
+   * health flags (parser breakage, GitHub outage). Called from `BackgroundManager.performInitialSetup`
+   * so the badge matches storage before `EventService` handlers run, without a GitHub round-trip.
+   */
+  syncBadgeFromStorage(): Promise<void>;
+
+  /**
    * Gets currently stored authored pull requests.
    */
   getStoredAuthoredPRs(): Promise<PullRequest[]>;
