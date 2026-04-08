@@ -23,6 +23,10 @@ const LETTER_HOVER_TEXT_CLASSES = [
 
 const LIFT_PX = 4;
 const HOVER_SCALE = 1.04;
+/** Snap to hover/celebration tint; asymmetric so only unhover uses the slow fade below. */
+const LETTER_COLOR_TRANSITION_IN_MS = 0;
+/** Color lerp on hover off; slightly longer than `config.gentle` settle so hue lingers a beat after the letter drops. */
+const LETTER_COLOR_TRANSITION_OUT_MS = 750;
 /** Per-letter delay for the “new PR” sweep; short enough to read as one gesture, long enough to register each step. */
 const CELEBRATE_MS_PER_LETTER = 72;
 
@@ -151,12 +155,19 @@ export const NamedLogo = ({ celebrateSignal = 0 }: NamedLogoProps) => {
             >
               <span
                 className={clsx(
-                  'font-semibold text-[15px] tracking-tight duration-300 ease-out',
+                  'font-semibold text-[15px] tracking-tight ease-out',
                   showHoverColor ? LETTER_HOVER_TEXT_CLASSES[i] : 'text-base-content',
                   reducedMotion
-                    ? 'opacity-90 transition-[color,opacity] hover:opacity-100'
+                    ? 'opacity-90 transition-[color,opacity] duration-300 hover:opacity-100'
                     : 'transition-colors'
                 )}
+                style={
+                  reducedMotion
+                    ? undefined
+                    : {
+                        transitionDuration: `${showHoverColor ? LETTER_COLOR_TRANSITION_IN_MS : LETTER_COLOR_TRANSITION_OUT_MS}ms`,
+                      }
+                }
               >
                 {char}
               </span>
