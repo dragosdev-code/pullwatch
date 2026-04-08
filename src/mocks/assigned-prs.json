@@ -8,18 +8,16 @@
     "author": [
       {
         "login": "nami-swan",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/12345?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=nami-swan"
       },
       {
-        "login": "Copilot"
+        "login": "Copilot",
+        "avatarUrl": "https://api.dicebear.com/9.x/bottts/svg?seed=copilot-nav"
       }
     ],
-    "createdAt": "2025-02-12T14:30:00.000Z",
-    "updatedAt": "2025-02-14T09:15:00.000Z",
-    "labels": [
-      "enhancement",
-      "ui"
-    ],
+    "createdAt": "2026-04-05T14:30:00.000Z",
+    "updatedAt": "2026-04-07T09:15:00.000Z",
+    "labels": ["enhancement"],
     "isNew": true,
     "html_url": "https://github.com/straw-hat-pirates/navigation-room/pull/42",
     "type": "open",
@@ -27,28 +25,37 @@
     "authorReviewStatus": "pending"
   },
   {
-    "id": "devil-fruit-engine/gum-gum-28456",
-    "url": "https://github.com/devil-fruit-engine/gum-gum/pull/28456",
-    "title": "Fix hydration mismatch when Luffy uses Gear 4",
-    "number": 28456,
-    "repoName": "devil-fruit-engine/gum-gum",
+    "id": "straw-hat-pirates/thousand-sunny-rigging-9001",
+    "url": "https://github.com/straw-hat-pirates/thousand-sunny-rigging/pull/9001",
+    "title": "Refactor rigging tension model for storm sails (multi-assignee dry run)",
+    "number": 9001,
+    "repoName": "straw-hat-pirates/thousand-sunny-rigging",
     "author": [
       {
         "login": "monkey-d-luffy",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/67890?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=luffy-gear"
+      },
+      {
+        "login": "roronoa-zoro",
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=zoro-three"
+      },
+      {
+        "login": "sanji-blackleg",
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=sanji-chef"
+      },
+      {
+        "login": "Copilot",
+        "avatarUrl": "https://api.dicebear.com/9.x/bottts/svg?seed=copilot-rig"
       }
     ],
-    "createdAt": "2025-02-10T08:00:00.000Z",
-    "updatedAt": "2025-02-13T16:45:00.000Z",
-    "labels": [
-      "bug",
-      "priority: high"
-    ],
-    "isNew": false,
-    "html_url": "https://github.com/devil-fruit-engine/gum-gum/pull/28456",
+    "createdAt": "2026-04-06T11:00:00.000Z",
+    "updatedAt": "2026-04-07T16:20:00.000Z",
+    "labels": ["feature"],
+    "isNew": true,
+    "html_url": "https://github.com/straw-hat-pirates/thousand-sunny-rigging/pull/9001",
     "type": "open",
-    "reviewStatus": "reviewed",
-    "authorReviewStatus": "approved"
+    "reviewStatus": "pending",
+    "authorReviewStatus": "pending"
   },
   {
     "id": "grand-line/vivre-cards-67890",
@@ -61,16 +68,35 @@
         "login": "nico-robin"
       }
     ],
-    "createdAt": "2025-02-14T11:20:00.000Z",
-    "updatedAt": "2025-02-14T11:20:00.000Z",
-    "labels": [
-      "performance"
-    ],
-    "isNew": true,
+    "createdAt": "2026-04-07T11:20:00.000Z",
+    "updatedAt": "2026-04-07T11:20:00.000Z",
+    "labels": ["performance"],
+    "isNew": false,
     "html_url": "https://github.com/grand-line/vivre-cards/pull/67890",
     "type": "open",
     "reviewStatus": "pending",
     "authorReviewStatus": "pending"
+  },
+  {
+    "id": "skypiea/dial-runtime-404",
+    "url": "https://github.com/skypiea/dial-runtime/pull/404",
+    "title": "WIP: Draft — Cloud dial WASM bindings (do not merge yet)",
+    "number": null,
+    "repoName": "skypiea/dial-runtime",
+    "author": [
+      {
+        "login": "wyper-shandian",
+        "avatarUrl": "https://api.dicebear.com/9.x/big-smile/svg?seed=wyper-skypea"
+      }
+    ],
+    "createdAt": "2026-04-04T08:00:00.000Z",
+    "updatedAt": "2026-04-06T12:00:00.000Z",
+    "labels": ["wip"],
+    "isNew": false,
+    "html_url": "https://github.com/skypiea/dial-runtime/pull/404",
+    "type": "draft",
+    "reviewStatus": "pending",
+    "authorReviewStatus": "draft"
   },
   {
     "id": "poneglyph-decoder/ancient-text-234567",
@@ -81,20 +107,38 @@
     "author": [
       {
         "login": "nico-robin",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/22222?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=robin-scholar"
       }
     ],
-    "createdAt": "2025-02-13T09:00:00.000Z",
-    "updatedAt": "2025-02-14T12:00:00.000Z",
-    "labels": [
-      "editor",
-      "extension-api"
-    ],
+    "createdAt": "2026-04-03T09:00:00.000Z",
+    "updatedAt": "2026-04-07T12:00:00.000Z",
+    "labels": ["editor"],
     "isNew": false,
     "html_url": "https://github.com/poneglyph-decoder/ancient-text/pull/234567",
     "type": "open",
     "reviewStatus": "reviewed",
     "authorReviewStatus": "changes_requested"
+  },
+  {
+    "id": "devil-fruit-engine/gum-gum-28456",
+    "url": "https://github.com/devil-fruit-engine/gum-gum/pull/28456",
+    "title": "Fix hydration mismatch when Luffy uses Gear 4",
+    "number": 28456,
+    "repoName": "devil-fruit-engine/gum-gum",
+    "author": [
+      {
+        "login": "monkey-d-luffy",
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=luffy-bounce"
+      }
+    ],
+    "createdAt": "2026-04-02T08:00:00.000Z",
+    "updatedAt": "2026-04-07T10:45:00.000Z",
+    "labels": ["bug"],
+    "isNew": false,
+    "html_url": "https://github.com/devil-fruit-engine/gum-gum/pull/28456",
+    "type": "open",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
   },
   {
     "id": "roronoa-zoro/santoryu-layout-9876",
@@ -105,43 +149,17 @@
     "author": [
       {
         "login": "roronoa-zoro",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/33333?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=zoro-layout"
       }
     ],
-    "createdAt": "2025-02-11T16:30:00.000Z",
-    "updatedAt": "2025-02-14T08:45:00.000Z",
-    "labels": [
-      "feature",
-      "css"
-    ],
+    "createdAt": "2026-04-01T16:30:00.000Z",
+    "updatedAt": "2026-04-07T08:45:00.000Z",
+    "labels": ["css"],
     "isNew": true,
     "html_url": "https://github.com/roronoa-zoro/santoryu-layout/pull/9876",
     "type": "open",
-    "reviewStatus": "pending",
-    "authorReviewStatus": "pending"
-  },
-  {
-    "id": "devil-fruit-engine/awakening-state-2345",
-    "url": "https://github.com/devil-fruit-engine/awakening-state/pull/2345",
-    "title": "Improve createSlice type inference for Devil Fruit awakening",
-    "number": 2345,
-    "repoName": "devil-fruit-engine/awakening-state",
-    "author": [
-      {
-        "login": "trafalgar-law"
-      }
-    ],
-    "createdAt": "2025-02-09T11:15:00.000Z",
-    "updatedAt": "2025-02-13T14:20:00.000Z",
-    "labels": [
-      "typescript",
-      "enhancement"
-    ],
-    "isNew": false,
-    "html_url": "https://github.com/devil-fruit-engine/awakening-state/pull/2345",
-    "type": "open",
-    "reviewStatus": "pending",
-    "authorReviewStatus": "commented"
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
   },
   {
     "id": "den-den-mushi/transceiver-5678",
@@ -152,44 +170,58 @@
     "author": [
       {
         "login": "usopp-sogeking",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/44444?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=usopp-sniper"
       }
     ],
-    "createdAt": "2025-02-12T07:00:00.000Z",
-    "updatedAt": "2025-02-14T10:30:00.000Z",
-    "labels": [
-      "ssr",
-      "feature",
-      "react"
-    ],
-    "isNew": true,
+    "createdAt": "2026-04-05T07:00:00.000Z",
+    "updatedAt": "2026-04-07T10:30:00.000Z",
+    "labels": ["ssr"],
+    "isNew": false,
     "html_url": "https://github.com/den-den-mushi/transceiver/pull/5678",
     "type": "open",
-    "reviewStatus": "pending",
-    "authorReviewStatus": "pending"
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "approved"
   },
   {
     "id": "chopper-doctor/rumble-ball-51234",
     "url": "https://github.com/chopper-doctor/rumble-ball/pull/51234",
-    "title": "Optimize Buffer allocation for Chopper's form transformations",
+    "title": "Optimize Buffer allocation for Chopper's form transformations and document edge cases when rumble balls stack with concurrent morph state updates in the extension host",
     "number": 51234,
     "repoName": "chopper-doctor/rumble-ball",
     "author": [
       {
         "login": "chopper-doctor",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/55555?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/big-smile/svg?seed=chopper-md"
       }
     ],
-    "createdAt": "2025-02-08T13:45:00.000Z",
-    "updatedAt": "2025-02-12T17:00:00.000Z",
-    "labels": [
-      "performance",
-      "buffer"
-    ],
+    "createdAt": "2026-03-28T13:45:00.000Z",
+    "updatedAt": "2026-04-06T17:00:00.000Z",
+    "labels": ["performance"],
     "isNew": false,
     "html_url": "https://github.com/chopper-doctor/rumble-ball/pull/51234",
     "type": "open",
     "reviewStatus": "reviewed",
     "authorReviewStatus": "approved"
+  },
+  {
+    "id": "devil-fruit-engine/awakening-state-2345",
+    "url": "https://github.com/devil-fruit-engine/awakening-state/pull/2345",
+    "title": "Improve createSlice type inference for Devil Fruit awakening",
+    "number": 2345,
+    "repoName": "devil-fruit-engine/awakening-state",
+    "author": [
+      {
+        "login": "trafalgar-law",
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=law-surgeon"
+      }
+    ],
+    "createdAt": "2026-03-30T11:15:00.000Z",
+    "updatedAt": "2026-04-05T14:20:00.000Z",
+    "labels": ["typescript"],
+    "isNew": false,
+    "html_url": "https://github.com/devil-fruit-engine/awakening-state/pull/2345",
+    "type": "open",
+    "reviewStatus": "reviewed",
+    "authorReviewStatus": "commented"
   }
 ]

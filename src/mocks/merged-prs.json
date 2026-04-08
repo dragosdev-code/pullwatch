@@ -8,15 +8,13 @@
     "author": [
       {
         "login": "franky-shogun",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/12345?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=franky-cola"
       }
     ],
-    "createdAt": "2025-02-08T10:00:00.000Z",
-    "updatedAt": "2025-02-11T14:30:00.000Z",
-    "labels": [
-      "documentation"
-    ],
-    "isNew": false,
+    "createdAt": "2026-03-28T10:00:00.000Z",
+    "updatedAt": "2026-04-06T14:30:00.000Z",
+    "labels": ["documentation"],
+    "isNew": true,
     "html_url": "https://github.com/going-merry/ship-manual/pull/38",
     "type": "merged",
     "reviewStatus": "reviewed",
@@ -31,16 +29,13 @@
     "author": [
       {
         "login": "monkey-d-luffy",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/67890?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=luffy-merged"
       }
     ],
-    "createdAt": "2025-02-05T09:15:00.000Z",
-    "updatedAt": "2025-02-12T11:00:00.000Z",
-    "labels": [
-      "feature",
-      "react-19"
-    ],
-    "isNew": false,
+    "createdAt": "2026-03-25T09:15:00.000Z",
+    "updatedAt": "2026-04-05T11:00:00.000Z",
+    "labels": ["feature"],
+    "isNew": true,
     "html_url": "https://github.com/devil-fruit-engine/gum-gum/pull/28400",
     "type": "merged",
     "reviewStatus": "reviewed",
@@ -55,15 +50,12 @@
     "author": [
       {
         "login": "jinbe-first-son",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/11111?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=jinbe-knight"
       }
     ],
-    "createdAt": "2025-02-01T16:45:00.000Z",
-    "updatedAt": "2025-02-10T09:30:00.000Z",
-    "labels": [
-      "bug",
-      "middleware"
-    ],
+    "createdAt": "2026-03-20T16:45:00.000Z",
+    "updatedAt": "2026-04-04T09:30:00.000Z",
+    "labels": ["bug"],
     "isNew": false,
     "html_url": "https://github.com/thousand-sunny/new-world/pull/67750",
     "type": "merged",
@@ -78,16 +70,12 @@
     "repoName": "brook-soul-king/soul-parlor",
     "author": [
       {
-        "login": "brook-soul-king",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/22222?v=4"
+        "login": "brook-soul-king"
       }
     ],
-    "createdAt": "2025-02-06T14:00:00.000Z",
-    "updatedAt": "2025-02-11T09:15:00.000Z",
-    "labels": [
-      "bug",
-      "memory"
-    ],
+    "createdAt": "2026-03-26T14:00:00.000Z",
+    "updatedAt": "2026-04-03T09:15:00.000Z",
+    "labels": ["bug"],
     "isNew": false,
     "html_url": "https://github.com/brook-soul-king/soul-parlor/pull/234500",
     "type": "merged",
@@ -103,15 +91,12 @@
     "author": [
       {
         "login": "roronoa-zoro",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/33333?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=zoro-merged"
       }
     ],
-    "createdAt": "2025-02-04T11:30:00.000Z",
-    "updatedAt": "2025-02-09T16:45:00.000Z",
-    "labels": [
-      "feature",
-      "css"
-    ],
+    "createdAt": "2026-03-24T11:30:00.000Z",
+    "updatedAt": "2026-04-02T16:45:00.000Z",
+    "labels": ["css"],
     "isNew": false,
     "html_url": "https://github.com/roronoa-zoro/santoryu-layout/pull/9800",
     "type": "merged",
@@ -126,15 +111,13 @@
     "repoName": "going-merry/legacy-ship",
     "author": [
       {
-        "login": "franky-shogun"
+        "login": "franky-shogun",
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=franky-legacy"
       }
     ],
-    "createdAt": "2025-02-03T08:20:00.000Z",
-    "updatedAt": "2025-02-08T14:00:00.000Z",
-    "labels": [
-      "breaking-change",
-      "createAsyncThunk"
-    ],
+    "createdAt": "2026-03-23T08:20:00.000Z",
+    "updatedAt": "2026-04-01T14:00:00.000Z",
+    "labels": ["breaking-change"],
     "isNew": false,
     "html_url": "https://github.com/going-merry/legacy-ship/pull/2300",
     "type": "merged",
@@ -150,15 +133,12 @@
     "author": [
       {
         "login": "nami-swan",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/44444?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=nami-pose"
       }
     ],
-    "createdAt": "2025-02-02T10:00:00.000Z",
-    "updatedAt": "2025-02-07T11:30:00.000Z",
-    "labels": [
-      "feature",
-      "stable-api"
-    ],
+    "createdAt": "2026-03-22T10:00:00.000Z",
+    "updatedAt": "2026-03-31T11:30:00.000Z",
+    "labels": ["feature"],
     "isNew": false,
     "html_url": "https://github.com/eternal-pose/waypoint/pull/5600",
     "type": "merged",
@@ -174,15 +154,12 @@
     "author": [
       {
         "login": "monkey-d-luffy",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/55555?v=4"
+        "avatarUrl": "https://api.dicebear.com/9.x/pixel-art/svg?seed=luffy-fleet"
       }
     ],
-    "createdAt": "2025-01-30T09:00:00.000Z",
-    "updatedAt": "2025-02-06T15:20:00.000Z",
-    "labels": [
-      "deps",
-      "v8"
-    ],
+    "createdAt": "2026-03-19T09:00:00.000Z",
+    "updatedAt": "2026-03-30T15:20:00.000Z",
+    "labels": ["deps"],
     "isNew": false,
     "html_url": "https://github.com/straw-hat-pirates/fleet/pull/51100",
     "type": "merged",

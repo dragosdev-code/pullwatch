@@ -193,11 +193,16 @@ export class DevTestService implements IDevTestService {
   static createMockPR(overrides?: Partial<PullRequest>): PullRequest {
     return {
       id: `test-pr-${Date.now()}`,
-      url: `${GITHUB_BASE_URL}/test/repo/pull/0`,
-      title: 'Test PR: This is a Test Notification',
+      url: `${GITHUB_BASE_URL}/den-den-mushi/transceiver/pull/0`,
+      title: 'Test PR: Den Den Mushi notification smoke test',
       number: 0,
-      repoName: 'test/repo',
-      author: [{ login: 'test-author' }],
+      repoName: 'den-den-mushi/transceiver',
+      author: [
+        {
+          login: 'usopp-sogeking',
+          avatarUrl: 'https://api.dicebear.com/9.x/pixel-art/svg?seed=usopp-devtest',
+        },
+      ],
       createdAt: new Date().toISOString(),
       isNew: true,
       type: 'open',
