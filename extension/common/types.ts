@@ -1,6 +1,7 @@
 // extension/common/types.ts
 import type {
   STORAGE_KEY_ASSIGNED_PRS,
+  STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_LAST_FETCH,
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
   STORAGE_KEY_SETTINGS,
@@ -98,6 +99,7 @@ export interface StorageItems {
   [STORAGE_KEY_PR_FETCH_IN_PROGRESS]?: boolean;
   [STORAGE_KEY_SETTINGS]?: ExtensionSettings;
   [STORAGE_KEY_USER_DATA]?: UserData;
+  [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]?: GitHubViewerIdentity;
   // Allow any string as a key for flexibility
   [key: string]: unknown;
 }
@@ -113,6 +115,7 @@ export interface StorageKeyMap {
   [STORAGE_KEY_AUTHORED_PRS]: StoredPRs;
   [STORAGE_KEY_LAST_FETCH]: number;
   [STORAGE_KEY_SETTINGS]: ExtensionSettings;
+  [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: GitHubViewerIdentity;
 }
 
 /**
@@ -139,6 +142,12 @@ export interface ExtensionSettings {
 export interface UserData {
   githubUsername?: string;
   lastLogin?: string; // ISO date string
+}
+
+/** Last known GitHub web-session login; compared on each fetch to detect account swap. */
+export interface GitHubViewerIdentity {
+  login: string;
+  updatedAt?: string;
 }
 
 /** Request-style runtime message (`payload`; used by popup, background, offscreen). */

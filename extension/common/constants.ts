@@ -13,6 +13,8 @@ export const STORAGE_KEY_PATTERN_REGISTRY = 'parser_pattern_registry';
 export const STORAGE_KEY_PARSER_BREAKAGE = 'parser_breakage';
 export const STORAGE_KEY_GITHUB_OUTAGE = 'github_outage';
 export const STORAGE_KEY_ROUTE_HINT = 'pulls_list_route_hint';
+/** Parsed GitHub session login for account-swap detection vs PR cache (see PRService silent baseline). */
+export const STORAGE_KEY_GITHUB_VIEWER_IDENTITY = 'github_viewer_identity';
 
 // Remote Pattern Registry
 // Production config — raw file on the main branch, served directly by GitHub.

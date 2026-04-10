@@ -60,6 +60,7 @@ export function compilePatterns(registry: PatternRegistry): CompiledPatterns {
     },
     timestamp: registry.timestamp.map(compileEntry),
     prType: registry.prType.map(compileTypeEntry),
+    viewerLogin: registry.viewerLogin.map(compileEntry),
     ...(registry.newExperience && {
       newExperience: {
         pageMarker: compileEntry(registry.newExperience.pageMarker),
@@ -254,6 +255,42 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
     { type: 'open', pattern: { regex: 'octicon-git-pull-request(?!-)', flags: 'i' } },
     { type: 'open', pattern: { regex: 'color-fg-open', flags: 'i' } },
     { type: 'merged', pattern: { regex: 'octicon-git-merge', flags: 'i' } },
+  ],
+
+  // WHY [flat chain]: Same strategy as list parsing — one ordered regex list, no branching on URL or
+  // legacy vs new experience. GitHubService walks these until the first capture of `login`.
+  // Roadmap: add optional `description` on every PatternEntry across this file for remote/config clarity.
+  viewerLogin: [
+    {
+      description: 'Match current_user login in embedded data',
+      regex: '"current_user"\\s*:\\s*\\{[^}]*"login"\\s*:\\s*"([^"]+)"',
+      flags: '',
+      captureGroups: { login: 1 },
+    },
+    {
+      description: 'Match userMenu owner login in global nav partial',
+      regex: '"userMenu"\\s*:\\s*\\{[^}]*"owner"\\s*:\\s*\\{[^}]*"login"\\s*:\\s*"([^"]+)"',
+      flags: '',
+      captureGroups: { login: 1 },
+    },
+    {
+      description: 'Match octolytics-actor-login meta tag',
+      regex: '<meta[^>]+name="octolytics-actor-login"[^>]+content="([^"]+)"',
+      flags: 'i',
+      captureGroups: { login: 1 },
+    },
+    {
+      description: 'Match user-login meta tag',
+      regex: '<meta[^>]+name="user-login"[^>]+content="([^"]+)"',
+      flags: 'i',
+      captureGroups: { login: 1 },
+    },
+    {
+      description: 'Match login in legacy client-env json',
+      regex: '<script[^>]*id="client-env"[^>]*>[\\s\\S]*?"login"\\s*:\\s*"([^"]+)"',
+      flags: 'i',
+      captureGroups: { login: 1 },
+    },
   ],
 
   // ── New-experience patterns (React-based global pulls dashboard) ───

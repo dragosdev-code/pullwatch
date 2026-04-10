@@ -1,5 +1,7 @@
 /** Serializable regex pattern entry (JSON-safe for remote config). */
 export interface PatternEntry {
+  /** Human-readable label for remote JSON / reviews; ignored at compile time. */
+  description?: string;
   regex: string;
   flags: string;
   captureGroups?: Record<string, number>;
@@ -76,6 +78,11 @@ export interface PatternRegistry {
   };
   timestamp: PatternEntry[];
   prType: PatternTypeEntry[];
+  /**
+   * Ordered viewer-login fallbacks (HTML only). First regex match wins — same model as {@link author} / list parsing.
+   * Required in registry JSON alongside other pattern blocks.
+   */
+  viewerLogin: PatternEntry[];
   /** Optional — absent in remote configs published before the new-experience parser shipped. */
   newExperience?: NewExperiencePatterns;
 }
@@ -145,6 +152,7 @@ export interface CompiledPatterns {
   };
   timestamp: CompiledPattern[];
   prType: CompiledPatternTypeEntry[];
+  viewerLogin: CompiledPattern[];
   /** Optional — undefined when the active registry predates the new-experience parser. */
   newExperience?: CompiledNewExperiencePatterns;
 }

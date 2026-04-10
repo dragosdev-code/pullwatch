@@ -2,6 +2,7 @@ import type { IStorageService } from '../interfaces/IStorageService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type {
   ExtensionSettings,
+  GitHubViewerIdentity,
   PullRequest,
   StorageKeyMap,
   StorageKeyPRs,
@@ -9,6 +10,7 @@ import type {
   UserData,
 } from '../../common/types';
 import {
+  STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_LAST_FETCH,
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
@@ -221,6 +223,35 @@ export class StorageService implements IStorageService {
       this.debugService.log('[StorageService] Settings updated:', updatedSettings);
     } catch (error) {
       this.logStorageException('[StorageService] Error setting settings:', error);
+      throw error;
+    }
+  }
+
+  async getGitHubViewerIdentity(): Promise<GitHubViewerIdentity | null> {
+    try {
+      return await this.get<GitHubViewerIdentity>(STORAGE_KEY_GITHUB_VIEWER_IDENTITY);
+    } catch (error) {
+      this.logStorageException('[StorageService] Error getting GitHub viewer identity:', error);
+      return null;
+    }
+  }
+
+  async setGitHubViewerIdentity(identity: GitHubViewerIdentity): Promise<void> {
+    try {
+      await this.set(STORAGE_KEY_GITHUB_VIEWER_IDENTITY, identity);
+      this.debugService.log('[StorageService] GitHub viewer identity updated:', identity.login);
+    } catch (error) {
+      this.logStorageException('[StorageService] Error setting GitHub viewer identity:', error);
+      throw error;
+    }
+  }
+
+  async clearGitHubViewerIdentity(): Promise<void> {
+    try {
+      await this.remove(STORAGE_KEY_GITHUB_VIEWER_IDENTITY);
+      this.debugService.log('[StorageService] GitHub viewer identity cleared');
+    } catch (error) {
+      this.logStorageException('[StorageService] Error clearing GitHub viewer identity:', error);
       throw error;
     }
   }

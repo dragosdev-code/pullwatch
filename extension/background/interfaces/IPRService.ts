@@ -58,4 +58,11 @@ export interface IPRService extends IService {
     newPRs: PullRequest[];
     allPRsWithStatus: PullRequest[];
   };
+
+  /**
+   * Writes `github_viewer_identity` from the last HTML-derived login.
+   * Call once after a successful fetch cycle (alarm block or single manual refresh) so merged/authored
+   * still compare against the pre-cycle baseline in storage.
+   */
+  persistResolvedViewerIdentity(): Promise<void>;
 }

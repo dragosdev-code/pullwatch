@@ -3,6 +3,7 @@ import type { IDebugService } from '../interfaces/IDebugService';
 import type { IAvatarService } from '../interfaces/IAvatarService';
 import type { IPatternRegistryService } from '../interfaces/IPatternRegistryService';
 import type { PullRequest } from '../../common/types';
+import type { CompiledPattern } from '../../common/pattern-types';
 import {
   GITHUB_BASE_URL,
   GITHUB_REVIEW_REQUESTS_URL_TEMPLATE,
@@ -76,6 +77,11 @@ export class GitHubService implements IGitHubService {
   private authoredPendingURL: string;
   private authoredCommentedURL: string;
   private authoredDraftURL: string;
+  /**
+   * Set from each successful {@link fetchGitHubData} HTML body via {@link viewerLogin} patterns.
+   * Cleared at the start of {@link fetchPRs} so a skipped network path does not reuse a stale login.
+   */
+  private lastResolvedViewerLogin: string | null = null;
 
   constructor(
     debugService: IDebugService,
@@ -114,6 +120,31 @@ export class GitHubService implements IGitHubService {
     this.debugService.log('[GitHubService] Initialized. Reviewed PRs URL:', this.reviewedPRsURL);
     this.initialized = true;
     this.debugService.log('[GitHubService] GitHub service initialized');
+  }
+
+  getLastResolvedViewerLogin(): string | null {
+    return this.lastResolvedViewerLogin;
+  }
+
+  /**
+   * WHY [flat chain]: Same contract as list parsing — walk registry `viewerLogin` patterns in order;
+   * first non-empty `login` capture wins. Empty capture is ignored so logged-out metas do not
+   * poison {@link PRService} account-swap detection.
+   */
+  private static extractViewerLoginFromHtml(
+    html: string,
+    chain: CompiledPattern[]
+  ): string | null {
+    for (const p of chain) {
+      const m = p.compiled.exec(html);
+      if (!m) continue;
+      const idx = p.captureGroups?.login ?? 1;
+      const raw = m[idx];
+      if (typeof raw === 'string' && raw.trim().length > 0) {
+        return raw.trim();
+      }
+    }
+    return null;
   }
 
   /**
@@ -185,6 +216,11 @@ export class GitHubService implements IGitHubService {
         if (isLoginPage) {
           throw new Error('NotLoggedIn: User is not logged in to GitHub.');
         }
+
+        this.lastResolvedViewerLogin = GitHubService.extractViewerLoginFromHtml(
+          html,
+          this.patternRegistryService.getPatterns().viewerLogin
+        );
 
         return await transform(html);
       } catch (error) {
@@ -339,6 +375,10 @@ export class GitHubService implements IGitHubService {
    */
   private async fetchPRs(url: string, context: string): Promise<PullRequest[]> {
     this.patternRegistryService.refreshIfStale().catch(() => {});
+
+    // WHY: If this fetch short-circuits on cache upstream, we must not attribute a prior
+    // request's viewer to this cycle; PRService persists identity after the alarm block.
+    this.lastResolvedViewerLogin = null;
 
     const hint = await this.readRouteHint();
 

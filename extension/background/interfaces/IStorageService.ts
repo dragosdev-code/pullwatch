@@ -1,4 +1,10 @@
-import type { ExtensionSettings, PullRequest, StorageKeyMap, StorageKeyPRs } from '../../common/types';
+import type {
+  ExtensionSettings,
+  GitHubViewerIdentity,
+  PullRequest,
+  StorageKeyMap,
+  StorageKeyPRs,
+} from '../../common/types';
 import type { IService } from './IService';
 
 /**
@@ -34,6 +40,21 @@ export interface IStorageService extends IService {
    * Sets extension settings.
    */
   setExtensionSettings(settings: Partial<ExtensionSettings>): Promise<void>;
+
+  /**
+   * Last persisted GitHub web-session login (account-swap baseline).
+   */
+  getGitHubViewerIdentity(): Promise<GitHubViewerIdentity | null>;
+
+  /**
+   * Persists viewer login after a successful fetch cycle.
+   */
+  setGitHubViewerIdentity(identity: GitHubViewerIdentity): Promise<void>;
+
+  /**
+   * Clears stored viewer identity (e.g. logged out / invalid session).
+   */
+  clearGitHubViewerIdentity(): Promise<void>;
 
   /**
    * Gets a value from storage by key.

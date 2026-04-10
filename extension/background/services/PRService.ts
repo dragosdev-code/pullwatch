@@ -15,6 +15,7 @@ import {
   STORAGE_KEY_GITHUB_OUTAGE,
   STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_PARSER_BREAKAGE,
+  STORAGE_KEY_ROUTE_HINT,
 } from '../../common/constants';
 import { RateLimitError, ParserBreakageError, GitHubOutageError } from '../../common/errors';
 import { delay } from '../../common/utils';
@@ -75,6 +76,23 @@ export class PRService implements IPRService {
   }
 
   /**
+   * WHY [ordering]: Storage identity must not update until the alarm (or manual) cycle finishes
+   * so merged/authored still see the pre-cycle login in {@link IStorageService.getGitHubViewerIdentity}
+   * and can apply the same silent baseline as assigned.
+   */
+  async persistResolvedViewerIdentity(): Promise<void> {
+    const login = this.gitHubService.getLastResolvedViewerLogin();
+    if (!login) {
+      this.debugService.log('[PRService] Skipping viewer identity persist — no resolved login');
+      return;
+    }
+    await this.storageService.setGitHubViewerIdentity({
+      login,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  /**
    * Loads assigned / review-requested PRs from GitHub, merges with the “reviewed” list,
    * writes storage, updates the badge, and shows notifications for PRs that are new
    * relative to the last stored **pending** set (skipped when {@link forceRefresh} is true).
@@ -128,15 +146,42 @@ export class PRService implements IPRService {
     try {
       const cached = await this.checkAssignedCache(forceRefresh, bypassCache);
       if (cached) return cached;
+
+      const baselineIdentity = await this.storageService.getGitHubViewerIdentity();
       const oldPendingPRs = oldPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
 
       const freshPendingPRsRaw = await this.gitHubService.fetchAssignedPRs();
       await delay(REQUEST_DELAY_MS);
       const freshReviewedPRsRaw = await this.gitHubService.fetchReviewedPRs();
 
-      const { allPRs, filteredPending, newPRs } = await this.mergeAndFilterAssignedPRs(
-        oldPendingPRs, freshPendingPRsRaw, freshReviewedPRsRaw
+      const currentLogin = this.gitHubService.getLastResolvedViewerLogin();
+      const accountSwap = Boolean(
+        baselineIdentity?.login && currentLogin && baselineIdentity.login !== currentLogin
       );
+      if (accountSwap) {
+        this.debugService.log(
+          `[PRService] GitHub account swap detected (${baselineIdentity!.login} → ${currentLogin}); silent assigned baseline`
+        );
+        await this.storageService.remove(STORAGE_KEY_ROUTE_HINT);
+      }
+
+      const oldPendingForCompare = accountSwap ? [] : oldPendingPRs;
+
+      let { allPRs, filteredPending, newPRs } = await this.mergeAndFilterAssignedPRs(
+        oldPendingForCompare,
+        freshPendingPRsRaw,
+        freshReviewedPRsRaw
+      );
+
+      if (accountSwap) {
+        const settings = await this.storageService.getExtensionSettings();
+        newPRs = [];
+        allPRs = allPRs.map((pr) => ({ ...pr, isNew: false }));
+        filteredPending = filterPendingAssignedByDraftSetting(
+          allPRs.filter((pr) => pr.reviewStatus !== 'reviewed'),
+          settings.assigned.showDraftsInList
+        );
+      }
 
       await this.persistAndNotifyAssigned(allPRs, filteredPending.length, newPRs, forceRefresh);
 
@@ -407,10 +452,27 @@ export class PRService implements IPRService {
         return stored.prs;
       }
 
-      const freshAuthoredPRs = await this.gitHubService.fetchAuthoredPRs();
+      const baselineIdentity = await this.storageService.getGitHubViewerIdentity();
+
+      const freshAuthoredPRsRaw = await this.gitHubService.fetchAuthoredPRs();
       this.debugService.log(
-        `[PRService] Fetched ${freshAuthoredPRs.length} authored PRs from GitHub`
+        `[PRService] Fetched ${freshAuthoredPRsRaw.length} authored PRs from GitHub`
       );
+
+      const currentLogin = this.gitHubService.getLastResolvedViewerLogin();
+      const accountSwap = Boolean(
+        baselineIdentity?.login && currentLogin && baselineIdentity.login !== currentLogin
+      );
+      if (accountSwap) {
+        this.debugService.log(
+          `[PRService] GitHub account swap detected (${baselineIdentity!.login} → ${currentLogin}); refreshing authored list baseline`
+        );
+        await this.storageService.remove(STORAGE_KEY_ROUTE_HINT);
+      }
+
+      const freshAuthoredPRs = accountSwap
+        ? freshAuthoredPRsRaw.map((pr) => ({ ...pr, isNew: false }))
+        : freshAuthoredPRsRaw;
 
       await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, freshAuthoredPRs);
 
@@ -499,13 +561,32 @@ export class PRService implements IPRService {
 
       this.debugService.log(`[PRService] Current stored merged PRs count: ${oldPRs.length}`);
 
+      const baselineIdentity = await this.storageService.getGitHubViewerIdentity();
+
       const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
       this.debugService.log(`[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`);
 
-      const { newPRs, allPRsWithStatus: mergedPRsWithStatus } = this.comparePRs(
-        oldPRs,
+      const currentLogin = this.gitHubService.getLastResolvedViewerLogin();
+      const accountSwap = Boolean(
+        baselineIdentity?.login && currentLogin && baselineIdentity.login !== currentLogin
+      );
+      if (accountSwap) {
+        this.debugService.log(
+          `[PRService] GitHub account swap detected (${baselineIdentity!.login} → ${currentLogin}); silent merged baseline`
+        );
+        await this.storageService.remove(STORAGE_KEY_ROUTE_HINT);
+      }
+
+      const oldMergedForCompare = accountSwap ? [] : oldPRs;
+
+      let { newPRs, allPRsWithStatus: mergedPRsWithStatus } = this.comparePRs(
+        oldMergedForCompare,
         freshMergedPRs
       );
+      if (accountSwap) {
+        newPRs = [];
+        mergedPRsWithStatus = mergedPRsWithStatus.map((pr) => ({ ...pr, isNew: false }));
+      }
       this.debugService.log(`[PRService] Newly merged PRs detected: ${newPRs.length}`);
 
       // WHY notify before persist: same rationale as persistAndNotifyAssigned.

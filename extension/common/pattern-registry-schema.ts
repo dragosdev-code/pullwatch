@@ -20,6 +20,7 @@ import type { PatternRegistry } from './pattern-types';
 // ── Leaf schemas ────────────────────────────────────────────────────
 
 const PatternEntrySchema = v.object({
+  description: v.optional(v.string()),
   regex: v.string(),
   flags: v.string(),
   // captureGroups maps human-readable names to 1-based RegExp group indices.
@@ -97,6 +98,7 @@ export const PatternRegistrySchema = v.object({
   }),
   timestamp: v.pipe(v.array(PatternEntrySchema), v.minLength(1)),
   prType: v.pipe(v.array(PatternTypeEntrySchema), v.minLength(1)),
+  viewerLogin: v.pipe(v.array(PatternEntrySchema), v.minLength(1)),
   // Optional — absent in remote configs published before the new-experience parser shipped.
   newExperience: v.optional(NewExperiencePatternsSchema),
 });

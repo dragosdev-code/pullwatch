@@ -119,6 +119,7 @@ export class EventService implements IEventService {
 
       // Perform initial fetch after installation/update
       await prService.fetchAndUpdateAssignedPRs(true);
+      await prService.persistResolvedViewerIdentity();
     } catch (error) {
       this.debugService.error('[EventService] Error handling installation:', error);
     }
@@ -141,6 +142,7 @@ export class EventService implements IEventService {
       await permissionService.checkAllPermissions();
       await alarmService.setupFetchAlarm();
       await prService.fetchAndUpdateAssignedPRs(true);
+      await prService.persistResolvedViewerIdentity();
     } catch (error) {
       this.debugService.error('[EventService] Error handling startup:', error);
     }
@@ -175,6 +177,7 @@ export class EventService implements IEventService {
           await prService.fetchAndUpdateAssignedPRs(false, true);
           await prService.updateMergedPRs(false, true);
           await prService.updateAuthoredPRs(false, true);
+          await prService.persistResolvedViewerIdentity();
         });
 
         this.debugService.log('[EventService] Completed alarm fetch for all PR types');
@@ -264,9 +267,11 @@ export class EventService implements IEventService {
         // fetchAssignedPRs: Fetch fresh data from GitHub and update storage (manual refresh)
         this.debugService.log('[EventService] Manual refresh - fetching fresh assigned PRs from GitHub');
         await this.coalescedPushBackFetchAlarm();
-        const prs = await this.withPrUiFetchIndicator(() =>
-          prService.fetchAndUpdateAssignedPRs(true)
-        );
+        const prs = await this.withPrUiFetchIndicator(async () => {
+          const list = await prService.fetchAndUpdateAssignedPRs(true);
+          await prService.persistResolvedViewerIdentity();
+          return list;
+        });
         this.debugService.log(`[EventService] fetchAndUpdateAssignedPRs returned ${prs.length} PRs`);
 
         const response = { success: true, data: prs };
@@ -299,7 +304,11 @@ export class EventService implements IEventService {
           '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
         );
         await this.coalescedPushBackFetchAlarm();
-        const merged = await this.withPrUiFetchIndicator(() => prService.updateMergedPRs(true));
+        const merged = await this.withPrUiFetchIndicator(async () => {
+          const list = await prService.updateMergedPRs(true);
+          await prService.persistResolvedViewerIdentity();
+          return list;
+        });
         this.debugService.log(`[EventService] updateMergedPRs returned ${merged.length} PRs`);
         sendResponse({ success: true, data: merged });
       }
@@ -365,7 +374,11 @@ export class EventService implements IEventService {
           '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
         );
         await this.coalescedPushBackFetchAlarm();
-        const authored = await this.withPrUiFetchIndicator(() => prService.updateAuthoredPRs(true));
+        const authored = await this.withPrUiFetchIndicator(async () => {
+          const list = await prService.updateAuthoredPRs(true);
+          await prService.persistResolvedViewerIdentity();
+          return list;
+        });
         sendResponse({ success: true, data: authored });
       }
     } catch (error) {

@@ -24,4 +24,10 @@ export interface IGitHubService extends IService {
    * Fetches authored pull requests (PRs created by the user) with different review statuses.
    */
   fetchAuthoredPRs(): Promise<PullRequest[]>;
+
+  /**
+   * Login parsed from the last successful pulls-list HTML in this worker wake (null if unknown).
+   * Used with {@link IStorageService.getGitHubViewerIdentity} for account-swap detection.
+   */
+  getLastResolvedViewerLogin(): string | null;
 }
