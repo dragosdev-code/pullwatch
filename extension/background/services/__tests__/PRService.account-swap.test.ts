@@ -3,9 +3,13 @@ import { PRService } from '../PRService';
 import type { PullRequest } from '../../../common/types';
 import {
   STORAGE_KEY_ASSIGNED_PRS,
+  STORAGE_KEY_AUTHORED_PRS,
+  STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_ROUTE_HINT,
 } from '../../../common/constants';
 import { DEFAULT_EXTENSION_SETTINGS } from '../StorageService';
+
+type StoredPRData = { prs: PullRequest[]; timestamp: number } | null;
 
 function makePR(partial: Partial<PullRequest> & Pick<PullRequest, 'id' | 'url'>): PullRequest {
   return {
@@ -28,9 +32,13 @@ describe('PRService account swap (silent baseline)', () => {
   let setLastFetchTime: Mock;
   let fetchAssignedPRs: Mock;
   let fetchReviewedPRs: Mock;
+  let fetchMergedPRs: Mock;
+  let fetchAuthoredPRs: Mock;
   let getLastResolvedViewerLogin: Mock;
   let showAssignedPRNotifications: Mock;
+  let showMergedPRNotifications: Mock;
   let setPRCountBadge: Mock;
+  let storedByKey: Record<string, StoredPRData>;
 
   const debugService = {
     log: vi.fn(),
@@ -52,31 +60,47 @@ describe('PRService account swap (silent baseline)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    getStoredPRs = vi.fn();
-    setStoredPRs = vi.fn().mockResolvedValue(undefined);
+
+    storedByKey = {
+      [STORAGE_KEY_ASSIGNED_PRS]: {
+        prs: [makePR({ id: 'old-1', url: 'https://github.com/o/r/pull/99', reviewStatus: 'pending' })],
+        timestamp: 0,
+      },
+      [STORAGE_KEY_MERGED_PRS]: {
+        prs: [makePR({ id: 'merged-old', url: 'https://github.com/o/r/pull/101', type: 'merged' })],
+        timestamp: 0,
+      },
+      [STORAGE_KEY_AUTHORED_PRS]: {
+        prs: [makePR({ id: 'authored-old', url: 'https://github.com/o/r/pull/201' })],
+        timestamp: 0,
+      },
+    };
+
+    getStoredPRs = vi.fn(async (key: string) => storedByKey[key] ?? null);
+    setStoredPRs = vi.fn(async (key: string, prs: PullRequest[]) => {
+      storedByKey[key] = { prs, timestamp: Date.now() };
+    });
     getGitHubViewerIdentity = vi.fn().mockResolvedValue({ login: 'alice' });
     getExtensionSettings = vi.fn().mockResolvedValue(DEFAULT_EXTENSION_SETTINGS);
     remove = vi.fn().mockResolvedValue(undefined);
     setLastFetchTime = vi.fn().mockResolvedValue(undefined);
-    fetchAssignedPRs = vi.fn();
-    fetchReviewedPRs = vi.fn();
-    getLastResolvedViewerLogin = vi.fn().mockReturnValue('bob');
-    showAssignedPRNotifications = vi.fn().mockResolvedValue(undefined);
-    setPRCountBadge = vi.fn().mockResolvedValue(undefined);
-
-    getStoredPRs.mockImplementation(async (key: string) => {
-      if (key !== STORAGE_KEY_ASSIGNED_PRS) return null;
-      return {
-        prs: [makePR({ id: 'old-1', url: 'https://github.com/o/r/pull/99', reviewStatus: 'pending' })],
-        timestamp: 0,
-      };
-    });
-
-    fetchAssignedPRs.mockResolvedValue([
+    fetchAssignedPRs = vi.fn().mockResolvedValue([
       makePR({ id: 'new-1', url: 'https://github.com/a/b/pull/1', title: 'PR one' }),
       makePR({ id: 'new-2', url: 'https://github.com/a/b/pull/2', title: 'PR two' }),
     ]);
-    fetchReviewedPRs.mockResolvedValue([]);
+    fetchReviewedPRs = vi.fn().mockResolvedValue([]);
+    fetchMergedPRs = vi.fn().mockResolvedValue([
+      makePR({ id: 'merged-1', url: 'https://github.com/a/b/pull/301', type: 'merged' }),
+      makePR({ id: 'merged-2', url: 'https://github.com/a/b/pull/302', type: 'merged' }),
+    ]);
+    fetchAuthoredPRs = vi.fn().mockResolvedValue([
+      makePR({ id: 'authored-1', url: 'https://github.com/a/b/pull/401', isNew: true }),
+      makePR({ id: 'authored-2', url: 'https://github.com/a/b/pull/402', isNew: true }),
+    ]);
+    getLastResolvedViewerLogin = vi.fn().mockReturnValue('bob');
+    showAssignedPRNotifications = vi.fn().mockResolvedValue(undefined);
+    showMergedPRNotifications = vi.fn().mockResolvedValue(undefined);
+    setPRCountBadge = vi.fn().mockResolvedValue(undefined);
   });
 
   function makeService() {
@@ -93,10 +117,13 @@ describe('PRService account swap (silent baseline)', () => {
       gitHubService: {
         fetchAssignedPRs,
         fetchReviewedPRs,
+        fetchMergedPRs,
+        fetchAuthoredPRs,
         getLastResolvedViewerLogin,
       } as never,
       notificationService: {
         showAssignedPRNotifications,
+        showMergedPRNotifications,
       } as never,
       badgeService: {
         setPRCountBadge,
@@ -107,7 +134,7 @@ describe('PRService account swap (silent baseline)', () => {
     });
   }
 
-  it('identity mismatch: no assigned notifications, no isNew persisted, badge from pending count', async () => {
+  it('identity mismatch: assigned path stays silent and persists without isNew', async () => {
     const pr = makeService();
     await pr.fetchAndUpdateAssignedPRs(false, true);
 
@@ -120,5 +147,51 @@ describe('PRService account swap (silent baseline)', () => {
     expect(written).toHaveLength(2);
     expect(written.every((p) => p.isNew !== true)).toBe(true);
     expect(setPRCountBadge).toHaveBeenCalledWith(2);
+  });
+
+  it('identity mismatch: merged path skips notifications and strips isNew', async () => {
+    const pr = makeService();
+    const merged = await pr.updateMergedPRs(false, true);
+
+    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(merged.every((p) => p.isNew !== true)).toBe(true);
+  });
+
+  it('identity mismatch: authored path persists all rows with isNew false', async () => {
+    const pr = makeService();
+    const authored = await pr.updateAuthoredPRs(false, true);
+
+    expect(authored.every((p) => p.isNew !== true)).toBe(true);
+    const authoredCall = setStoredPRs.mock.calls.find((c) => c[0] === STORAGE_KEY_AUTHORED_PRS);
+    expect(authoredCall).toBeDefined();
+    const written: PullRequest[] = authoredCall![1];
+    expect(written.every((p) => p.isNew !== true)).toBe(true);
+  });
+
+  it('no stored identity (first install path): not treated as swap', async () => {
+    getGitHubViewerIdentity.mockResolvedValue(null);
+    const pr = makeService();
+    await pr.fetchAndUpdateAssignedPRs(false, true);
+
+    expect(showAssignedPRNotifications).toHaveBeenCalledTimes(1);
+    expect(remove).not.toHaveBeenCalledWith(STORAGE_KEY_ROUTE_HINT);
+  });
+
+  it('same identity: preserves normal notification behavior', async () => {
+    getGitHubViewerIdentity.mockResolvedValue({ login: 'bob' });
+    const pr = makeService();
+    await pr.fetchAndUpdateAssignedPRs(false, true);
+
+    expect(showAssignedPRNotifications).toHaveBeenCalledTimes(1);
+    expect(remove).not.toHaveBeenCalledWith(STORAGE_KEY_ROUTE_HINT);
+  });
+
+  it('null current login: does not infer account swap', async () => {
+    getLastResolvedViewerLogin.mockReturnValue(null);
+    const pr = makeService();
+    await pr.fetchAndUpdateAssignedPRs(false, true);
+
+    expect(showAssignedPRNotifications).toHaveBeenCalledTimes(1);
+    expect(remove).not.toHaveBeenCalledWith(STORAGE_KEY_ROUTE_HINT);
   });
 });

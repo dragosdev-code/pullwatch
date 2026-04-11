@@ -117,7 +117,8 @@ export class EventService implements IEventService {
         this.debugService.log('[EventService] Extension updated');
       }
 
-      // Perform initial fetch after installation/update
+      // WHY [ordering]: Installation only fetches assigned data for fast first render, but
+      // identity still comes from that HTML and must be persisted before the first alarm cycle.
       await prService.fetchAndUpdateAssignedPRs(true);
       await prService.persistResolvedViewerIdentity();
     } catch (error) {

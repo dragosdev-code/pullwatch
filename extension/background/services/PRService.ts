@@ -50,6 +50,10 @@ export class PRService implements IPRService {
   private mergedFetchInProgress: Promise<PullRequest[]> | null = null;
   private mergedFetchOpts: { forceRefresh: boolean; bypassCache: boolean } | null = null;
   private authoredFetchInProgress: Promise<PullRequest[]> | null = null;
+  private authoredFetchOpts: { forceRefresh: boolean; bypassCache: boolean } | null = null;
+  private cycleBaselineLogin: string | null = null;
+  private cycleBaselineLoaded = false;
+  private clearedRouteHintForSwapKey: string | null = null;
 
   constructor(deps: {
     debugService: IDebugService;
@@ -81,15 +85,74 @@ export class PRService implements IPRService {
    * and can apply the same silent baseline as assigned.
    */
   async persistResolvedViewerIdentity(): Promise<void> {
-    const login = this.gitHubService.getLastResolvedViewerLogin();
-    if (!login) {
-      this.debugService.log('[PRService] Skipping viewer identity persist — no resolved login');
-      return;
+    try {
+      const login = this.gitHubService.getLastResolvedViewerLogin();
+      if (!login) {
+        this.debugService.log('[PRService] Skipping viewer identity persist — no resolved login');
+        return;
+      }
+      await this.storageService.setGitHubViewerIdentity({
+        login,
+        updatedAt: new Date().toISOString(),
+      });
+    } finally {
+      this.resetSwapCycleState();
     }
-    await this.storageService.setGitHubViewerIdentity({
-      login,
-      updatedAt: new Date().toISOString(),
-    });
+  }
+
+  /**
+   * WHY [cycle baseline]: Assigned/merged/authored can run in one alarm wake. Cache the
+   * stored viewer login once so all three compare against the same pre-cycle identity.
+   */
+  private async getCycleBaselineLogin(): Promise<string | null> {
+    if (!this.cycleBaselineLoaded) {
+      const baselineIdentity = await this.storageService.getGitHubViewerIdentity();
+      this.cycleBaselineLogin = baselineIdentity?.login ?? null;
+      this.cycleBaselineLoaded = true;
+    }
+    return this.cycleBaselineLogin;
+  }
+
+  private resetSwapCycleState(): void {
+    this.cycleBaselineLoaded = false;
+    this.cycleBaselineLogin = null;
+    this.clearedRouteHintForSwapKey = null;
+  }
+
+  /**
+   * WHY [single side-effect]: Route hint clear is a swap side-effect, not a per-list concern.
+   * Keep it idempotent for one baseline->current pair so sequential list fetches do not thrash
+   * storage and future reordering still preserves behavior.
+   */
+  private async clearRouteHintForSwapOnce(
+    baselineLogin: string,
+    currentLogin: string
+  ): Promise<void> {
+    const key = `${baselineLogin}->${currentLogin}`;
+    if (this.clearedRouteHintForSwapKey === key) return;
+    this.clearedRouteHintForSwapKey = key;
+    await this.storageService.remove(STORAGE_KEY_ROUTE_HINT);
+  }
+
+  /**
+   * Compares the last HTML-derived viewer with the cycle's baseline identity.
+   * First install (no stored baseline) and unknown current login are intentionally not swaps.
+   */
+  private async detectAccountSwap(
+    logSuffix: string
+  ): Promise<{ accountSwap: boolean; baselineLogin: string | null; currentLogin: string | null }> {
+    const baselineLogin = await this.getCycleBaselineLogin();
+    const currentLogin = this.gitHubService.getLastResolvedViewerLogin();
+    const accountSwap = Boolean(baselineLogin && currentLogin && baselineLogin !== currentLogin);
+
+    if (accountSwap && baselineLogin && currentLogin) {
+      await this.clearRouteHintForSwapOnce(baselineLogin, currentLogin);
+      this.debugService.log(
+        `[PRService] GitHub account swap detected (${baselineLogin} → ${currentLogin}); ${logSuffix}`
+      );
+    }
+
+    return { accountSwap, baselineLogin, currentLogin };
   }
 
   /**
@@ -147,39 +210,37 @@ export class PRService implements IPRService {
       const cached = await this.checkAssignedCache(forceRefresh, bypassCache);
       if (cached) return cached;
 
-      const baselineIdentity = await this.storageService.getGitHubViewerIdentity();
       const oldPendingPRs = oldPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
+      const settings = await this.storageService.getExtensionSettings();
+      const showDrafts = settings.assigned.showDraftsInList;
 
       const freshPendingPRsRaw = await this.gitHubService.fetchAssignedPRs();
+      let { accountSwap } = await this.detectAccountSwap('silent assigned baseline');
+
+      // WHY [ordering]: If swap is known from the first assigned fetch, clear the stale route
+      // hint before the reviewed request so the next fetch in this cycle can probe cleanly.
       await delay(REQUEST_DELAY_MS);
       const freshReviewedPRsRaw = await this.gitHubService.fetchReviewedPRs();
 
-      const currentLogin = this.gitHubService.getLastResolvedViewerLogin();
-      const accountSwap = Boolean(
-        baselineIdentity?.login && currentLogin && baselineIdentity.login !== currentLogin
-      );
-      if (accountSwap) {
-        this.debugService.log(
-          `[PRService] GitHub account swap detected (${baselineIdentity!.login} → ${currentLogin}); silent assigned baseline`
-        );
-        await this.storageService.remove(STORAGE_KEY_ROUTE_HINT);
+      if (!accountSwap) {
+        ({ accountSwap } = await this.detectAccountSwap('silent assigned baseline'));
       }
 
       const oldPendingForCompare = accountSwap ? [] : oldPendingPRs;
 
-      let { allPRs, filteredPending, newPRs } = await this.mergeAndFilterAssignedPRs(
+      let { allPRs, filteredPending, newPRs } = this.mergeAndFilterAssignedPRs(
         oldPendingForCompare,
         freshPendingPRsRaw,
-        freshReviewedPRsRaw
+        freshReviewedPRsRaw,
+        showDrafts
       );
 
       if (accountSwap) {
-        const settings = await this.storageService.getExtensionSettings();
         newPRs = [];
         allPRs = allPRs.map((pr) => ({ ...pr, isNew: false }));
         filteredPending = filterPendingAssignedByDraftSetting(
           allPRs.filter((pr) => pr.reviewStatus !== 'reviewed'),
-          settings.assigned.showDraftsInList
+          showDrafts
         );
       }
 
@@ -241,11 +302,12 @@ export class PRService implements IPRService {
    * Compares old pending PRs against fresh data, deduplicates reviewed PRs,
    * and applies draft filtering based on user settings.
    */
-  private async mergeAndFilterAssignedPRs(
+  private mergeAndFilterAssignedPRs(
     oldPendingPRs: PullRequest[],
     freshPendingRaw: PullRequest[],
-    freshReviewedRaw: PullRequest[]
-  ): Promise<{ allPRs: PullRequest[]; filteredPending: PullRequest[]; newPRs: PullRequest[] }> {
+    freshReviewedRaw: PullRequest[],
+    showDrafts: boolean
+  ): { allPRs: PullRequest[]; filteredPending: PullRequest[]; newPRs: PullRequest[] } {
     const freshPending = freshPendingRaw.map((pr) => ({
       ...pr,
       reviewStatus: 'pending' as const,
@@ -261,9 +323,6 @@ export class PRService implements IPRService {
       .filter((pr) => !pendingIds.has(pr.id || pr.url))
       .filter((pr) => pr.type !== 'merged')
       .map((pr): PullRequest => ({ ...pr, reviewStatus: 'reviewed' as const, isNew: false }));
-
-    const settings = await this.storageService.getExtensionSettings();
-    const showDrafts = settings.assigned.showDraftsInList;
 
     const filteredPending = filterPendingAssignedByDraftSetting(pendingPRsWithStatus, showDrafts);
 
@@ -428,13 +487,30 @@ export class PRService implements IPRService {
   }
 
   async updateAuthoredPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
-    if (this.authoredFetchInProgress) {
-      this.debugService.log('[PRService] Authored fetch already in progress, reusing');
+    while (true) {
+      if (this.authoredFetchInProgress && this.authoredFetchOpts) {
+        const o = this.authoredFetchOpts;
+        const needStricter =
+          (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
+        if (!needStricter) {
+          this.debugService.log('[PRService] Authored fetch already in progress, reusing');
+          return this.authoredFetchInProgress;
+        }
+        this.debugService.log(
+          '[PRService] Authored fetch in progress with weaker flags; awaiting then retrying'
+        );
+        await this.authoredFetchInProgress;
+        continue;
+      }
+
+      this.authoredFetchOpts = { forceRefresh, bypassCache };
+      this.authoredFetchInProgress = this.doUpdateAuthoredPRs(forceRefresh, bypassCache)
+        .finally(() => {
+          this.authoredFetchInProgress = null;
+          this.authoredFetchOpts = null;
+        });
       return this.authoredFetchInProgress;
     }
-    this.authoredFetchInProgress = this.doUpdateAuthoredPRs(forceRefresh, bypassCache)
-      .finally(() => { this.authoredFetchInProgress = null; });
-    return this.authoredFetchInProgress;
   }
 
   private async doUpdateAuthoredPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
@@ -452,23 +528,12 @@ export class PRService implements IPRService {
         return stored.prs;
       }
 
-      const baselineIdentity = await this.storageService.getGitHubViewerIdentity();
-
       const freshAuthoredPRsRaw = await this.gitHubService.fetchAuthoredPRs();
       this.debugService.log(
         `[PRService] Fetched ${freshAuthoredPRsRaw.length} authored PRs from GitHub`
       );
 
-      const currentLogin = this.gitHubService.getLastResolvedViewerLogin();
-      const accountSwap = Boolean(
-        baselineIdentity?.login && currentLogin && baselineIdentity.login !== currentLogin
-      );
-      if (accountSwap) {
-        this.debugService.log(
-          `[PRService] GitHub account swap detected (${baselineIdentity!.login} → ${currentLogin}); refreshing authored list baseline`
-        );
-        await this.storageService.remove(STORAGE_KEY_ROUTE_HINT);
-      }
+      const { accountSwap } = await this.detectAccountSwap('refreshing authored list baseline');
 
       const freshAuthoredPRs = accountSwap
         ? freshAuthoredPRsRaw.map((pr) => ({ ...pr, isNew: false }))
@@ -561,21 +626,10 @@ export class PRService implements IPRService {
 
       this.debugService.log(`[PRService] Current stored merged PRs count: ${oldPRs.length}`);
 
-      const baselineIdentity = await this.storageService.getGitHubViewerIdentity();
-
       const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
       this.debugService.log(`[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`);
 
-      const currentLogin = this.gitHubService.getLastResolvedViewerLogin();
-      const accountSwap = Boolean(
-        baselineIdentity?.login && currentLogin && baselineIdentity.login !== currentLogin
-      );
-      if (accountSwap) {
-        this.debugService.log(
-          `[PRService] GitHub account swap detected (${baselineIdentity!.login} → ${currentLogin}); silent merged baseline`
-        );
-        await this.storageService.remove(STORAGE_KEY_ROUTE_HINT);
-      }
+      const { accountSwap } = await this.detectAccountSwap('silent merged baseline');
 
       const oldMergedForCompare = accountSwap ? [] : oldPRs;
 

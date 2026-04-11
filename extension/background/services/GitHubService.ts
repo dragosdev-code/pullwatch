@@ -136,6 +136,9 @@ export class GitHubService implements IGitHubService {
     chain: CompiledPattern[]
   ): string | null {
     for (const p of chain) {
+      // WHY [lastIndex]: Compiled regex objects are shared across fetches. If remote config
+      // ever introduces `g`, exec() mutates lastIndex and can skip later matches unless reset.
+      p.compiled.lastIndex = 0;
       const m = p.compiled.exec(html);
       if (!m) continue;
       const idx = p.captureGroups?.login ?? 1;

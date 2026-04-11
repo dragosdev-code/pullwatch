@@ -262,12 +262,16 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
   // Roadmap: add optional `description` on every PatternEntry across this file for remote/config clarity.
   viewerLogin: [
     {
+      // WHY [fragility]: `[^}]*` is intentionally narrow for speed on large HTML blobs.
+      // If GitHub nests objects before `login`, fallback entries below still recover.
       description: 'Match current_user login in embedded data',
       regex: '"current_user"\\s*:\\s*\\{[^}]*"login"\\s*:\\s*"([^"]+)"',
       flags: '',
       captureGroups: { login: 1 },
     },
     {
+      // WHY [fragility]: Same trade-off as current_user — keep this specific JSON shape fast,
+      // then rely on ordered metas/client-env fallbacks when nav embedding changes.
       description: 'Match userMenu owner login in global nav partial',
       regex: '"userMenu"\\s*:\\s*\\{[^}]*"owner"\\s*:\\s*\\{[^}]*"login"\\s*:\\s*"([^"]+)"',
       flags: '',
