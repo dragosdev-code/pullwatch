@@ -45,7 +45,9 @@ export class EventService implements IEventService {
   private fetchAlarmPushBackInFlight: Promise<void> | null = null;
   /**
    * Count of overlapping PR fetch operations (manual messages run in parallel; alarm is one block).
-   * WHY: a single boolean per handler would clear `pr_fetch_in_progress` while sibling fetches still run.
+   * WHY [UI flag]: a single boolean per handler would clear `pr_fetch_in_progress` while sibling fetches still run.
+   * WHY [identity barrier]: when this returns to 0, {@link withPrUiFetchIndicator} persists viewer identity once —
+   * see that method for the account-swap ordering contract with {@link PRService}.
    */
   private prUiFetchDepth = 0;
   private readonly dispatchTable: Map<RequestRuntimeAction, MessageHandler>;
@@ -174,11 +176,12 @@ export class EventService implements IEventService {
         const prService = this.serviceContainer.getService('prService');
 
         // Alarm cadence is the rate limiter; each tick should observe GitHub, not short TTL cache.
+        // WHY [single barrier]: One `withPrUiFetchIndicator` callback (depth 1) runs the three fetches
+        // sequentially; identity still persists only when that whole block completes.
         await this.withPrUiFetchIndicator(async () => {
           await prService.fetchAndUpdateAssignedPRs(false, true);
           await prService.updateMergedPRs(false, true);
           await prService.updateAuthoredPRs(false, true);
-          await prService.persistResolvedViewerIdentity();
         });
 
         this.debugService.log('[EventService] Completed alarm fetch for all PR types');
@@ -268,11 +271,9 @@ export class EventService implements IEventService {
         // fetchAssignedPRs: Fetch fresh data from GitHub and update storage (manual refresh)
         this.debugService.log('[EventService] Manual refresh - fetching fresh assigned PRs from GitHub');
         await this.coalescedPushBackFetchAlarm();
-        const prs = await this.withPrUiFetchIndicator(async () => {
-          const list = await prService.fetchAndUpdateAssignedPRs(true);
-          await prService.persistResolvedViewerIdentity();
-          return list;
-        });
+        const prs = await this.withPrUiFetchIndicator(async () =>
+          prService.fetchAndUpdateAssignedPRs(true)
+        );
         this.debugService.log(`[EventService] fetchAndUpdateAssignedPRs returned ${prs.length} PRs`);
 
         const response = { success: true, data: prs };
@@ -305,11 +306,7 @@ export class EventService implements IEventService {
           '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
         );
         await this.coalescedPushBackFetchAlarm();
-        const merged = await this.withPrUiFetchIndicator(async () => {
-          const list = await prService.updateMergedPRs(true);
-          await prService.persistResolvedViewerIdentity();
-          return list;
-        });
+        const merged = await this.withPrUiFetchIndicator(async () => prService.updateMergedPRs(true));
         this.debugService.log(`[EventService] updateMergedPRs returned ${merged.length} PRs`);
         sendResponse({ success: true, data: merged });
       }
@@ -322,9 +319,20 @@ export class EventService implements IEventService {
   /**
    * Mirrors in-flight PR fetches to `chrome.storage.local` so an open popup can show “Updating…”
    * for alarm ticks (no React Query mutations) and keeps the flag true until parallel manual handlers finish.
+   *
+   * **Fetch + account-swap flow (manual refresh):** the popup sends three messages; each handler
+   * enters here, so {@link prUiFetchDepth} increments up to 3 and decrements as each fetch completes
+   * (completion order is undefined). {@link PRService} compares HTML-derived login to
+   * `github_viewer_identity` for silent baseline; if the first finisher persisted identity early,
+   * siblings would see baseline === current and miss the swap. This wrapper therefore calls
+   * {@link PRService.persistResolvedViewerIdentity} only when depth returns to **0** (last sibling done).
+   *
+   * **Alarm tick:** one callback runs assigned → merged → authored sequentially (depth stays 1);
+   * identity persists once at the end of that block — same storage contract as manual refresh.
    */
   private async withPrUiFetchIndicator<T>(fn: () => Promise<T>): Promise<T> {
     const storageService = this.serviceContainer.getService('storageService');
+    const prService = this.serviceContainer.getService('prService');
     if (this.prUiFetchDepth === 0) {
       await storageService.set(STORAGE_KEY_PR_FETCH_IN_PROGRESS, true);
     }
@@ -334,6 +342,11 @@ export class EventService implements IEventService {
     } finally {
       this.prUiFetchDepth -= 1;
       if (this.prUiFetchDepth === 0) {
+        try {
+          await prService.persistResolvedViewerIdentity();
+        } catch (err) {
+          this.debugService.error('[EventService] persistResolvedViewerIdentity failed:', err);
+        }
         await storageService.set(STORAGE_KEY_PR_FETCH_IN_PROGRESS, false);
       }
     }
@@ -375,11 +388,7 @@ export class EventService implements IEventService {
           '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
         );
         await this.coalescedPushBackFetchAlarm();
-        const authored = await this.withPrUiFetchIndicator(async () => {
-          const list = await prService.updateAuthoredPRs(true);
-          await prService.persistResolvedViewerIdentity();
-          return list;
-        });
+        const authored = await this.withPrUiFetchIndicator(async () => prService.updateAuthoredPRs(true));
         sendResponse({ success: true, data: authored });
       }
     } catch (error) {

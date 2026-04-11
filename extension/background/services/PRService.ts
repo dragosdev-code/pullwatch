@@ -80,9 +80,13 @@ export class PRService implements IPRService {
   }
 
   /**
-   * WHY [ordering]: Storage identity must not update until the alarm (or manual) cycle finishes
-   * so merged/authored still see the pre-cycle login in {@link IStorageService.getGitHubViewerIdentity}
-   * and can apply the same silent baseline as assigned.
+   * WHY [ordering]: Writes `github_viewer_identity` from {@link IGitHubService.getLastResolvedViewerLogin}
+   * and resets in-memory swap state ({@link resetSwapCycleState}).
+   *
+   * **Call sites:** {@link EventService.withPrUiFetchIndicator} when overlapping fetches drain to
+   * depth 0 (parallel manual refresh + alarm’s single sequential block); {@link EventService.handleInstallation}
+   * and {@link EventService.handleStartup} after assigned-only fetch. Those entry points keep storage
+   * identity stable until every list path in a refresh wave has run swap detection against the same baseline.
    */
   async persistResolvedViewerIdentity(): Promise<void> {
     try {
@@ -137,6 +141,12 @@ export class PRService implements IPRService {
   /**
    * Compares the last HTML-derived viewer with the cycle's baseline identity.
    * First install (no stored baseline) and unknown current login are intentionally not swaps.
+   *
+   * WHY [storage baseline]: Baseline is frozen on the first {@link getCycleBaselineLogin} call this cycle
+   * (backed by {@link IStorageService.getGitHubViewerIdentity}). Parallel manual refresh relies on
+   * {@link EventService.withPrUiFetchIndicator}
+   * to delay {@link persistResolvedViewerIdentity} until all three fetches finish so that read stays
+   * the **pre-refresh** login for assigned, merged, and authored.
    */
   private async detectAccountSwap(
     logSuffix: string
