@@ -86,11 +86,6 @@ export const OnboardingReveal = memo(function OnboardingReveal({
     el.style.webkitMaskPosition = '0 0';
   }, []);
 
-  const clearIrisMask = useCallback((el: HTMLDivElement) => {
-    el.style.maskImage = '';
-    el.style.webkitMaskImage = '';
-  }, []);
-
   const handleLetsGo = useCallback(() => {
     if (exitStartedRef.current || completeOnceRef.current) return;
     exitStartedRef.current = true;
@@ -134,12 +129,14 @@ export const OnboardingReveal = memo(function OnboardingReveal({
         exitRafRef.current = requestAnimationFrame(step);
       } else {
         exitRafRef.current = 0;
-        clearIrisMask(root);
+        // WHY [no clearIrisMask here]: Clearing the mask restores a full opaque overlay for at
+        // least one paint before React commits `onRevealComplete` — that reads as a one-frame
+        // "flash back". Unmount drops the node (and inline mask styles) without that frame.
         finish();
       }
     };
     exitRafRef.current = requestAnimationFrame(step);
-  }, [applyIrisMask, clearIrisMask, finish, initIrisMaskStatics, reducedMotion]);
+  }, [applyIrisMask, finish, initIrisMaskStatics, reducedMotion]);
 
   const [springs] = useTrail(
     REVEAL_STEPS,
