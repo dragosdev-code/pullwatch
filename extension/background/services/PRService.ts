@@ -17,7 +17,12 @@ import {
   STORAGE_KEY_PARSER_BREAKAGE,
   STORAGE_KEY_ROUTE_HINT,
 } from '../../common/constants';
-import { RateLimitError, ParserBreakageError, GitHubOutageError } from '../../common/errors';
+import {
+  RateLimitError,
+  ParserBreakageError,
+  GitHubOutageError,
+  isGitHubWebSessionAuthError,
+} from '../../common/errors';
 import { delay } from '../../common/utils';
 
 /**
@@ -208,6 +213,18 @@ export class PRService implements IPRService {
     }
   }
 
+  /** Missing GitHub cookie session is normal; do not log it as a service fault. */
+  private logPrFetchFailure(label: string, error: unknown): void {
+    if (isGitHubWebSessionAuthError(error)) {
+      this.debugService.warn(
+        `[PRService] ${label} — GitHub not signed in (expected until user logs in on github.com):`,
+        error instanceof Error ? error.message : error
+      );
+    } else {
+      this.debugService.error(`[PRService] ${label}:`, error);
+    }
+  }
+
   private async doFetchAndUpdateAssignedPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
     this.debugService.log(
       `[PRService] Fetching and updating assigned PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`
@@ -284,7 +301,7 @@ export class PRService implements IPRService {
       if (error instanceof RateLimitError) {
         this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
       }
-      this.debugService.error('[PRService] Error fetching and updating PRs:', error);
+      this.logPrFetchFailure('Error fetching and updating PRs', error);
       await this.badgeService.setErrorBadge();
       throw error;
     }
@@ -576,7 +593,7 @@ export class PRService implements IPRService {
       if (error instanceof RateLimitError) {
         this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
       }
-      this.debugService.error('[PRService] Error updating authored PRs:', error);
+      this.logPrFetchFailure('Error updating authored PRs', error);
       throw error;
     }
   }
@@ -693,7 +710,7 @@ export class PRService implements IPRService {
       if (error instanceof RateLimitError) {
         this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
       }
-      this.debugService.error('[PRService] Error updating merged PRs:', error);
+      this.logPrFetchFailure('Error updating merged PRs', error);
       throw error;
     }
   }

@@ -17,6 +17,11 @@ export const STORAGE_KEY_ROUTE_HINT = 'pulls_list_route_hint';
 export const STORAGE_KEY_GITHUB_VIEWER_IDENTITY = 'github_viewer_identity';
 /** Popup first-run reveal; written once per install (see use-onboarding). */
 export const STORAGE_KEY_HAS_SEEN_ONBOARDING = 'has_seen_onboarding';
+/**
+ * Set when the GitHub web session caches are cleared so the popup shows the onboarding reveal
+ * again after the next successful login, even if `has_seen_onboarding` is already true.
+ */
+export const STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING = 'onboarding_reauth_gate_pending';
 
 // Remote Pattern Registry
 // Production config — raw file on the main branch, served directly by GitHub.

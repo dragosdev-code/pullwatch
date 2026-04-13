@@ -20,11 +20,17 @@ import {
   STORAGE_KEY_ROUTE_HINT,
   ROUTE_HINT_TTL_MS,
 } from '../../common/constants';
-import { RateLimitError, ParserBreakageError, GitHubOutageError } from '../../common/errors';
+import {
+  RateLimitError,
+  ParserBreakageError,
+  GitHubOutageError,
+  isGitHubWebSessionAuthError,
+} from '../../common/errors';
 import { GitHubHTMLParser } from './GitHubHTMLParser';
 import { GitHubEmbeddedJsonPullHarvest } from './GitHubEmbeddedJsonPullHarvest';
 import { NewExperienceGitHubHTMLParser } from './NewExperienceGitHubHTMLParser';
 import { delay } from '../../common/utils';
+import { isGitHubLoggedOutHtmlShell } from '../../common/github-html-session';
 
 /**
  * Which pulls *list URL* shape {@link GitHubService.fetchPRs} prefers first
@@ -204,19 +210,21 @@ export class GitHubService implements IGitHubService {
             }
             throw new GitHubOutageError(context, response.status);
           }
+          // WHY [404 + body]: Read HTML and use `user-login` / `is_logged_out_page` metas (see
+          // `github-html-session.ts`). A signed-in user can still get 404 on a bad path; their shell
+          // keeps a non-empty `user-login`, so we must not treat that as session loss.
+          if (response.status === 404) {
+            const html404 = await response.text();
+            if (isGitHubLoggedOutHtmlShell(html404, response.url)) {
+              throw new Error('NotLoggedIn: User is not logged in to GitHub.');
+            }
+            throw new Error(`GitHub ${context} request failed: 404`);
+          }
           throw new Error(`GitHub ${context} request failed: ${response.status}`);
         }
 
         const html = await response.text();
-        const pageTitle = (html.match(/<title>(.*?)<\/title>/i) || [])[1] || '';
-        const isLoginPage =
-          pageTitle.includes('Sign in to GitHub') ||
-          html.includes('name="login"') ||
-          response.url.includes('/login') ||
-          html.includes('action="/session"') ||
-          html.includes('class="auth-form"');
-
-        if (isLoginPage) {
+        if (isGitHubLoggedOutHtmlShell(html, response.url)) {
           throw new Error('NotLoggedIn: User is not logged in to GitHub.');
         }
 
@@ -235,9 +243,7 @@ export class GitHubService implements IGitHubService {
           error instanceof RateLimitError ||
           error instanceof ParserBreakageError ||
           error instanceof GitHubOutageError ||
-          (error instanceof Error &&
-            (error.message.startsWith('AuthenticationError') ||
-              error.message.startsWith('NotLoggedIn')))
+          isGitHubWebSessionAuthError(error)
         ) {
           throw error;
         }
@@ -460,6 +466,16 @@ export class GitHubService implements IGitHubService {
     }
   }
 
+  /** Auth/session loss is expected; keep it out of error-level noise. */
+  private logListFetchFailure(messagePrefix: string, error: unknown): void {
+    const detail = error instanceof Error ? error.message : error;
+    if (isGitHubWebSessionAuthError(error)) {
+      this.debugService.warn(`${messagePrefix} (no GitHub web session)`, detail);
+    } else {
+      this.debugService.error(messagePrefix, detail);
+    }
+  }
+
   async fetchMergedPRs(): Promise<PullRequest[]> {
     this.debugService.log(
       '[GitHubService] fetchMergedPRs — list template (effective URL in fetchPRs routing):',
@@ -471,10 +487,10 @@ export class GitHubService implements IGitHubService {
       if (error instanceof RateLimitError) throw error;
       if (error instanceof ParserBreakageError) throw error;
       if (error instanceof GitHubOutageError) throw error;
-      this.debugService.error(
-        '[GitHubService] Error in fetchMergedPRs:',
-        error instanceof Error ? error.message : error
-      );
+      this.logListFetchFailure('[GitHubService] Error in fetchMergedPRs:', error);
+      if (isGitHubWebSessionAuthError(error)) {
+        throw error;
+      }
       throw new Error(
         `Network or parsing error while fetching merged PRs: ${
           error instanceof Error ? error.message : String(error)
@@ -494,14 +510,8 @@ export class GitHubService implements IGitHubService {
       if (error instanceof RateLimitError) throw error;
       if (error instanceof ParserBreakageError) throw error;
       if (error instanceof GitHubOutageError) throw error;
-      this.debugService.error(
-        '[GitHubService] Error in fetchAssignedPRs:',
-        error instanceof Error ? error.message : error
-      );
-      if (
-        error instanceof Error &&
-        (error.message.startsWith('AuthenticationError') || error.message.startsWith('NotLoggedIn'))
-      ) {
+      this.logListFetchFailure('[GitHubService] Error in fetchAssignedPRs:', error);
+      if (isGitHubWebSessionAuthError(error)) {
         throw error;
       }
       throw new Error(
@@ -524,14 +534,8 @@ export class GitHubService implements IGitHubService {
       if (error instanceof RateLimitError) throw error;
       if (error instanceof ParserBreakageError) throw error;
       if (error instanceof GitHubOutageError) throw error;
-      this.debugService.error(
-        '[GitHubService] Error in fetchReviewedPRs:',
-        error instanceof Error ? error.message : error
-      );
-      if (
-        error instanceof Error &&
-        (error.message.startsWith('AuthenticationError') || error.message.startsWith('NotLoggedIn'))
-      ) {
+      this.logListFetchFailure('[GitHubService] Error in fetchReviewedPRs:', error);
+      if (isGitHubWebSessionAuthError(error)) {
         throw error;
       }
 
@@ -582,14 +586,8 @@ export class GitHubService implements IGitHubService {
       if (error instanceof RateLimitError) throw error;
       if (error instanceof ParserBreakageError) throw error;
       if (error instanceof GitHubOutageError) throw error;
-      this.debugService.error(
-        '[GitHubService] Error in fetchAuthoredPRs:',
-        error instanceof Error ? error.message : error
-      );
-      if (
-        error instanceof Error &&
-        (error.message.startsWith('AuthenticationError') || error.message.startsWith('NotLoggedIn'))
-      ) {
+      this.logListFetchFailure('[GitHubService] Error in fetchAuthoredPRs:', error);
+      if (isGitHubWebSessionAuthError(error)) {
         throw error;
       }
       throw new Error(
@@ -619,15 +617,12 @@ export class GitHubService implements IGitHubService {
       if (error instanceof ParserBreakageError) throw error;
       if (error instanceof GitHubOutageError) throw error;
 
-      this.debugService.error(
+      this.logListFetchFailure(
         `[GitHubService] Error fetching ${authorReviewStatus} PRs:`,
-        error instanceof Error ? error.message : error
+        error
       );
 
-      if (
-        error instanceof Error &&
-        (error.message.startsWith('AuthenticationError') || error.message.startsWith('NotLoggedIn'))
-      ) {
+      if (isGitHubWebSessionAuthError(error)) {
         throw error;
       }
 

@@ -10,8 +10,13 @@ import type {
   UserData,
 } from '../../common/types';
 import {
+  STORAGE_KEY_ASSIGNED_PRS,
+  STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_LAST_FETCH,
+  STORAGE_KEY_MERGED_PRS,
+  STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
+  STORAGE_KEY_ROUTE_HINT,
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
 } from '../../common/constants';
@@ -252,6 +257,34 @@ export class StorageService implements IStorageService {
       this.debugService.log('[StorageService] GitHub viewer identity cleared');
     } catch (error) {
       this.logStorageException('[StorageService] Error clearing GitHub viewer identity:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * WHY [targeted wipe]: `chrome.storage.local` survives GitHub logout in the browser; leaving PR
+   * payloads and `github_viewer_identity` would show another user's stale PRs after account swap
+   * on the same Chrome profile. We intentionally do not clear settings or health keys.
+   * WHY [reauth gate]: `onboarding_reauth_gate_pending` forces the popup welcome overlay after the
+   * user signs back in, even when `has_seen_onboarding` stayed true across the wipe.
+   */
+  async clearGitHubWebSessionCaches(): Promise<void> {
+    try {
+      await this.clearGitHubViewerIdentity();
+      const keys = [
+        STORAGE_KEY_ASSIGNED_PRS,
+        STORAGE_KEY_MERGED_PRS,
+        STORAGE_KEY_AUTHORED_PRS,
+        STORAGE_KEY_LAST_FETCH,
+        STORAGE_KEY_ROUTE_HINT,
+      ];
+      await runWithTransientStorageRetry(() => this.localStorage.remove(keys));
+      await runWithTransientStorageRetry(() =>
+        this.localStorage.set({ [STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING]: true })
+      );
+      this.debugService.log('[StorageService] GitHub web-session caches cleared');
+    } catch (error) {
+      this.logStorageException('[StorageService] Error clearing GitHub web-session caches:', error);
       throw error;
     }
   }

@@ -57,6 +57,12 @@ export interface IStorageService extends IService {
   clearGitHubViewerIdentity(): Promise<void>;
 
   /**
+   * Removes GitHub-derived local data after the web session is gone: viewer identity, PR list
+   * envelopes, last fetch time, and route hint. Settings and onboarding flags are untouched.
+   */
+  clearGitHubWebSessionCaches(): Promise<void>;
+
+  /**
    * Gets a value from storage by key.
    */
   get<K extends keyof StorageKeyMap>(key: K): Promise<StorageKeyMap[K] | null>;

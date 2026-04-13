@@ -55,3 +55,19 @@ export class GitHubOutageError extends Error {
 export function isTransientExtensionStorageError(error: unknown): boolean {
   return error instanceof Error && /no sw/i.test(error.message);
 }
+
+/**
+ * True when the background should treat the failure as loss of the GitHub web session (clear
+ * cached identity/PRs). Session loss is decided in `GitHubService` from HTML (`user-login` meta,
+ * etc.); this helper only recognizes the resulting `Error` shapes for `EventService` (including
+ * messages wrapped by `fetchAssignedPRs` and similar).
+ */
+export function isGitHubWebSessionAuthError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const m = error.message;
+  return (
+    m.includes('NotLoggedIn:') ||
+    m.includes('AuthenticationError:') ||
+    /not\s+logged\s+in/i.test(m)
+  );
+}

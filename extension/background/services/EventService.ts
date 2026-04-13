@@ -15,6 +15,7 @@ import {
   SETTINGS_TEST_ERROR_DISABLED,
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
 } from '../../common/constants';
+import { isGitHubWebSessionAuthError } from '../../common/errors';
 import {
   DEV_TEST_ACTION,
   EVENT_FETCH_PRS,
@@ -95,6 +96,30 @@ export class EventService implements IEventService {
   }
 
   /**
+   * WHY [storage not sendMessage]: Popup reads `chrome.storage.local` and listens with
+   * `chrome.storage.onChanged`; removing keys here invalidates the GitHub web session for every
+   * open UI surface without requiring a document reload.
+   */
+  private async invalidateGitHubWebSessionAfterAuthFailure(): Promise<void> {
+    try {
+      const storageService = this.serviceContainer.getService('storageService');
+      const badgeService = this.serviceContainer.getService('badgeService');
+      await storageService.clearGitHubWebSessionCaches();
+      await badgeService.setDefaultBadge();
+    } catch (err) {
+      this.debugService.error('[EventService] GitHub session wipe failed after auth error:', err);
+    }
+  }
+
+  private logCatchAsWarningIfAuth(context: string, error: unknown): void {
+    if (isGitHubWebSessionAuthError(error)) {
+      this.debugService.warn(`[EventService] ${context}:`, error);
+    } else {
+      this.debugService.error(`[EventService] ${context}:`, error);
+    }
+  }
+
+  /**
    * Handles extension installation and updates.
    */
   async handleInstallation(details: chrome.runtime.InstalledDetails): Promise<void> {
@@ -124,7 +149,7 @@ export class EventService implements IEventService {
       await prService.fetchAndUpdateAssignedPRs(true);
       await prService.persistResolvedViewerIdentity();
     } catch (error) {
-      this.debugService.error('[EventService] Error handling installation:', error);
+      this.logCatchAsWarningIfAuth('Error handling installation', error);
     }
   }
 
@@ -147,7 +172,7 @@ export class EventService implements IEventService {
       await prService.fetchAndUpdateAssignedPRs(true);
       await prService.persistResolvedViewerIdentity();
     } catch (error) {
-      this.debugService.error('[EventService] Error handling startup:', error);
+      this.logCatchAsWarningIfAuth('Error handling startup', error);
     }
   }
 
@@ -189,7 +214,10 @@ export class EventService implements IEventService {
         this.debugService.warn('[EventService] Unknown alarm triggered:', alarm.name);
       }
     } catch (error) {
-      this.debugService.error('[EventService] Error handling alarm:', error);
+      if (isGitHubWebSessionAuthError(error)) {
+        await this.invalidateGitHubWebSessionAfterAuthFailure();
+      }
+      this.logCatchAsWarningIfAuth('Error handling alarm', error);
     }
   }
 
@@ -281,7 +309,10 @@ export class EventService implements IEventService {
         sendResponse(response);
       }
     } catch (error) {
-      this.debugService.error('[EventService] Error handling assigned PR data actions:', error);
+      if (isGitHubWebSessionAuthError(error)) {
+        await this.invalidateGitHubWebSessionAfterAuthFailure();
+      }
+      this.logCatchAsWarningIfAuth('Error handling assigned PR data actions', error);
       sendResponse({ success: false, error: 'Failed to handle assigned PR action' });
     }
   }
@@ -311,7 +342,10 @@ export class EventService implements IEventService {
         sendResponse({ success: true, data: merged });
       }
     } catch (error) {
-      this.debugService.error('[EventService] Error handling merged PR data actions:', error);
+      if (isGitHubWebSessionAuthError(error)) {
+        await this.invalidateGitHubWebSessionAfterAuthFailure();
+      }
+      this.logCatchAsWarningIfAuth('Error handling merged PR data actions', error);
       sendResponse({ success: false, error: 'Failed to handle merged PR action' });
     }
   }
@@ -392,7 +426,10 @@ export class EventService implements IEventService {
         sendResponse({ success: true, data: authored });
       }
     } catch (error) {
-      this.debugService.error('[EventService] Error handling authored PR data actions:', error);
+      if (isGitHubWebSessionAuthError(error)) {
+        await this.invalidateGitHubWebSessionAfterAuthFailure();
+      }
+      this.logCatchAsWarningIfAuth('Error handling authored PR data actions', error);
       sendResponse({ success: false, error: 'Failed to handle authored PR action' });
     }
   }
