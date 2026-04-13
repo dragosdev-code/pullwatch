@@ -3,6 +3,11 @@ import { NotificationService } from '../NotificationService';
 import type { ExtensionSettings, PullRequest } from '../../../common/types';
 import { DEFAULT_EXTENSION_SETTINGS } from '../StorageService';
 import { SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS } from '../../../common/constants';
+import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../../common/settings-test-notification-copy';
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 const openPr = (overrides: Partial<PullRequest> = {}): PullRequest => ({
   id: 'o1',
@@ -82,6 +87,27 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     const id = notificationsCreate.mock.calls[0][0] as string;
     expect(id).toMatch(/^extension-settings-test\|assigned\|\d+$/);
     expect(id.endsWith('|10000')).toBe(true);
+
+    const options = notificationsCreate.mock.calls[0][1] as chrome.notifications.NotificationCreateOptions;
+    expect(options.title).toBe(SETTINGS_TEST_NOTIFICATION_COPY.assigned.title);
+    expect(options.message).toBe(SETTINGS_TEST_NOTIFICATION_COPY.assigned.message);
+    expect(options.contextMessage).toMatch(
+      new RegExp(
+        `^${escapeRegExp(SETTINGS_TEST_NOTIFICATION_COPY.assigned.contextMessage)} · Preview .+`
+      )
+    );
+  });
+
+  it('appends Preview time to contextMessage for merged preview', async () => {
+    const svc = makeService(settingsWithPreviewEnabled());
+    await svc.fireSettingsTestNotification('merged');
+
+    const options = notificationsCreate.mock.calls[0][1] as chrome.notifications.NotificationCreateOptions;
+    expect(options.contextMessage).toMatch(
+      new RegExp(
+        `^${escapeRegExp(SETTINGS_TEST_NOTIFICATION_COPY.merged.contextMessage)} · Preview .+`
+      )
+    );
   });
 
   it('clears the previous preview id before creating a new one on the next fire', async () => {

@@ -158,7 +158,8 @@ export class NotificationService implements INotificationService {
    * Sample notification for end users (settings page). Separate from Dev Test: ID must not use the
    * `pr-alert|` prefix so handleNotificationClick skips tabs.create and only clears the toast.
    * `silent: true` matches real PR alerts — OS does not double-play; extension owns sound via SoundService.
-   * Each successful fire uses a new id suffix so the host OS treats it as a new deliverable banner.
+   * Uses a fresh Chrome notification id each time plus a distinct visible subtitle so macOS Notification Center
+   * is less likely to coalesce successive previews into a silent in-place update.
    */
   async fireSettingsTestNotification(category: 'assigned' | 'merged'): Promise<void> {
     const now = Date.now();
@@ -189,13 +190,18 @@ export class NotificationService implements INotificationService {
 
     const notificationId = `extension-settings-test|${category}|${Date.now()}`;
 
+    // WHY [macOS + native NC]: Distinct Chrome ids are not always enough for a new banner; the OS bridge can still
+    // refresh an existing row. Vary contextMessage only here — PR toasts keep stable copy + ids for click routing and dedup.
+    const previewTimeLabel = new Intl.DateTimeFormat(undefined, { timeStyle: 'medium' }).format(new Date());
+    const contextMessage = `${copy.contextMessage} · Preview ${previewTimeLabel}`;
+
     await this.createNotification(
       {
         type: 'basic',
         iconUrl: localIconUrl,
         title: copy.title,
         message: copy.message,
-        contextMessage: copy.contextMessage,
+        contextMessage,
         requireInteraction: false,
         silent: true,
         priority: 2,
