@@ -7,7 +7,7 @@ export const SETTINGS_TEST_NOTIFICATION_COPY = {
   assigned: {
     title: 'New PR Review Request',
     message: '+10,432 / -0 lines. "Minor typo fix, PTAL"',
-    contextMessage: 'acme/the-abyss by chaotic-coworker',
+    contextMessage: 'acme/abyss by chaotic',
   },
   merged: {
     title: 'PR Merged!',
