@@ -111,6 +111,10 @@ export class EventService implements IEventService {
     }
   }
 
+  /**
+   * WHY [log level]: `isGitHubWebSessionAuthError` means the browser has no github.com session for
+   * this profile — expected until the user signs in — so `warn` keeps support signal on real faults.
+   */
   private logCatchAsWarningIfAuth(context: string, error: unknown): void {
     if (isGitHubWebSessionAuthError(error)) {
       this.debugService.warn(`[EventService] ${context}:`, error);
@@ -120,20 +124,22 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Handles extension installation and updates.
+   * `chrome.runtime.onInstalled` — permissions, fetch alarm, and initial GitHub hydration for the popup.
+   *
+   * WHY [three lists + barrier]: The UI reads assigned, merged, and authored from `chrome.storage.local`
+   * independently; each key must be populated before first paint. `withPrUiFetchIndicator` matches the
+   * alarm/manual-refresh contract so `PRService.persistResolvedViewerIdentity` runs once after the whole
+   * wave (same depth → `finally` rule as manual refresh).
    */
   async handleInstallation(details: chrome.runtime.InstalledDetails): Promise<void> {
     try {
       this.debugService.log('[EventService] Handling installation:', details);
 
-      // Get services directly from container
-      const permissionService =
-        this.serviceContainer.getService('permissionService');
+      const permissionService = this.serviceContainer.getService('permissionService');
       const alarmService = this.serviceContainer.getService('alarmService');
       const prService = this.serviceContainer.getService('prService');
       const badgeService = this.serviceContainer.getService('badgeService');
 
-      // Handle installation logic
       await permissionService.checkAllPermissions();
       await alarmService.setupFetchAlarm();
 
@@ -144,33 +150,43 @@ export class EventService implements IEventService {
         this.debugService.log('[EventService] Extension updated');
       }
 
-      // WHY [ordering]: Installation only fetches assigned data for fast first render, but
-      // identity still comes from that HTML and must be persisted before the first alarm cycle.
-      await prService.fetchAndUpdateAssignedPRs(true);
-      await prService.persistResolvedViewerIdentity();
+      // WHY [forceRefresh only on install]: `true` suppresses “new PR” side effects on first-ever
+      // hydration; `update` uses `false` like the periodic alarm so version bumps behave as a refresh.
+      const forceRefresh = details.reason === 'install';
+      await this.withPrUiFetchIndicator(async () => {
+        await prService.fetchAndUpdateAssignedPRs(forceRefresh, true);
+        await prService.updateMergedPRs(forceRefresh, true);
+        await prService.updateAuthoredPRs(forceRefresh, true);
+      });
     } catch (error) {
       this.logCatchAsWarningIfAuth('Error handling installation', error);
     }
   }
 
   /**
-   * Handles extension startup.
+   * Service worker wake / browser startup — re-arm alarms and refill storage before the popup reads it.
+   *
+   * WHY [`forceRefresh` + `bypassCache` on all three]: After an MV3 sleep or browser restart, TTL cache
+   * in `PRService` could otherwise serve empty or stale slices; `true, true` forces a GitHub round-trip
+   * for every list under the same identity barrier as the periodic `EVENT_FETCH_PRS` alarm path.
    */
   async handleStartup(): Promise<void> {
     try {
       this.debugService.log('[EventService] Handling startup');
 
       // Get services directly from container
-      const permissionService =
-        this.serviceContainer.getService('permissionService');
+      const permissionService = this.serviceContainer.getService('permissionService');
       const alarmService = this.serviceContainer.getService('alarmService');
       const prService = this.serviceContainer.getService('prService');
 
       // Handle startup logic
       await permissionService.checkAllPermissions();
       await alarmService.setupFetchAlarm();
-      await prService.fetchAndUpdateAssignedPRs(true);
-      await prService.persistResolvedViewerIdentity();
+      await this.withPrUiFetchIndicator(async () => {
+        await prService.fetchAndUpdateAssignedPRs(true, true);
+        await prService.updateMergedPRs(true, true);
+        await prService.updateAuthoredPRs(true, true);
+      });
     } catch (error) {
       this.logCatchAsWarningIfAuth('Error handling startup', error);
     }
@@ -189,8 +205,7 @@ export class EventService implements IEventService {
           return;
         }
 
-        const rateLimitService =
-          this.serviceContainer.getService('rateLimitService');
+        const rateLimitService = this.serviceContainer.getService('rateLimitService');
         if (rateLimitService.shouldSkipFetch()) {
           this.debugService.log('[EventService] Skipping fetch - rate limited (backoff active)');
           return;
@@ -200,9 +215,9 @@ export class EventService implements IEventService {
 
         const prService = this.serviceContainer.getService('prService');
 
-        // Alarm cadence is the rate limiter; each tick should observe GitHub, not short TTL cache.
-        // WHY [single barrier]: One `withPrUiFetchIndicator` callback (depth 1) runs the three fetches
-        // sequentially; identity still persists only when that whole block completes.
+        // WHY [bypassCache]: Alarm spacing is the rate limiter — each tick should hit GitHub, not the
+        // short TTL cache in `PRService`. Same `withPrUiFetchIndicator` wrapper as install/startup so
+        // depth hits zero once and `persistResolvedViewerIdentity` stays ordered with the full wave.
         await this.withPrUiFetchIndicator(async () => {
           await prService.fetchAndUpdateAssignedPRs(false, true);
           await prService.updateMergedPRs(false, true);
@@ -229,8 +244,7 @@ export class EventService implements IEventService {
       this.debugService.log('[EventService] Handling notification click:', notificationId);
 
       // Get notification service and handle click
-      const notificationService =
-        this.serviceContainer.getService('notificationService');
+      const notificationService = this.serviceContainer.getService('notificationService');
       await notificationService.handleNotificationClick(notificationId);
     } catch (error) {
       this.debugService.error('[EventService] Error handling notification click:', error);
@@ -297,12 +311,16 @@ export class EventService implements IEventService {
         sendResponse({ success: true, data: storedPRs });
       } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchAssignedPRs)) {
         // fetchAssignedPRs: Fetch fresh data from GitHub and update storage (manual refresh)
-        this.debugService.log('[EventService] Manual refresh - fetching fresh assigned PRs from GitHub');
+        this.debugService.log(
+          '[EventService] Manual refresh - fetching fresh assigned PRs from GitHub'
+        );
         await this.coalescedPushBackFetchAlarm();
         const prs = await this.withPrUiFetchIndicator(async () =>
           prService.fetchAndUpdateAssignedPRs(true)
         );
-        this.debugService.log(`[EventService] fetchAndUpdateAssignedPRs returned ${prs.length} PRs`);
+        this.debugService.log(
+          `[EventService] fetchAndUpdateAssignedPRs returned ${prs.length} PRs`
+        );
 
         const response = { success: true, data: prs };
         this.debugService.log(`[EventService] Sending response with fresh assigned PRs`);
@@ -330,14 +348,18 @@ export class EventService implements IEventService {
 
       if (this.isMessageAction(message, PR_DATA_ACTION.getMergedPRs)) {
         const storedPRs = await prService.getStoredMergedPRs();
-        this.debugService.log(`[EventService] getMergedPRs: returning ${storedPRs.length} stored merged PRs`);
+        this.debugService.log(
+          `[EventService] getMergedPRs: returning ${storedPRs.length} stored merged PRs`
+        );
         sendResponse({ success: true, data: storedPRs });
       } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchMergedPRs)) {
         this.debugService.log(
           '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
         );
         await this.coalescedPushBackFetchAlarm();
-        const merged = await this.withPrUiFetchIndicator(async () => prService.updateMergedPRs(true));
+        const merged = await this.withPrUiFetchIndicator(async () =>
+          prService.updateMergedPRs(true)
+        );
         this.debugService.log(`[EventService] updateMergedPRs returned ${merged.length} PRs`);
         sendResponse({ success: true, data: merged });
       }
@@ -351,18 +373,17 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Mirrors in-flight PR fetches to `chrome.storage.local` so an open popup can show “Updating…”
-   * for alarm ticks (no React Query mutations) and keeps the flag true until parallel manual handlers finish.
+   * Mirrors in-flight PR work to `STORAGE_KEY_PR_FETCH_IN_PROGRESS` so the popup can show “Updating…”
+   * without React Query driving fetches from the panel.
    *
-   * **Fetch + account-swap flow (manual refresh):** the popup sends three messages; each handler
-   * enters here, so {@link prUiFetchDepth} increments up to 3 and decrements as each fetch completes
-   * (completion order is undefined). {@link PRService} compares HTML-derived login to
-   * `github_viewer_identity` for silent baseline; if the first finisher persisted identity early,
-   * siblings would see baseline === current and miss the swap. This wrapper therefore calls
-   * {@link PRService.persistResolvedViewerIdentity} only when depth returns to **0** (last sibling done).
+   * WHY [depth + identity]: Manual refresh sends three runtime messages — each handler nests here, so
+   * {@link prUiFetchDepth} can reach 3 and unwind in arbitrary order. `PRService` compares HTML-derived
+   * login to `github_viewer_identity` for account-swap; persisting identity when the *first* sibling
+   * finished would let later siblings read baseline === current and miss a swap. `persistResolvedViewerIdentity`
+   * therefore runs only when depth returns to **0**.
    *
-   * **Alarm tick:** one callback runs assigned → merged → authored sequentially (depth stays 1);
-   * identity persists once at the end of that block — same storage contract as manual refresh.
+   * WHY [alarm / install / startup]: A single nested callback (depth 1) runs assigned → merged → authored
+   * sequentially; same persist-on-zero contract so install-time hydration matches manual refresh semantics.
    */
   private async withPrUiFetchIndicator<T>(fn: () => Promise<T>): Promise<T> {
     const storageService = this.serviceContainer.getService('storageService');
@@ -422,7 +443,9 @@ export class EventService implements IEventService {
           '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
         );
         await this.coalescedPushBackFetchAlarm();
-        const authored = await this.withPrUiFetchIndicator(async () => prService.updateAuthoredPRs(true));
+        const authored = await this.withPrUiFetchIndicator(async () =>
+          prService.updateAuthoredPRs(true)
+        );
         sendResponse({ success: true, data: authored });
       }
     } catch (error) {
@@ -434,7 +457,6 @@ export class EventService implements IEventService {
     }
   }
 
-
   /**
    * Handles settings related actions (saveSettings, getSettings, testSettingsNotification).
    */
@@ -445,10 +467,7 @@ export class EventService implements IEventService {
     try {
       if (message.action === SETTINGS_ACTION.testSettingsNotification) {
         const payload = (message as RuntimeRequestMessage<SettingsNotificationTestPayload>).payload;
-        if (
-          !payload ||
-          (payload.category !== 'assigned' && payload.category !== 'merged')
-        ) {
+        if (!payload || (payload.category !== 'assigned' && payload.category !== 'merged')) {
           sendResponse({ success: false, error: 'Invalid test notification payload' });
           return;
         }
@@ -567,7 +586,12 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      if (this.isMessageAction<{ sound: NotificationSound }>(message, PREVIEW_SOUND_ACTION.previewSound)) {
+      if (
+        this.isMessageAction<{ sound: NotificationSound }>(
+          message,
+          PREVIEW_SOUND_ACTION.previewSound
+        )
+      ) {
         const { sound } = message.payload || { sound: 'ping' };
 
         this.debugService.log(`[EventService] Playing sound preview: ${sound}`);
@@ -617,8 +641,7 @@ export class EventService implements IEventService {
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
     try {
-      const devTestService =
-        this.serviceContainer.getService('devTestService');
+      const devTestService = this.serviceContainer.getService('devTestService');
 
       switch (message.action) {
         case DEV_TEST_ACTION.fireNotification: {
@@ -628,7 +651,9 @@ export class EventService implements IEventService {
           break;
         }
         case DEV_TEST_ACTION.startLoop: {
-          const { intervalMs } = (message.payload as { intervalMs: number }) || { intervalMs: 3000 };
+          const { intervalMs } = (message.payload as { intervalMs: number }) || {
+            intervalMs: 3000,
+          };
           const state = await devTestService.startNotificationLoop(intervalMs);
           sendResponse({ success: true, data: state });
           break;
@@ -643,7 +668,9 @@ export class EventService implements IEventService {
           break;
         }
         case DEV_TEST_ACTION.overrideAlarm: {
-          const { intervalMs } = (message.payload as { intervalMs: number }) || { intervalMs: 30000 };
+          const { intervalMs } = (message.payload as { intervalMs: number }) || {
+            intervalMs: 30000,
+          };
           const alarmState = await devTestService.overrideAlarmInterval(intervalMs);
           sendResponse({ success: true, data: alarmState });
           break;
