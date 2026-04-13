@@ -74,6 +74,10 @@ export const OnboardingReveal = memo(function OnboardingReveal({
     const g = `radial-gradient(circle at ${cx}px ${cy}px, transparent ${inner}px, black ${outer}px)`;
     el.style.maskImage = g;
     el.style.webkitMaskImage = g;
+  }, []);
+
+  /** WHY [once, not per-frame]: These values never change — setting them on every rAF frame wastes style recalcs. */
+  const initIrisMaskStatics = useCallback((el: HTMLDivElement) => {
     el.style.maskSize = '100% 100%';
     el.style.maskRepeat = 'no-repeat';
     el.style.maskPosition = '0 0';
@@ -115,6 +119,7 @@ export const OnboardingReveal = memo(function OnboardingReveal({
     if (exitBackupIdRef.current) window.clearTimeout(exitBackupIdRef.current);
     exitBackupIdRef.current = window.setTimeout(() => finish(), durationMs + 450);
 
+    initIrisMaskStatics(root);
     applyIrisMask(root, cx, cy, 0);
 
     let startMs: number | null = null;
@@ -134,7 +139,7 @@ export const OnboardingReveal = memo(function OnboardingReveal({
       }
     };
     exitRafRef.current = requestAnimationFrame(step);
-  }, [applyIrisMask, clearIrisMask, finish, reducedMotion]);
+  }, [applyIrisMask, clearIrisMask, finish, initIrisMaskStatics, reducedMotion]);
 
   const [springs] = useTrail(
     REVEAL_STEPS,

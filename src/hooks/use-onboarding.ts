@@ -25,22 +25,23 @@ function readViewerLogin(items: Record<string, unknown>): string | null {
   return login && login.length > 0 ? login : null;
 }
 
-async function persistHasSeenOnboarding(): Promise<void> {
+/**
+ * WHY [single round-trip]: `set` + `remove` are fired concurrently with `Promise.all` so a
+ * popup close can't land between two sequential awaits and leave storage half-written
+ * (e.g. `has_seen_onboarding = true` but `reauth_gate_pending` still `true`).
+ */
+async function persistOnboardingDismissal(): Promise<void> {
   if (!isExtensionContext() || typeof chrome === 'undefined' || !chrome.storage?.local) {
     return;
   }
-  await runWithTransientStorageRetry(() =>
-    chrome.storage.local.set({ [STORAGE_KEY_HAS_SEEN_ONBOARDING]: true })
-  );
-}
-
-async function clearOnboardingReauthGatePending(): Promise<void> {
-  if (!isExtensionContext() || typeof chrome === 'undefined' || !chrome.storage?.local) {
-    return;
-  }
-  await runWithTransientStorageRetry(() =>
-    chrome.storage.local.remove(STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING)
-  );
+  await Promise.all([
+    runWithTransientStorageRetry(() =>
+      chrome.storage.local.set({ [STORAGE_KEY_HAS_SEEN_ONBOARDING]: true })
+    ),
+    runWithTransientStorageRetry(() =>
+      chrome.storage.local.remove(STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING)
+    ),
+  ]);
 }
 
 /**
@@ -75,16 +76,17 @@ export function useOnboarding() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   const markRevealComplete = useCallback(() => {
+    // WHY [optimistic state]: Set React state immediately so the overlay unmounts even if
+    // the popup is destroyed before chrome.storage IPC completes. On next open, hydrate()
+    // reads the authoritative storage value.
+    setHasSeenOnboarding(true);
+    setReauthGatePending(false);
+    setThroughLoggedOutGate(false);
     void (async () => {
       try {
-        await persistHasSeenOnboarding();
-        await clearOnboardingReauthGatePending();
+        await persistOnboardingDismissal();
       } catch (e) {
-        console.error('[useOnboarding] persist has_seen_onboarding failed', e);
-      } finally {
-        setHasSeenOnboarding(true);
-        setReauthGatePending(false);
-        setThroughLoggedOutGate(false);
+        console.error('[useOnboarding] persistOnboardingDismissal failed', e);
       }
     })();
   }, []);
@@ -105,8 +107,19 @@ export function useOnboarding() {
     }
 
     let cancelled = false;
+    /**
+     * WHY [generation counter]: `onChanged` can fire while `hydrate()` is in-flight; its
+     * values are strictly newer than the snapshot `hydrate` started reading. If the counter
+     * advanced, skip the stale hydration writes so we don't regress state.
+     *
+     * WHY [local + gate keys only]: Non-`local` areas (e.g. `sync`) and unrelated `local` keys
+     * (PR lists, fetch flags) must not bump the counter — otherwise hydrate would skip applying
+     * a valid first snapshot for no onboarding-relevant reason.
+     */
+    let storageGeneration = 0;
 
     const hydrate = async () => {
+      const readGeneration = storageGeneration;
       try {
         const result = await runWithTransientStorageRetry(() =>
           chrome.storage.local.get([
@@ -116,6 +129,11 @@ export function useOnboarding() {
           ])
         );
         if (cancelled) return;
+        // If onChanged fired while we were reading, its values are newer — skip the hydration write.
+        if (storageGeneration > readGeneration) {
+          setStorageReady(true);
+          return;
+        }
         setHasSeenOnboarding(!!result[STORAGE_KEY_HAS_SEEN_ONBOARDING]);
         setReauthGatePending(!!result[STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING]);
         setViewerLogin(readViewerLogin(result));
@@ -136,6 +154,15 @@ export function useOnboarding() {
       area: string
     ) => {
       if (area !== 'local') return;
+
+      const onboardingStorageTouched =
+        STORAGE_KEY_HAS_SEEN_ONBOARDING in changes ||
+        STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING in changes ||
+        STORAGE_KEY_GITHUB_VIEWER_IDENTITY in changes;
+      if (onboardingStorageTouched) {
+        storageGeneration += 1;
+      }
+
       if (STORAGE_KEY_HAS_SEEN_ONBOARDING in changes) {
         setHasSeenOnboarding(!!changes[STORAGE_KEY_HAS_SEEN_ONBOARDING].newValue);
       }
