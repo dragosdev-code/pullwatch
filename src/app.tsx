@@ -7,6 +7,7 @@ import { AssignedList } from './components/lists/assigned-list';
 import { AuthoredList } from './components/lists/authored-list';
 import { MergedList } from './components/lists/merged-list';
 import { DevTestArea } from './components/dev-test-area';
+import { OnboardingGate } from './components/onboarding/onboarding-gate';
 import { useAssignedPRs } from './hooks/use-assigned-prs';
 import { useMergedPRs } from './hooks/use-merged-prs';
 import { useAuthoredPRs } from './hooks/use-authored-prs';
@@ -21,7 +22,7 @@ import { ParserBreakageBanner } from './components/parser-breakage-banner';
 import { GitHubOutageBanner } from './components/github-outage-banner';
 import { TAB_IDS } from './constants/tabs';
 
-const App = () => {
+const AppShell = () => {
   const error = useGlobalError();
   const isDebugMode = useDebugMode();
   const clearGlobalError = useClearGlobalError();
@@ -37,7 +38,7 @@ const App = () => {
 
   const pendingPRCount = useMemo(
     () => assignedPRs.filter((pr) => pr.reviewStatus === 'pending').length,
-    [assignedPRs]
+    [assignedPRs],
   );
 
   const { assignedNewPrIds, mergedNewPrIds, markViewedIds, markViewedId } =
@@ -49,7 +50,7 @@ const App = () => {
       { id: TAB_IDS.AUTHORED, label: 'Authored', count: authoredPRs.length },
       { id: TAB_IDS.MERGED, label: 'Merged', count: mergedPRs.length },
     ],
-    [pendingPRCount, authoredPRs.length, mergedPRs.length]
+    [pendingPRCount, authoredPRs.length, mergedPRs.length],
   );
 
   const handleTabChange = (tabId: string) => {
@@ -57,7 +58,7 @@ const App = () => {
   };
 
   return (
-    <div className="w-[380px] h-[400px] bg-base-100 relative overflow-hidden border-0 shadow-none flex flex-col">
+    <div className="relative flex h-full w-full flex-col overflow-hidden border-0 shadow-none">
       <DiagnosticsSurface />
       <Header />
 
@@ -108,5 +109,11 @@ const App = () => {
     </div>
   );
 };
+
+const App = () => (
+  <OnboardingGate>
+    <AppShell />
+  </OnboardingGate>
+);
 
 export default App;

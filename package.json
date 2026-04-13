@@ -27,6 +27,7 @@
     "date-fns": "^4.1.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-focus-lock": "^2.13.7",
     "react-hook-form": "^7.71.1",
     "tailwindcss": "^4.2.2",
     "valibot": "^1.3.1",

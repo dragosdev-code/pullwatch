@@ -15,6 +15,8 @@ export const STORAGE_KEY_GITHUB_OUTAGE = 'github_outage';
 export const STORAGE_KEY_ROUTE_HINT = 'pulls_list_route_hint';
 /** Parsed GitHub session login for account-swap detection vs PR cache (see PRService silent baseline). */
 export const STORAGE_KEY_GITHUB_VIEWER_IDENTITY = 'github_viewer_identity';
+/** Popup first-run reveal; written once per install (see use-onboarding). */
+export const STORAGE_KEY_HAS_SEEN_ONBOARDING = 'has_seen_onboarding';
 
 // Remote Pattern Registry
 // Production config — raw file on the main branch, served directly by GitHub.
