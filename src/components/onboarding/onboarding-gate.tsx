@@ -9,7 +9,7 @@ type OnboardingGateProps = {
 
 /**
  * WHY [overlay + inert]: PR lists hydrate into TanStack Query before paint; this gate keeps the
- * main tree mounted (so hooks + storage sync keep running) while blocking interaction and SR
+ * main tree mounted (so hooks + storage sync keep running) while blocking interaction and SR(screen reader)
  * exposure until onboarding clears — no cache tricks and no layout dimension changes at handoff.
  */
 export function OnboardingGate({ children }: OnboardingGateProps) {
