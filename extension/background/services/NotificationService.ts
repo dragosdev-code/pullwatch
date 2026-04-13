@@ -5,6 +5,7 @@ import type { ISoundService } from '../interfaces/ISoundService';
 import type { PullRequest, NotificationSound } from '../../common/types';
 import {
   SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
+  SETTINGS_PREVIEW_AFTER_CLEAR_MS,
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
 } from '../../common/constants';
@@ -158,8 +159,8 @@ export class NotificationService implements INotificationService {
    * Sample notification for end users (settings page). Separate from Dev Test: ID must not use the
    * `pr-alert|` prefix so handleNotificationClick skips tabs.create and only clears the toast.
    * `silent: true` matches real PR alerts — OS does not double-play; extension owns sound via SoundService.
-   * Uses a fresh Chrome notification id each time plus a distinct visible subtitle so macOS Notification Center
-   * is less likely to coalesce successive previews into a silent in-place update.
+   * Uses a fresh Chrome id, scrubs all preview rows for this category from `getAll`, a short post-clear yield on
+   * macOS, and distinct title/body text so the native stack is less likely to swallow the banner while sound plays.
    */
   async fireSettingsTestNotification(category: 'assigned' | 'merged'): Promise<void> {
     const now = Date.now();
@@ -183,24 +184,38 @@ export class NotificationService implements INotificationService {
 
     // WHY [ordering]: Drop the last preview for this category before allocating a new id so Notification Center
     // does not accumulate one row per cooldown window; `createNotification` still clears the new id (no-op first time).
+    let clearedAnyPreview = false;
     const previousPreviewId = this.lastSettingsTestNotificationId[category];
     if (previousPreviewId) {
       await this.clearNotification(previousPreviewId);
+      clearedAnyPreview = true;
+    }
+
+    const extraClears = await this.clearAllSettingsPreviewNotificationsForCategory(category);
+    if (extraClears > 0) {
+      clearedAnyPreview = true;
+    }
+
+    // WHY [ordering]: chrome.notifications.clear returns before macOS always removes the row; without a yield the
+    // next create can be coalesced or dropped while SoundService still runs.
+    if (clearedAnyPreview) {
+      await this.delayMs(SETTINGS_PREVIEW_AFTER_CLEAR_MS);
     }
 
     const notificationId = `extension-settings-test|${category}|${Date.now()}`;
 
-    // WHY [macOS + native NC]: Distinct Chrome ids are not always enough for a new banner; the OS bridge can still
-    // refresh an existing row. Vary contextMessage only here — PR toasts keep stable copy + ids for click routing and dedup.
+    // WHY [macOS + native NC]: Distinct Chrome ids are not always enough for a new banner; the OS may key on body
+    // text. Vary message + subtitle here only — PR toasts keep stable copy + ids for click routing and dedup.
     const previewTimeLabel = new Intl.DateTimeFormat(undefined, { timeStyle: 'medium' }).format(new Date());
-    const contextMessage = `${copy.contextMessage} · Preview ${previewTimeLabel}`;
+    const message = `${copy.message}\n\nPreview · ${previewTimeLabel}`;
+    const contextMessage = `${copy.contextMessage} · ${previewTimeLabel}`;
 
     await this.createNotification(
       {
         type: 'basic',
         iconUrl: localIconUrl,
         title: copy.title,
-        message: copy.message,
+        message,
         contextMessage,
         requireInteraction: false,
         silent: true,
@@ -221,6 +236,33 @@ export class NotificationService implements INotificationService {
     }
 
     this.debugService.log(`[NotificationService] Settings test notification fired (${category})`);
+  }
+
+  private delayMs(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  /**
+   * Clears every live settings preview for this category (orphans after worker restart, or rows Chrome still lists).
+   * Returns how many ids were cleared.
+   */
+  private async clearAllSettingsPreviewNotificationsForCategory(
+    category: 'assigned' | 'merged'
+  ): Promise<number> {
+    const prefix = `extension-settings-test|${category}|`;
+    try {
+      const all = await chrome.notifications.getAll();
+      const ids = Object.keys(all).filter((id) => id.startsWith(prefix));
+      for (const id of ids) {
+        await this.clearNotification(id);
+      }
+      return ids.length;
+    } catch (error) {
+      this.debugService.error('[NotificationService] Preview cleanup getAll/clear failed:', error);
+      return 0;
+    }
   }
 
   /**

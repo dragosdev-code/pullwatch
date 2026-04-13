@@ -2,7 +2,10 @@ import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from 'vite
 import { NotificationService } from '../NotificationService';
 import type { ExtensionSettings, PullRequest } from '../../../common/types';
 import { DEFAULT_EXTENSION_SETTINGS } from '../StorageService';
-import { SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS } from '../../../common/constants';
+import {
+  SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
+  SETTINGS_PREVIEW_AFTER_CLEAR_MS,
+} from '../../../common/constants';
 import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../../common/settings-test-notification-copy';
 
 function escapeRegExp(s: string): string {
@@ -28,6 +31,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
   let getSettings: Mock<() => Promise<ExtensionSettings>>;
   let notificationsClear: ReturnType<typeof vi.fn>;
   let notificationsCreate: ReturnType<typeof vi.fn>;
+  let notificationsGetAll: ReturnType<typeof vi.fn>;
 
   function settingsWithPreviewEnabled(patch: Partial<ExtensionSettings> = {}): ExtensionSettings {
     return {
@@ -43,6 +47,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     getSettings = vi.fn();
     notificationsClear = vi.fn().mockResolvedValue(true);
     notificationsCreate = vi.fn().mockImplementation((_id: string) => Promise.resolve(_id));
+    notificationsGetAll = vi.fn().mockResolvedValue({});
 
     globalThis.chrome = {
       runtime: {
@@ -51,6 +56,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
       notifications: {
         clear: notificationsClear,
         create: notificationsCreate,
+        getAll: notificationsGetAll,
       },
     } as unknown as typeof chrome;
 
@@ -90,12 +96,15 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
 
     const options = notificationsCreate.mock.calls[0][1] as chrome.notifications.NotificationCreateOptions;
     expect(options.title).toBe(SETTINGS_TEST_NOTIFICATION_COPY.assigned.title);
-    expect(options.message).toBe(SETTINGS_TEST_NOTIFICATION_COPY.assigned.message);
-    expect(options.contextMessage).toMatch(
+    expect(options.message).toMatch(
       new RegExp(
-        `^${escapeRegExp(SETTINGS_TEST_NOTIFICATION_COPY.assigned.contextMessage)} · Preview .+`
+        `^${escapeRegExp(SETTINGS_TEST_NOTIFICATION_COPY.assigned.message)}\n\nPreview · .+`
       )
     );
+    expect(options.contextMessage).toMatch(
+      new RegExp(`^${escapeRegExp(SETTINGS_TEST_NOTIFICATION_COPY.assigned.contextMessage)} · .+`)
+    );
+    expect(notificationsGetAll).toHaveBeenCalledTimes(1);
   });
 
   it('appends Preview time to contextMessage for merged preview', async () => {
@@ -103,10 +112,13 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     await svc.fireSettingsTestNotification('merged');
 
     const options = notificationsCreate.mock.calls[0][1] as chrome.notifications.NotificationCreateOptions;
-    expect(options.contextMessage).toMatch(
+    expect(options.message).toMatch(
       new RegExp(
-        `^${escapeRegExp(SETTINGS_TEST_NOTIFICATION_COPY.merged.contextMessage)} · Preview .+`
+        `^${escapeRegExp(SETTINGS_TEST_NOTIFICATION_COPY.merged.message)}\n\nPreview · .+`
       )
+    );
+    expect(options.contextMessage).toMatch(
+      new RegExp(`^${escapeRegExp(SETTINGS_TEST_NOTIFICATION_COPY.merged.contextMessage)} · .+`)
     );
   });
 
@@ -121,7 +133,10 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
 
     vi.setSystemTime(10_000 + SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS + 1);
 
-    await svc.fireSettingsTestNotification('assigned');
+    notificationsGetAll.mockResolvedValue({});
+    const secondFire = svc.fireSettingsTestNotification('assigned');
+    await vi.advanceTimersByTimeAsync(SETTINGS_PREVIEW_AFTER_CLEAR_MS);
+    await secondFire;
 
     expect(notificationsClear.mock.calls.map((c) => c[0])).toContain(firstId);
 

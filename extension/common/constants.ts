@@ -69,6 +69,12 @@ export const NOTIFICATION_NEW_PR = 'newPRNotification';
 /** Minimum delay between settings-page "Test" notification fires per category (UI mirrors this). */
 export const SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS = 5000;
 
+/**
+ * After clearing a settings preview on macOS, wait briefly before `create` so Notification Center can release
+ * the prior row; otherwise the next toast may be dropped while sound still runs.
+ */
+export const SETTINGS_PREVIEW_AFTER_CLEAR_MS = 120;
+
 export const DEV_TEST_AREA_ENABLE_DELAY_MS = 5000;
 
 /** Returned in message responses when settings test is rejected — UI can map to copy without string matching free text. */
