@@ -12,6 +12,15 @@ export class AvatarService implements IAvatarService {
   private avatarCache = new Map<string, string>();
   private initialized = false;
 
+  /**
+   * WHY [concurrency cap]: MV3 service workers share a single thread and a ~6 concurrent
+   * connection limit per host. Firing `Promise.all` on 60+ unique logins would queue most
+   * requests behind the connection limit while keeping the SW alive waiting, risking the
+   * 5-minute execution ceiling on slow networks. Batching in groups of 6 matches Chrome's
+   * per-host connection pool so every in-flight request has a real socket.
+   */
+  private static readonly MAX_CONCURRENT_AVATAR_FETCHES = 6;
+
   constructor(debugService: IDebugService, baseURL: string) {
     this.debugService = debugService;
     this.baseURL = baseURL;
@@ -24,20 +33,25 @@ export class AvatarService implements IAvatarService {
   }
 
   async enrichPRsWithAvatars(prs: PullRequest[]): Promise<PullRequest[]> {
-    const uniqueLogins = [
-      ...new Set(prs.flatMap((pr) => pr.author.map((a) => a.login))),
-    ].filter((login) => login !== 'Unknown Author');
-
-    const avatarEntries = await Promise.all(
-      uniqueLogins.map(async (login) => {
-        const base64 = await this.fetchAvatarAsBase64(login);
-        return [login, base64] as const;
-      })
+    const uniqueLogins = [...new Set(prs.flatMap((pr) => pr.author.map((a) => a.login)))].filter(
+      (login) => login !== 'Unknown Author'
     );
 
-    const avatarMap = new Map(
-      avatarEntries.filter((entry): entry is [string, string] => entry[1] !== null)
-    );
+    const avatarMap = new Map<string, string>();
+
+    // Pooled fetch — at most MAX_CONCURRENT_AVATAR_FETCHES in-flight at once
+    for (let i = 0; i < uniqueLogins.length; i += AvatarService.MAX_CONCURRENT_AVATAR_FETCHES) {
+      const batch = uniqueLogins.slice(i, i + AvatarService.MAX_CONCURRENT_AVATAR_FETCHES);
+      const entries = await Promise.all(
+        batch.map(async (login) => {
+          const base64 = await this.fetchAvatarAsBase64(login);
+          return [login, base64] as const;
+        })
+      );
+      for (const [login, base64] of entries) {
+        if (base64 !== null) avatarMap.set(login, base64);
+      }
+    }
 
     return prs.map((pr) => {
       const nextAuthor = pr.author.map((a) => {
