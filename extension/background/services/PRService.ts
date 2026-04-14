@@ -239,7 +239,7 @@ export class PRService implements IPRService {
     const oldPRs = storedData?.prs || [];
 
     try {
-      const cached = await this.checkAssignedCache(forceRefresh, bypassCache);
+      const cached = this.checkAssignedCacheFromStored(storedData, forceRefresh, bypassCache);
       if (cached) return cached;
 
       const oldPendingPRs = oldPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
@@ -314,12 +314,15 @@ export class PRService implements IPRService {
 
   /**
    * Returns cached assigned PRs if the cache is valid, or null if a fresh fetch is needed.
+   *
+   * WHY [no extra read]: The caller already loaded `storedData` for the `oldPRs` baseline.
+   * Passing it here avoids a redundant `chrome.storage.local.get` + JSON deserialization.
    */
-  private async checkAssignedCache(
+  private checkAssignedCacheFromStored(
+    storedData: { prs: PullRequest[]; timestamp?: number } | null,
     forceRefresh: boolean,
-    bypassCache: boolean
-  ): Promise<PullRequest[] | null> {
-    const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_ASSIGNED_PRS);
+    bypassCache: boolean,
+  ): PullRequest[] | null {
     const isCacheValid =
       storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
 
