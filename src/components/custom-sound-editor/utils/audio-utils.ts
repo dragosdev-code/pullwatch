@@ -35,7 +35,7 @@ export async function decodeAudioFile(file: File): Promise<AudioBuffer> {
 export async function trimAudioBuffer(
   buffer: AudioBuffer,
   startS: number,
-  endS: number,
+  endS: number
 ): Promise<AudioBuffer> {
   const duration = endS - startS;
   const sampleRate = buffer.sampleRate;
@@ -127,11 +127,15 @@ export function audioBufferToWavBase64(buffer: AudioBuffer): string {
 export function previewInterval(
   buffer: AudioBuffer,
   startS: number,
-  endS: number,
+  endS: number
 ): { stop: () => void } {
   // Stop any in-flight preview
   if (activeSource) {
-    try { activeSource.stop(); } catch { /* already stopped */ }
+    try {
+      activeSource.stop();
+    } catch {
+      /* already stopped */
+    }
     activeSource = null;
   }
 
@@ -152,7 +156,11 @@ export function previewInterval(
 
   return {
     stop() {
-      try { source.stop(); } catch { /* already stopped */ }
+      try {
+        source.stop();
+      } catch {
+        /* already stopped */
+      }
       if (activeSource === source) activeSource = null;
     },
   };

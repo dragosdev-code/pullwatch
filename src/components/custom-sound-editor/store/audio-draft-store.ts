@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 import { MAX_CUSTOM_SOUND_DURATION_S } from '../../../../extension/common/constants';
-import { getWaveformPeaks } from '../../../lib/audio-utils';
+import { getWaveformPeaks } from '../utils/audio-utils';
 
 /**
  * Draft audio loaded into the editor: waveform source, display label, and trim range.

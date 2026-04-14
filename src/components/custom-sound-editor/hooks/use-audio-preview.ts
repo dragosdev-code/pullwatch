@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { previewInterval } from '../../../lib/audio-utils';
+import { previewInterval } from '../utils/audio-utils';
 
 /**
  * Manages audio preview playback for the trimmed selection.

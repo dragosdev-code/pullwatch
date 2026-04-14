@@ -7,7 +7,7 @@ import {
   MAX_CUSTOM_SOUND_FILE_SIZE_BYTES,
   MAX_CUSTOM_SOUND_NAME_LENGTH,
 } from '../../../extension/common/constants';
-import { decodeAudioFile, trimAudioBuffer, audioBufferToWavBase64 } from '../../lib/audio-utils';
+import { decodeAudioFile, trimAudioBuffer, audioBufferToWavBase64 } from './utils/audio-utils';
 import { useCustomSounds } from '../../hooks/use-custom-sounds';
 import { useAudioPreview } from './hooks/use-audio-preview';
 import { CustomSoundEditorHeader } from './components/custom-sound-editor-header';
