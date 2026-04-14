@@ -2,12 +2,10 @@ import type { PullRequest } from '../../common/types';
 import type { IService } from './IService';
 
 /**
- * Interface for the avatar service that fetches and caches GitHub user avatars.
+ * WHY [GitHubService → storage]: Parsed PRs are persisted often; `avatarUrl` must stay
+ * short https (parser CDN or `github.com/{login}.png`), not large inlined image payloads.
+ * Popup reads authors and renders `<img src={avatarUrl}>` when set.
  */
 export interface IAvatarService extends IService {
-  /**
-   * Enriches PR rows with base64 avatar data URLs, keyed by login across every
-   * person in each PR’s `author` array; deduplicates fetches globally.
-   */
   enrichPRsWithAvatars(prs: PullRequest[]): Promise<PullRequest[]>;
 }

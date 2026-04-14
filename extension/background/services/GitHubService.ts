@@ -475,7 +475,7 @@ export class GitHubService implements IGitHubService {
       this.debugService.warn(`${messagePrefix} (no GitHub web session)`, detail);
       return;
     }
-    // WHY [silent]: Same coarse `Failed to fetch` as avatars when the OS network stack is not
+    // WHY [silent]: Transient offline / `Failed to fetch` when the OS network stack is not
     // ready after wake — list fetch will retry on the next alarm without polluting error logs.
     if (isOfflineError(error)) {
       return;
