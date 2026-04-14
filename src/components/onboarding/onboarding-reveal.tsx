@@ -68,13 +68,16 @@ export const OnboardingReveal = memo(function OnboardingReveal({
     onRevealComplete();
   }, [onRevealComplete]);
 
-  const applyIrisMask = useCallback((el: HTMLDivElement, cx: number, cy: number, holeRadiusPx: number) => {
-    const inner = Math.max(0, holeRadiusPx);
-    const outer = inner + 2;
-    const g = `radial-gradient(circle at ${cx}px ${cy}px, transparent ${inner}px, black ${outer}px)`;
-    el.style.maskImage = g;
-    el.style.webkitMaskImage = g;
-  }, []);
+  const applyIrisMask = useCallback(
+    (el: HTMLDivElement, cx: number, cy: number, holeRadiusPx: number) => {
+      const inner = Math.max(0, holeRadiusPx);
+      const outer = inner + 2;
+      const g = `radial-gradient(circle at ${cx}px ${cy}px, transparent ${inner}px, black ${outer}px)`;
+      el.style.maskImage = g;
+      el.style.webkitMaskImage = g;
+    },
+    []
+  );
 
   /** WHY [once, not per-frame]: These values never change — setting them on every rAF frame wastes style recalcs. */
   const initIrisMaskStatics = useCallback((el: HTMLDivElement) => {
@@ -107,10 +110,10 @@ export const OnboardingReveal = memo(function OnboardingReveal({
         Math.hypot(cx, cy),
         Math.hypot(rr.width - cx, cy),
         Math.hypot(cx, rr.height - cy),
-        Math.hypot(rr.width - cx, rr.height - cy),
+        Math.hypot(rr.width - cx, rr.height - cy)
       ) + 8;
 
-    const durationMs = reducedMotion ? 160 : 580;
+    const durationMs = reducedMotion ? 200 : 1000;
     if (exitBackupIdRef.current) window.clearTimeout(exitBackupIdRef.current);
     exitBackupIdRef.current = window.setTimeout(() => finish(), durationMs + 450);
 
@@ -152,7 +155,7 @@ export const OnboardingReveal = memo(function OnboardingReveal({
         }
       },
     }),
-    [reducedMotion],
+    [reducedMotion]
   );
 
   return (
@@ -210,7 +213,7 @@ export const OnboardingReveal = memo(function OnboardingReveal({
               onClick={handleLetsGo}
               disabled={isExitAnimating}
               aria-busy={isExitAnimating}
-              className="min-h-[40px] cursor-pointer rounded-full px-6 text-[12px] font-semibold tracking-wide shadow-[0_6px_20px_rgba(0,0,0,0.28)] transition-[filter] duration-150 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 disabled:pointer-events-none disabled:opacity-70"
+              className="min-h-[40px] cursor-pointer rounded-full px-6 text-[12px] font-semibold tracking-wide shadow-[0_6px_20px_rgba(0,0,0,0.28)] transition-[filter] duration-150 hover:brightness-110  focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 disabled:pointer-events-none disabled:opacity-70"
               style={{
                 color: ONBOARDING_TEXT_PRIMARY,
                 background:
