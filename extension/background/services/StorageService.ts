@@ -120,7 +120,9 @@ export class StorageService implements IStorageService {
    * Gets stored pull requests by storage key.
    * PRs are stored in local storage (device-specific).
    */
-  async getStoredPRs(key: StorageKeyPRs): Promise<{ prs: PullRequest[]; timestamp?: number } | null> {
+  async getStoredPRs(
+    key: StorageKeyPRs
+  ): Promise<{ prs: PullRequest[]; timestamp?: number } | null> {
     try {
       const storedPRs = await this.get<StoredPRs>(key);
 
@@ -139,28 +141,77 @@ export class StorageService implements IStorageService {
 
       return null;
     } catch (error) {
-      this.logStorageException(`[StorageService] Error getting stored PRs for key '${key}':`, error);
+      this.logStorageException(
+        `[StorageService] Error getting stored PRs for key '${key}':`,
+        error
+      );
       return null;
     }
   }
 
   /**
-   * Sets stored pull requests by storage key.
+   * Per-key last serialized fingerprint for {@link setStoredPRs} dirty detection.
+   *
+   * WHY [in-memory, SW-scoped]: Lives only for this worker activation. On wake the
+   * map is empty, so the first `setStoredPRs` always calls `chrome.storage.local.set`,
+   * refreshing `StoredPRs.lastUpdated` for consumers that read TTL via
+   * {@link getStoredPRs} (e.g. `PRService.tryTtlCachedPrList`) and for the popup’s
+   * storage-driven lists (`hydratePrQueriesFromStorage`, `usePrListsStorageSync`).
+   */
+  private lastWrittenFingerprint = new Map<string, string>();
+
+  /**
+   * Fingerprint for comparing successive PR lists inside one worker lifetime.
+   *
+   * WHY [JSON.stringify]: PR payloads are plain JSON-shaped objects (avatars are
+   * URLs, not inlined image data), so full-array serialization is small and keeps
+   * the dirty check aligned with everything persisted to `chrome.storage.local` —
+   * including fields added later on `PullRequest`, without maintaining a parallel
+   * field list here. Cost stays well below a redundant `set` (structured clone + IPC).
+   */
+  private computePrListFingerprint(prs: PullRequest[]): string {
+    // WHY [sentinel]: Fixed fingerprint for the empty list without invoking stringify.
+    if (prs.length === 0) return '0';
+    return JSON.stringify(prs);
+  }
+
+  /**
+   * Persists `{ prs, lastUpdated }` for one of the three PR-list keys.
+   *
+   * WHY [skip identical payload]: `EventService.handleAlarm` refetches on a fixed
+   * cadence; when GitHub returns the same list, avoiding `set` drops structured-clone
+   * and IPC work. The popup listens on `chrome.storage.onChanged` — no write means no
+   * spurious React Query churn when nothing changed.
+   *
+   * WHY [fingerprint only after successful `set`]: If `set` throws, the map is not
+   * updated, so the next call retries persistence instead of treating a failed round as cached.
    */
   async setStoredPRs(key: StorageKeyPRs, prs: PullRequest[]): Promise<void> {
     try {
+      const fingerprint = this.computePrListFingerprint(prs);
+      if (this.lastWrittenFingerprint.get(key) === fingerprint) {
+        this.debugService.log(
+          `[StorageService] Skipping write for '${key}' — fingerprint unchanged (${prs.length} items)`
+        );
+        return;
+      }
+
       const storedPRs: StoredPRs = {
         prs,
         lastUpdated: new Date().toISOString(),
       };
       await this.set(key, storedPRs);
+      this.lastWrittenFingerprint.set(key, fingerprint);
       this.debugService.log(
         `[StorageService] Stored PRs updated for key '${key}':`,
         prs.length,
         'items'
       );
     } catch (error) {
-      this.logStorageException(`[StorageService] Error setting stored PRs for key '${key}':`, error);
+      this.logStorageException(
+        `[StorageService] Error setting stored PRs for key '${key}':`,
+        error
+      );
       throw error;
     }
   }
@@ -279,6 +330,12 @@ export class StorageService implements IStorageService {
         STORAGE_KEY_ROUTE_HINT,
       ];
       await runWithTransientStorageRetry(() => this.localStorage.remove(keys));
+
+      // WHY [fingerprint reset]: List keys were just removed from disk; fingerprints
+      // still reflect pre-wipe payloads. Clearing keeps this cache coherent with
+      // `chrome.storage.local` so the next `setStoredPRs` for each key performs a real `set`.
+      this.lastWrittenFingerprint.clear();
+
       await runWithTransientStorageRetry(() =>
         this.localStorage.set({ [STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING]: true })
       );
@@ -404,7 +461,9 @@ export class StorageService implements IStorageService {
       // Chrome storage.local quota is typically 5MB
       const totalBytes = 5 * 1024 * 1024;
 
-      this.debugService.log(`[StorageService] Local storage usage: ${usedBytes}/${totalBytes} bytes`);
+      this.debugService.log(
+        `[StorageService] Local storage usage: ${usedBytes}/${totalBytes} bytes`
+      );
       return { usedBytes, totalBytes };
     } catch (error) {
       this.logStorageException('[StorageService] Error getting storage info:', error);
