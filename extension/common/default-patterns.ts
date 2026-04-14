@@ -260,6 +260,10 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
   // WHY [flat chain]: Same strategy as list parsing — one ordered regex list, no branching on URL or
   // legacy vs new experience. GitHubService walks these until the first capture of `login`.
   // Roadmap: add optional `description` on every PatternEntry across this file for remote/config clarity.
+  //
+  // Session boundary: `NotLoggedIn` / logged-out shell detection uses `github-html-session.ts`
+  // (static, store-reviewed). This chain is for viewer identity extraction only — Valibot-validated
+  // remote `patterns.json` may tune these regexes without widening auth blast radius.
   viewerLogin: [
     {
       // WHY [fragility]: `[^}]*` is intentionally narrow for speed on large HTML blobs.
@@ -283,6 +287,12 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
       flags: 'i',
       captureGroups: { login: 1 },
     },
+    /**
+     * Stricter `user-login` meta than `github-html-session.ts`: this entry participates in the
+     * ordered `viewerLogin` scrape chain (remote-tunable via `patterns.json`), not in session
+     * termination. Intentional duplication — security gate stays static; this capture feeds
+     * feature logic only when non-empty (see `GitHubService.extractViewerLoginFromHtml`).
+     */
     {
       description: 'Match user-login meta tag',
       regex: '<meta[^>]+name="user-login"[^>]+content="([^"]+)"',

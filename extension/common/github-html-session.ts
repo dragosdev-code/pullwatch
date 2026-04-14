@@ -2,6 +2,16 @@
  * Detects logged-out github.com HTML shells from the document itself (not HTTP status alone).
  * `GitHubService` uses this so a 404 on a bad URL while signed in — still carrying a non-empty
  * `user-login` meta — does not clear the extension session.
+ *
+ * **Session vs scraping:** Meta regexes here are the **static, store-reviewed** gate for
+ * `NotLoggedIn` / session-loss classification (small blast radius — no remote `patterns.json`).
+ * The same `user-login` signal appears again in `default-patterns.ts` inside
+ * `DEFAULT_PATTERNS.viewerLogin` as a **stricter, remote-tunable** extractor for viewer login
+ * on authenticated pages. That duplication is intentional: flexible matching for security
+ * decisions; ordered chain entries for feature parsing and hot-fix without conflating the two.
+ *
+ * Cross-ref: `default-patterns.ts` → `DEFAULT_PATTERNS.viewerLogin` → description
+ * “Match user-login meta tag”.
  */
 
 const META_USER_LOGIN_NAME_FIRST_RE =
