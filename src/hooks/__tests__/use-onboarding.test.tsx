@@ -6,6 +6,7 @@ import {
   STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
 } from '../../../extension/common/constants';
 import { useOnboarding } from '../use-onboarding';
+import { chromeExtensionService } from '../../services/chrome-extension-service';
 
 vi.mock('../../services/chrome-extension-service', () => ({
   chromeExtensionService: {
@@ -151,5 +152,42 @@ describe('useOnboarding', () => {
 
     await waitFor(() => expect(result.current.showFirstRunReveal).toBe(true));
     expect(result.current.showLoggedOutLayer).toBe(false);
+  });
+
+  it('sets friendly refresh info when session refresh rejects with NotLoggedIn', async () => {
+    const matchMediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation(
+      () =>
+        ({
+          matches: true,
+          media: '(prefers-reduced-motion: reduce)',
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        }) as unknown as MediaQueryList
+    );
+    try {
+      getMock.mockResolvedValue({
+        [STORAGE_KEY_HAS_SEEN_ONBOARDING]: true,
+        [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: undefined,
+      });
+      const authErr = new Error('NotLoggedIn: User is not logged in to GitHub.');
+      vi.mocked(chromeExtensionService.fetchFreshAssignedPRs).mockRejectedValueOnce(authErr);
+      vi.mocked(chromeExtensionService.fetchFreshMergedPRs).mockRejectedValueOnce(authErr);
+      vi.mocked(chromeExtensionService.fetchFreshAuthoredPRs).mockRejectedValueOnce(authErr);
+
+      const { result } = renderHook(() => useOnboarding());
+      await waitFor(() => expect(result.current.storageReady).toBe(true));
+
+      await act(async () => {
+        await result.current.refreshGitHubSession();
+      });
+
+      expect(result.current.refreshErrorMessage).toBeNull();
+      expect(result.current.refreshState).toBe('idle');
+      expect(result.current.refreshInfoMessage).toContain(
+        'does not detect a signed-in GitHub session'
+      );
+    } finally {
+      matchMediaSpy.mockRestore();
+    }
   });
 });

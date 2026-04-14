@@ -88,6 +88,71 @@
   }
 }
 
+/* Logged-out onboarding: refresh control motion (see LoggedOutView). */
+@keyframes pw-onboarding-refresh-sweep {
+  from {
+    transform: translateX(-115%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
+@keyframes pw-onboarding-refresh-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.12),
+      0 0 18px rgba(160, 195, 255, 0.12);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.18),
+      0 0 28px rgba(186, 210, 255, 0.32);
+  }
+}
+
+.pw-onboarding-refresh-sweep-track {
+  position: absolute;
+  bottom: 5px;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.pw-onboarding-refresh-sweep-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 38%;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0.45),
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
+  animation: pw-onboarding-refresh-sweep 1.05s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+.pw-onboarding-refresh-btn-busy {
+  animation: pw-onboarding-refresh-glow 1.65s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-onboarding-refresh-sweep-bar,
+  .pw-onboarding-refresh-btn-busy {
+    animation: none !important;
+  }
+}
+
 /* —— Settings: Founders’ lounge / sponsor section (scoped) —— */
 /* WHY [compositor]: Rotating via transform on a layer keeps work on the compositor; animating a custom property
    inside conic-gradient(var(...)) forces frequent style recalc + repaint (see CSS Properties & Values / var() substitution). */

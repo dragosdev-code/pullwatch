@@ -19,6 +19,17 @@ function isAuthLikeErrorMessage(message: string): boolean {
   );
 }
 
+/** Shown after refresh when GitHub has no browser session Pullwatch can use (not a transport/parser failure). */
+const REFRESH_NO_GITHUB_SESSION_INFO =
+  'Pullwatch still does not detect a signed-in GitHub session in this browser. Finish signing in on github.com, then tap Refresh status again.';
+
+/** Keeps the refresh control in a loading state long enough for motion design (skipped when reduced motion). */
+const REFRESH_MIN_UI_MS = 850;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function readViewerLogin(items: Record<string, unknown>): string | null {
   const raw = items[STORAGE_KEY_GITHUB_VIEWER_IDENTITY] as GitHubViewerIdentity | undefined;
   const login = raw?.login?.trim();
@@ -73,6 +84,7 @@ export function useOnboarding() {
   const [authWall, setAuthWall] = useState(false);
   const [refreshState, setRefreshState] = useState<OnboardingRefreshState>('idle');
   const [refreshErrorMessage, setRefreshErrorMessage] = useState<string | null>(null);
+  const [refreshInfoMessage, setRefreshInfoMessage] = useState<string | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   const markRevealComplete = useCallback(() => {
@@ -204,6 +216,15 @@ export function useOnboarding() {
     }
     setRefreshState('loading');
     setRefreshErrorMessage(null);
+    setRefreshInfoMessage(null);
+    const started = Date.now();
+    const minUiMs = prefersReducedMotion ? 0 : REFRESH_MIN_UI_MS;
+    const settleMinUi = async () => {
+      const elapsed = Date.now() - started;
+      const remaining = minUiMs - elapsed;
+      if (remaining > 0) await sleep(remaining);
+    };
+
     try {
       await Promise.all([
         chromeExtensionService.fetchFreshAssignedPRs(),
@@ -216,8 +237,12 @@ export function useOnboarding() {
       const login = readViewerLogin(result);
       setAuthWall(false);
       setViewerLogin(login);
+      await settleMinUi();
       if (!login) {
         setAuthWall(true);
+        setRefreshInfoMessage(REFRESH_NO_GITHUB_SESSION_INFO);
+      } else {
+        setRefreshInfoMessage(null);
       }
       setRefreshState('idle');
     } catch (error) {
@@ -225,13 +250,17 @@ export function useOnboarding() {
       if (isAuthLikeErrorMessage(message)) {
         setAuthWall(true);
         setViewerLogin(null);
+        await settleMinUi();
+        setRefreshInfoMessage(REFRESH_NO_GITHUB_SESSION_INFO);
         setRefreshState('idle');
       } else {
+        await settleMinUi();
+        setRefreshInfoMessage(null);
         setRefreshErrorMessage(message);
         setRefreshState('error');
       }
     }
-  }, []);
+  }, [prefersReducedMotion]);
 
   const showLoggedOutLayer = storageReady && !isLoggedIn;
   const needsOnboardingReveal =
@@ -247,6 +276,7 @@ export function useOnboarding() {
     prefersReducedMotion,
     refreshState,
     refreshErrorMessage,
+    refreshInfoMessage,
     refreshGitHubSession,
     markRevealComplete,
     mainAppInert,

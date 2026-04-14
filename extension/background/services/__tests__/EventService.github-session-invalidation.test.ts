@@ -9,6 +9,7 @@ import type { IAlarmService } from '../../interfaces/IAlarmService';
 import type { IBadgeService } from '../../interfaces/IBadgeService';
 import type { IRateLimitService } from '../../interfaces/IRateLimitService';
 import type { MessageResponse, RuntimeRequestMessage } from '../../../common/types';
+import { GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE } from '../../../common/errors';
 import { EVENT_FETCH_PRS, PR_DATA_ACTION } from '../../../common/runtime-actions';
 
 const debugService: IDebugService = {
@@ -104,7 +105,7 @@ describe('EventService GitHub web-session invalidation', () => {
     expect(clearGitHubWebSessionCaches).toHaveBeenCalledTimes(1);
     expect(setDefaultBadge).toHaveBeenCalledTimes(1);
     expect(sendResponse).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, error: 'Failed to handle assigned PR action' })
+      expect.objectContaining({ success: false, error: GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE })
     );
   });
 });

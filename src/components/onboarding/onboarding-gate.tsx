@@ -20,6 +20,7 @@ export function OnboardingGate({ children }: OnboardingGateProps) {
     showFirstRunReveal,
     refreshState,
     refreshErrorMessage,
+    refreshInfoMessage,
     refreshGitHubSession,
     prefersReducedMotion,
     markRevealComplete,
@@ -44,6 +45,8 @@ export function OnboardingGate({ children }: OnboardingGateProps) {
         <LoggedOutView
           refreshState={refreshState}
           refreshErrorMessage={refreshErrorMessage}
+          refreshInfoMessage={refreshInfoMessage}
+          prefersReducedMotion={prefersReducedMotion}
           onRefresh={refreshGitHubSession}
         />
       ) : null}

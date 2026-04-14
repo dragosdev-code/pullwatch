@@ -21,6 +21,7 @@ import {
   ROUTE_HINT_TTL_MS,
 } from '../../common/constants';
 import {
+  GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE,
   RateLimitError,
   ParserBreakageError,
   GitHubOutageError,
@@ -216,7 +217,7 @@ export class GitHubService implements IGitHubService {
           if (response.status === 404) {
             const html404 = await response.text();
             if (isGitHubLoggedOutHtmlShell(html404, response.url)) {
-              throw new Error('NotLoggedIn: User is not logged in to GitHub.');
+              throw new Error(GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE);
             }
             throw new Error(`GitHub ${context} request failed: 404`);
           }
@@ -225,7 +226,7 @@ export class GitHubService implements IGitHubService {
 
         const html = await response.text();
         if (isGitHubLoggedOutHtmlShell(html, response.url)) {
-          throw new Error('NotLoggedIn: User is not logged in to GitHub.');
+          throw new Error(GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE);
         }
 
         this.lastResolvedViewerLogin = GitHubService.extractViewerLoginFromHtml(

@@ -15,7 +15,10 @@ import {
   SETTINGS_TEST_ERROR_DISABLED,
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
 } from '../../common/constants';
-import { isGitHubWebSessionAuthError } from '../../common/errors';
+import {
+  GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE,
+  isGitHubWebSessionAuthError,
+} from '../../common/errors';
 import {
   DEV_TEST_ACTION,
   EVENT_FETCH_PRS,
@@ -331,7 +334,12 @@ export class EventService implements IEventService {
         await this.invalidateGitHubWebSessionAfterAuthFailure();
       }
       this.logCatchAsWarningIfAuth('Error handling assigned PR data actions', error);
-      sendResponse({ success: false, error: 'Failed to handle assigned PR action' });
+      sendResponse({
+        success: false,
+        error: isGitHubWebSessionAuthError(error)
+          ? GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE
+          : 'Failed to handle assigned PR action',
+      });
     }
   }
 
@@ -368,7 +376,12 @@ export class EventService implements IEventService {
         await this.invalidateGitHubWebSessionAfterAuthFailure();
       }
       this.logCatchAsWarningIfAuth('Error handling merged PR data actions', error);
-      sendResponse({ success: false, error: 'Failed to handle merged PR action' });
+      sendResponse({
+        success: false,
+        error: isGitHubWebSessionAuthError(error)
+          ? GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE
+          : 'Failed to handle merged PR action',
+      });
     }
   }
 
@@ -453,7 +466,12 @@ export class EventService implements IEventService {
         await this.invalidateGitHubWebSessionAfterAuthFailure();
       }
       this.logCatchAsWarningIfAuth('Error handling authored PR data actions', error);
-      sendResponse({ success: false, error: 'Failed to handle authored PR action' });
+      sendResponse({
+        success: false,
+        error: isGitHubWebSessionAuthError(error)
+          ? GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE
+          : 'Failed to handle authored PR action',
+      });
     }
   }
 

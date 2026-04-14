@@ -1,5 +1,6 @@
-import { memo, useCallback, useId } from 'react';
+import { memo, useCallback, useId, useMemo } from 'react';
 import FocusLock from 'react-focus-lock';
+import { animated, useTransition } from '@react-spring/web';
 import { GITHUB_BASE_URL } from '../../../extension/common/constants';
 import { isExtensionContext } from '../../utils/is-extension-context';
 import type { OnboardingRefreshState } from '../../hooks/use-onboarding';
@@ -13,10 +14,20 @@ import {
 export type LoggedOutViewProps = {
   refreshState: OnboardingRefreshState;
   refreshErrorMessage: string | null;
+  refreshInfoMessage: string | null;
+  prefersReducedMotion: boolean;
   onRefresh: () => void;
 };
 
 const LOGIN_URL = `${GITHUB_BASE_URL}/login`;
+
+const HINT_AFTER_SIGN_IN = 'After signing in on github.com, return here and tap Refresh status.';
+
+type FeedbackSlot = {
+  key: string;
+  tone: 'error' | 'info' | 'hint';
+  text: string;
+};
 
 /**
  * Premium empty state for missing GitHub session — not an error screen.
@@ -26,6 +37,8 @@ const LOGIN_URL = `${GITHUB_BASE_URL}/login`;
 export const LoggedOutView = memo(function LoggedOutView({
   refreshState,
   refreshErrorMessage,
+  refreshInfoMessage,
+  prefersReducedMotion,
   onRefresh,
 }: LoggedOutViewProps) {
   const titleId = useId();
@@ -41,6 +54,29 @@ export const LoggedOutView = memo(function LoggedOutView({
 
   const busy = refreshState === 'loading';
 
+  const feedbackSlot = useMemo<FeedbackSlot>(() => {
+    if (refreshErrorMessage) {
+      return { key: `err:${refreshErrorMessage}`, tone: 'error', text: refreshErrorMessage };
+    }
+    if (refreshInfoMessage) {
+      return { key: `info:${refreshInfoMessage}`, tone: 'info', text: refreshInfoMessage };
+    }
+    return { key: 'hint', tone: 'hint', text: HINT_AFTER_SIGN_IN };
+  }, [refreshErrorMessage, refreshInfoMessage]);
+
+  const motionOff = prefersReducedMotion;
+  const feedbackTransitions = useTransition([feedbackSlot], {
+    keys: (item) => item.key,
+    from: motionOff ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 },
+    enter: motionOff
+      ? { opacity: 1, y: 0, config: { duration: 0 } }
+      : { opacity: 1, y: 0, config: { tension: 200, friction: 24 } },
+    leave: motionOff
+      ? { opacity: 1, y: 0, config: { duration: 0 } }
+      : { opacity: 0, y: -6, config: { tension: 320, friction: 32 } },
+    trail: 0,
+  });
+
   return (
     <FocusLock returnFocus autoFocus>
       <div
@@ -55,7 +91,9 @@ export const LoggedOutView = memo(function LoggedOutView({
             ? 'Checking GitHub session'
             : refreshErrorMessage
               ? `Refresh failed: ${refreshErrorMessage}`
-              : ''}
+              : refreshInfoMessage
+                ? refreshInfoMessage
+                : ''}
         </div>
 
         <div className="mx-auto flex max-w-[300px] flex-col items-center gap-5">
@@ -93,32 +131,58 @@ export const LoggedOutView = memo(function LoggedOutView({
                 border: '1px solid rgba(255,255,255,0.12)',
               }}
             >
-              Login in GitHub
+              Log in to GitHub
             </button>
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={busy}
-              className="flex h-10 w-full cursor-pointer items-center justify-center rounded-xl text-[12px] font-medium transition-opacity disabled:cursor-wait disabled:opacity-60"
+            <div
+              className="flex w-full flex-col gap-1.5 rounded-xl px-2.5 py-2"
               style={{
-                color: ONBOARDING_TEXT_PRIMARY,
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.14)',
+                background: 'rgba(0,0,0,0.14)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
               }}
             >
-              {busy ? 'Checking session…' : 'Refresh status'}
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={busy}
+                aria-busy={busy}
+                style={{
+                  color: ONBOARDING_TEXT_PRIMARY,
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                }}
+                className={`relative flex h-10 w-full cursor-pointer items-center justify-center rounded-lg text-[12px] font-medium transition-opacity disabled:cursor-wait disabled:opacity-60 ${busy && !motionOff ? 'pw-onboarding-refresh-btn-busy' : ''}`}
+              >
+                <span className="relative z-1">
+                  {busy ? 'Checking session…' : 'Refresh status'}
+                </span>
+                {busy && !motionOff ? (
+                  <span className="pw-onboarding-refresh-sweep-track" aria-hidden>
+                    <span className="pw-onboarding-refresh-sweep-bar" />
+                  </span>
+                ) : null}
+              </button>
 
-          {refreshErrorMessage ? (
-            <p className="text-left text-[11px] leading-snug" style={{ color: '#ffb4b4' }}>
-              {refreshErrorMessage}
-            </p>
-          ) : (
-            <p className="text-[11px] leading-snug" style={{ color: ONBOARDING_TEXT_SOFT }}>
-              After signing in on github.com, return here and tap Refresh status.
-            </p>
-          )}
+              <div className="grid min-h-[47px] w-full text-left *:col-start-1 *:row-start-1">
+                {feedbackTransitions((style, item) => (
+                  <animated.p
+                    className="text-[11px] leading-snug"
+                    style={{
+                      ...style,
+                      color:
+                        item.tone === 'error'
+                          ? '#ffb4b4'
+                          : item.tone === 'info'
+                            ? 'rgba(255, 220, 188, 0.95)'
+                            : ONBOARDING_TEXT_SOFT,
+                    }}
+                  >
+                    {item.text}
+                  </animated.p>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </FocusLock>

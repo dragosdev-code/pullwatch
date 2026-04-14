@@ -40,6 +40,13 @@ export class GitHubOutageError extends Error {
   }
 }
 
+/**
+ * `Error.message` / runtime `sendResponse.error` when GitHub has no web session in this browser.
+ * Matches throws in `GitHubService` so popups can treat it as session loss via `isAuthLikeErrorMessage`.
+ */
+export const GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE =
+  'NotLoggedIn: User is not logged in to GitHub.';
+
 // ─── Chromium / platform (not thrown by this extension) ─────────────────────
 
 /**
