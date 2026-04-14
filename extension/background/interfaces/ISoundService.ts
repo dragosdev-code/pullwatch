@@ -6,8 +6,8 @@ import type { IService } from './IService';
  */
 export interface ISoundService extends IService {
   /**
-   * Plays a notification sound.
-   * @param sound - The sound type to play ('ping', 'bell', or 'off')
+   * Plays a notification sound via the offscreen audio document.
+   * @param sound - Built-in (`ping`, `bell`), a user slot (`custom_0`, …), or `off` to skip playback. Defaults to `ping`.
    */
   playNotificationSound(sound?: NotificationSound): Promise<void>;
 

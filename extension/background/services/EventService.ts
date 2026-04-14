@@ -553,6 +553,11 @@ export class EventService implements IEventService {
 
   /**
    * Handles offscreen related actions (sound playback, etc.).
+   *
+   * WHY [gate]: `EVENT_PLAY_SOUND` is routed through `SoundService.playNotificationSound` rather
+   * than forwarding the message directly to the offscreen document. `SoundService` owns a FIFO
+   * promise gate that serializes concurrent playback requests; bypassing it would let overlapping
+   * messages produce simultaneous audio.
    */
   async handleOffscreenActions(
     message: RuntimeMessage,
@@ -561,30 +566,12 @@ export class EventService implements IEventService {
     try {
       if (this.isMessageAction(message, EVENT_PLAY_SOUND)) {
         const soundService = this.serviceContainer.getService('soundService');
+        const payload = message.payload as { soundType?: string } | undefined;
+        const sound = (payload?.soundType ?? 'ping') as NotificationSound;
 
-        await soundService.ensureOffscreenDocument();
+        await soundService.playNotificationSound(sound);
 
-        // Send message to the offscreen document for audio playback
-        chrome.runtime.sendMessage(
-          { action: EVENT_PLAY_SOUND, payload: message.payload },
-          (response) => {
-            if (chrome.runtime.lastError) {
-              this.debugService.error(
-                '[EventService] Error sending play sound message to offscreen:',
-                chrome.runtime.lastError.message
-              );
-              sendResponse({ success: false, error: 'Failed to message offscreen for sound play' });
-            } else {
-              this.debugService.log(
-                '[EventService] Play sound message sent to offscreen, response:',
-                response
-              );
-              sendResponse(
-                response || { success: true, data: 'Play sound message processed by offscreen.' }
-              );
-            }
-          }
-        );
+        sendResponse({ success: true, data: `Sound played: ${sound}` });
       } else if (this.isMessageAction(message, EVENT_OFFSCREEN_READY)) {
         this.debugService.log('[EventService] Offscreen document reported ready.');
         sendResponse({ success: true, data: 'Offscreen ready acknowledged' });
