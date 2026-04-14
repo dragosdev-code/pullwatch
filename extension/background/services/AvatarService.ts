@@ -1,6 +1,7 @@
 import type { IAvatarService } from '../interfaces/IAvatarService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type { PullRequest } from '../../common/types';
+import { isOfflineError } from '../../common/network-utils';
 
 /**
  * AvatarService fetches and caches GitHub user avatars as base64 data URLs.
@@ -75,6 +76,11 @@ export class AvatarService implements IAvatarService {
       this.avatarCache.set(login, dataUrl);
       return dataUrl;
     } catch (error) {
+      // WHY [silent]: Transient transport loss (sleep/wake, DNS not ready) is expected; PR rows
+      // stay usable without avatars — skip error telemetry so real faults stay visible.
+      if (isOfflineError(error)) {
+        return null;
+      }
       this.debugService.error(
         `[AvatarService] Failed to fetch avatar for ${login}:`,
         error instanceof Error ? error.message : error

@@ -27,6 +27,7 @@ import {
   GitHubOutageError,
   isGitHubWebSessionAuthError,
 } from '../../common/errors';
+import { isOfflineError } from '../../common/network-utils';
 import { GitHubHTMLParser } from './GitHubHTMLParser';
 import { GitHubEmbeddedJsonPullHarvest } from './GitHubEmbeddedJsonPullHarvest';
 import { NewExperienceGitHubHTMLParser } from './NewExperienceGitHubHTMLParser';
@@ -472,9 +473,14 @@ export class GitHubService implements IGitHubService {
     const detail = error instanceof Error ? error.message : error;
     if (isGitHubWebSessionAuthError(error)) {
       this.debugService.warn(`${messagePrefix} (no GitHub web session)`, detail);
-    } else {
-      this.debugService.error(messagePrefix, detail);
+      return;
     }
+    // WHY [silent]: Same coarse `Failed to fetch` as avatars when the OS network stack is not
+    // ready after wake — list fetch will retry on the next alarm without polluting error logs.
+    if (isOfflineError(error)) {
+      return;
+    }
+    this.debugService.error(messagePrefix, detail);
   }
 
   async fetchMergedPRs(): Promise<PullRequest[]> {

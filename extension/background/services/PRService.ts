@@ -23,6 +23,7 @@ import {
   GitHubOutageError,
   isGitHubWebSessionAuthError,
 } from '../../common/errors';
+import { isOfflineError } from '../../common/network-utils';
 import { delay } from '../../common/utils';
 
 /**
@@ -220,9 +221,13 @@ export class PRService implements IPRService {
         `[PRService] ${label} — GitHub not signed in (expected until user logs in on github.com):`,
         error instanceof Error ? error.message : error
       );
-    } else {
-      this.debugService.error(`[PRService] ${label}:`, error);
+      return;
     }
+    // WHY [silent]: Aligns with GitHubService — transient fetch transport after wake, not a PR pipeline bug.
+    if (isOfflineError(error)) {
+      return;
+    }
+    this.debugService.error(`[PRService] ${label}:`, error);
   }
 
   private async doFetchAndUpdateAssignedPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
