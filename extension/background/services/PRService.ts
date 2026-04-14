@@ -186,12 +186,14 @@ export class PRService implements IPRService {
    * @param bypassCache - Ignore the short TTL cache and always refetch (periodic alarm).
    * @returns The current assigned PR list after the effective fetch completes.
    */
-  async fetchAndUpdateAssignedPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
+  async fetchAndUpdateAssignedPRs(
+    forceRefresh = false,
+    bypassCache = false
+  ): Promise<PullRequest[]> {
     while (true) {
       if (this.assignedFetchInProgress && this.assignedFetchOpts) {
         const o = this.assignedFetchOpts;
-        const needStricter =
-          (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
+        const needStricter = (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
         if (!needStricter) {
           this.debugService.log('[PRService] Assigned fetch already in progress, reusing');
           return this.assignedFetchInProgress;
@@ -204,12 +206,13 @@ export class PRService implements IPRService {
       }
 
       this.assignedFetchOpts = { forceRefresh, bypassCache };
-      this.assignedFetchInProgress = this.doFetchAndUpdateAssignedPRs(forceRefresh, bypassCache).finally(
-        () => {
-          this.assignedFetchInProgress = null;
-          this.assignedFetchOpts = null;
-        }
-      );
+      this.assignedFetchInProgress = this.doFetchAndUpdateAssignedPRs(
+        forceRefresh,
+        bypassCache
+      ).finally(() => {
+        this.assignedFetchInProgress = null;
+        this.assignedFetchOpts = null;
+      });
       return this.assignedFetchInProgress;
     }
   }
@@ -230,7 +233,33 @@ export class PRService implements IPRService {
     this.debugService.error(`[PRService] ${label}:`, error);
   }
 
-  private async doFetchAndUpdateAssignedPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
+  /**
+   * WHY [single gate]: Assigned, merged, and authored share one TTL on the `StoredPRs` envelope
+   * (`lastUpdated` surfaced as `timestamp` by {@link IStorageService.getStoredPRs}). Callers pass
+   * the same object they already read for `oldPRs` so we never add an extra `chrome.storage` round
+   * trip. `bypassCache: true` is how {@link EventService.handleAlarm} forces a GitHub hit every tick;
+   * `forceRefresh` is install/startup/manual refresh — both must skip this fast path so notification
+   * baselines and {@link BackgroundManager.performInitialSetup} semantics stay correct.
+   */
+  private tryTtlCachedPrList(
+    stored: { prs: PullRequest[]; timestamp?: number } | null,
+    forceRefresh: boolean,
+    bypassCache: boolean,
+    listLabelForLog: 'Assigned' | 'Merged' | 'Authored'
+  ): PullRequest[] | null {
+    const isCacheValid = stored && stored.timestamp && Date.now() - stored.timestamp < CACHE_TTL_MS;
+
+    if (isCacheValid && !forceRefresh && !bypassCache) {
+      this.debugService.log(`[PRService] Returning cached ${listLabelForLog} PRs`);
+      return stored.prs;
+    }
+    return null;
+  }
+
+  private async doFetchAndUpdateAssignedPRs(
+    forceRefresh: boolean,
+    bypassCache: boolean
+  ): Promise<PullRequest[]> {
     this.debugService.log(
       `[PRService] Fetching and updating assigned PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`
     );
@@ -239,7 +268,7 @@ export class PRService implements IPRService {
     const oldPRs = storedData?.prs || [];
 
     try {
-      const cached = this.checkAssignedCacheFromStored(storedData, forceRefresh, bypassCache);
+      const cached = this.tryTtlCachedPrList(storedData, forceRefresh, bypassCache, 'Assigned');
       if (cached) return cached;
 
       const oldPendingPRs = oldPRs.filter((pr) => pr.reviewStatus !== 'reviewed');
@@ -310,27 +339,6 @@ export class PRService implements IPRService {
       await this.badgeService.setErrorBadge();
       throw error;
     }
-  }
-
-  /**
-   * Returns cached assigned PRs if the cache is valid, or null if a fresh fetch is needed.
-   *
-   * WHY [no extra read]: The caller already loaded `storedData` for the `oldPRs` baseline.
-   * Passing it here avoids a redundant `chrome.storage.local.get` + JSON deserialization.
-   */
-  private checkAssignedCacheFromStored(
-    storedData: { prs: PullRequest[]; timestamp?: number } | null,
-    forceRefresh: boolean,
-    bypassCache: boolean,
-  ): PullRequest[] | null {
-    const isCacheValid =
-      storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
-
-    if (isCacheValid && !forceRefresh && !bypassCache) {
-      this.debugService.log('[PRService] Returning cached Assigned PRs');
-      return storedData.prs;
-    }
-    return null;
   }
 
   /**
@@ -525,8 +533,7 @@ export class PRService implements IPRService {
     while (true) {
       if (this.authoredFetchInProgress && this.authoredFetchOpts) {
         const o = this.authoredFetchOpts;
-        const needStricter =
-          (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
+        const needStricter = (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
         if (!needStricter) {
           this.debugService.log('[PRService] Authored fetch already in progress, reusing');
           return this.authoredFetchInProgress;
@@ -539,29 +546,30 @@ export class PRService implements IPRService {
       }
 
       this.authoredFetchOpts = { forceRefresh, bypassCache };
-      this.authoredFetchInProgress = this.doUpdateAuthoredPRs(forceRefresh, bypassCache)
-        .finally(() => {
+      this.authoredFetchInProgress = this.doUpdateAuthoredPRs(forceRefresh, bypassCache).finally(
+        () => {
           this.authoredFetchInProgress = null;
           this.authoredFetchOpts = null;
-        });
+        }
+      );
       return this.authoredFetchInProgress;
     }
   }
 
-  private async doUpdateAuthoredPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
-    this.debugService.log(`[PRService] Updating authored PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`);
+  private async doUpdateAuthoredPRs(
+    forceRefresh: boolean,
+    bypassCache: boolean
+  ): Promise<PullRequest[]> {
+    this.debugService.log(
+      `[PRService] Updating authored PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`
+    );
 
     const stored = await this.storageService.getStoredPRs(STORAGE_KEY_AUTHORED_PRS);
     const oldPRs = stored?.prs || [];
 
     try {
-      const isCacheValid =
-        stored && stored.timestamp && Date.now() - stored.timestamp < CACHE_TTL_MS;
-
-      if (isCacheValid && !forceRefresh && !bypassCache) {
-        this.debugService.log('[PRService] Returning cached Authored PRs');
-        return stored.prs;
-      }
+      const cached = this.tryTtlCachedPrList(stored, forceRefresh, bypassCache, 'Authored');
+      if (cached) return cached;
 
       const freshAuthoredPRsRaw = await this.gitHubService.fetchAuthoredPRs();
       this.debugService.log(
@@ -622,8 +630,7 @@ export class PRService implements IPRService {
     while (true) {
       if (this.mergedFetchInProgress && this.mergedFetchOpts) {
         const o = this.mergedFetchOpts;
-        const needStricter =
-          (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
+        const needStricter = (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
         if (!needStricter) {
           this.debugService.log('[PRService] Merged fetch already in progress, reusing');
           return this.mergedFetchInProgress;
@@ -644,20 +651,20 @@ export class PRService implements IPRService {
     }
   }
 
-  private async doUpdateMergedPRs(forceRefresh: boolean, bypassCache: boolean): Promise<PullRequest[]> {
-    this.debugService.log(`[PRService] Updating merged PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`);
+  private async doUpdateMergedPRs(
+    forceRefresh: boolean,
+    bypassCache: boolean
+  ): Promise<PullRequest[]> {
+    this.debugService.log(
+      `[PRService] Updating merged PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`
+    );
 
     const storedData = await this.storageService.getStoredPRs(STORAGE_KEY_MERGED_PRS);
     const oldPRs = storedData?.prs || [];
 
     try {
-      const isCacheValid =
-        storedData && storedData.timestamp && Date.now() - storedData.timestamp < CACHE_TTL_MS;
-
-      if (isCacheValid && !forceRefresh && !bypassCache) {
-        this.debugService.log('[PRService] Returning cached Merged PRs');
-        return storedData.prs;
-      }
+      const cached = this.tryTtlCachedPrList(storedData, forceRefresh, bypassCache, 'Merged');
+      if (cached) return cached;
 
       this.debugService.log(`[PRService] Current stored merged PRs count: ${oldPRs.length}`);
 
@@ -698,7 +705,9 @@ export class PRService implements IPRService {
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
       await this.healthStatusService.clearGitHubOutage();
-      this.debugService.log(`[PRService] Successfully updated ${mergedPRsWithStatus.length} merged PRs`);
+      this.debugService.log(
+        `[PRService] Successfully updated ${mergedPRsWithStatus.length} merged PRs`
+      );
       return mergedPRsWithStatus;
     } catch (error) {
       if (error instanceof ParserBreakageError) {
