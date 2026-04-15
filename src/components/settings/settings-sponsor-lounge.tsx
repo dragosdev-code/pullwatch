@@ -75,8 +75,8 @@ export const SettingsSponsorLounge = ({ linkBehavior }: SettingsSponsorLoungePro
         Support the dev
       </p>
 
-      <div className="pw-sponsor-frame rounded-2xl p-px">
-        <div className="pw-sponsor-inner overflow-hidden rounded-[0.9rem] px-4 py-5">
+      <div className="pw-sponsor-frame rounded-2xl">
+        <div className="pw-sponsor-inner overflow-hidden px-4 py-5">
           {noiseMounted ? (
             <svg
               className="pointer-events-none absolute inset-0 size-full opacity-[0.045] mix-blend-overlay"

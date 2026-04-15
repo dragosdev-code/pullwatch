@@ -154,11 +154,19 @@
 }
 
 /* —— Settings: Founders’ lounge / sponsor section (scoped) —— */
-/* WHY [compositor]: Rotating via transform on a layer keeps work on the compositor; animating a custom property
-   inside conic-gradient(var(...)) forces frequent style recalc + repaint (see CSS Properties & Values / var() substitution). */
-@keyframes pw-sponsor-frame-rotate {
+
+/* WHY [@property]: Registering --pw-border-angle lets CSS natively interpolate the angle as a typed <angle>
+   value. This enables smooth conic-gradient rotation driven by a custom property instead of the previous
+   oversized-element-transform hack. The repaint cost is negligible for one small card in a settings panel. */
+@property --pw-border-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes pw-sponsor-border-travel {
   to {
-    transform: rotate(360deg);
+    --pw-border-angle: 360deg;
   }
 }
 
@@ -187,31 +195,118 @@
 
 .pw-sponsor-frame {
   position: relative;
-  overflow: hidden;
-  box-shadow:
+  /* Ring stroke (::before mask padding) and layout gutter must match: with p-px the inner panel sat on
+     ~1.5px of each ring, so “chunkier” reads only where subpixels left a wider slot (often the bottom). */
+  --pw-sponsor-ring-gutter: 1.9px;
+  padding: var(--pw-sponsor-ring-gutter);
+  /* WHY [no overflow:hidden]: The mask-composite technique on ::before shapes the border ring
+     intrinsically; ::after’s blur extends slightly past the edge for corner glow and must not be clipped. */
+  /* box-shadow:
     0 0 28px -10px color-mix(in oklch, var(--color-primary) 22%, transparent),
-    0 12px 40px -20px color-mix(in oklch, var(--color-neutral) 25%, transparent);
+    0 12px 40px -20px color-mix(in oklch, var(--color-neutral) 25%, transparent); */
 }
 
+/* WHY [mask-composite: exclude]: A tight conic-gradient beam rotates around the full element, but
+   two stacked linear-gradient masks with XOR compositing carve out the center, leaving only the
+   border ring visible — pixel-perfect thickness without overflow clipping. */
 .pw-sponsor-frame::before {
   content: '';
   position: absolute;
   z-index: 0;
-  inset: -50%;
+  inset: 0;
+  border-radius: inherit;
+  /* Stroke thickness; keep in sync with --pw-sponsor-ring-gutter so the full ring sits in the gutter. */
+  padding: var(--pw-sponsor-ring-gutter);
   background: conic-gradient(
-    from 0deg,
-    color-mix(in oklch, var(--color-primary) 58%, transparent),
+    from var(--pw-border-angle) at 50% 50%,
+    transparent 0%,
     transparent 32%,
-    color-mix(in oklch, var(--color-primary) 42%, transparent) 56%,
-    transparent 78%
+    color-mix(in oklch, var(--color-primary) 8%, transparent) 36%,
+    color-mix(in oklch, var(--color-primary) 45%, transparent) 40%,
+    color-mix(in oklch, var(--color-primary) 85%, transparent) 44%,
+    var(--color-primary) 48%,
+    var(--color-primary) 52%,
+    color-mix(in oklch, var(--color-primary) 85%, transparent) 56%,
+    color-mix(in oklch, var(--color-primary) 45%, transparent) 60%,
+    color-mix(in oklch, var(--color-primary) 8%, transparent) 64%,
+    transparent 68%,
+    transparent 100%
   );
-  transform-origin: center;
-  animation: pw-sponsor-frame-rotate 10s linear infinite;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: pw-sponsor-border-travel 4s linear infinite;
+}
+
+/* WHY [corner glow]: Four radial-gradient hotspots sit at each corner; a rotating conic mask
+   (same animation) reveals them only as the beam passes through, creating a diffuse ambient
+   light-bleed that dissipates into the background — shadow-like, not border-like. */
+.pw-sponsor-frame::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  /* Tighter than ::before blur extent so the glow reads as soft bleed, not a second rim. */
+  inset: -8px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 0% 0%,
+      color-mix(in oklch, var(--color-primary) 34%, transparent) 0%,
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(in oklch, var(--color-primary) 34%, transparent) 0%,
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 100% 100%,
+      color-mix(in oklch, var(--color-primary) 34%, transparent) 0%,
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 0% 100%,
+      color-mix(in oklch, var(--color-primary) 34%, transparent) 0%,
+      transparent 22%
+    );
+  /* Soft window tracks ::before’s wider arc; edges stay gradual to avoid banding. */
+  -webkit-mask: conic-gradient(
+    from var(--pw-border-angle),
+    transparent 0%,
+    transparent 32%,
+    rgba(255, 255, 255, 0.35) 38%,
+    rgba(255, 255, 255, 0.85) 46%,
+    rgba(255, 255, 255, 0.85) 54%,
+    rgba(255, 255, 255, 0.35) 62%,
+    transparent 68%,
+    transparent 100%
+  );
+  mask: conic-gradient(
+    from var(--pw-border-angle),
+    transparent 0%,
+    transparent 32%,
+    rgba(255, 255, 255, 0.35) 38%,
+    rgba(255, 255, 255, 0.85) 46%,
+    rgba(255, 255, 255, 0.85) 54%,
+    rgba(255, 255, 255, 0.35) 62%,
+    transparent 68%,
+    transparent 100%
+  );
+  animation: pw-sponsor-border-travel 4s linear infinite;
+  filter: blur(10px);
+  opacity: 0.26;
 }
 
 .pw-sponsor-inner {
   position: relative;
   z-index: 1;
+  border-radius: calc(var(--radius-2xl, 1rem) - var(--pw-sponsor-ring-gutter, 3px));
   /* Opaque fill so the rotating frame gradient is not visible through the panel (blur was smearing it). */
   background: var(--color-base-100);
   border: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
@@ -365,7 +460,12 @@
 @media (prefers-reduced-motion: reduce) {
   .pw-sponsor-frame::before {
     animation: none;
-    transform: rotate(42deg);
+    --pw-border-angle: 42deg;
+  }
+
+  .pw-sponsor-frame::after {
+    animation: none;
+    opacity: 0;
   }
 
   .pw-sponsor-orb {
