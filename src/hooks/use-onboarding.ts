@@ -205,6 +205,7 @@ export function useOnboarding() {
   const isLoggedIn = Boolean(!authWall && viewerLogin);
 
   useEffect(() => {
+    if (!isExtensionContext()) return;
     if (!storageReady || isLoggedIn) return;
     setThroughLoggedOutGate(true);
   }, [storageReady, isLoggedIn]);
@@ -262,10 +263,17 @@ export function useOnboarding() {
     }
   }, [prefersReducedMotion]);
 
-  const showLoggedOutLayer = storageReady && !isLoggedIn;
+  /** Logged-out + first-run overlays require the real extension (storage + background); plain Vite has neither. */
+  const onboardingOverlaysActive = isExtensionContext();
+  const showLoggedOutLayer =
+    storageReady && !isLoggedIn && onboardingOverlaysActive;
   const needsOnboardingReveal =
     !hasSeenOnboarding || reauthGatePending || throughLoggedOutGate;
-  const showFirstRunReveal = storageReady && isLoggedIn && needsOnboardingReveal;
+  const showFirstRunReveal =
+    storageReady &&
+    isLoggedIn &&
+    needsOnboardingReveal &&
+    onboardingOverlaysActive;
   const gateOverlayVisible = showLoggedOutLayer || showFirstRunReveal;
   const mainAppInert = !storageReady || gateOverlayVisible;
 
