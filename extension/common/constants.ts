@@ -88,6 +88,13 @@ export const DEV_TEST_AREA_ENABLE_DELAY_MS = 5000;
 export const SETTINGS_TEST_ERROR_COOLDOWN = 'SETTINGS_TEST_COOLDOWN';
 export const SETTINGS_TEST_ERROR_DISABLED = 'SETTINGS_TEST_DISABLED';
 
+/**
+ * Returned when `chrome.notifications.getPermissionLevel()` reports `denied` for this extension —
+ * Chrome (not necessarily the OS) is blocking notifications. Popup maps this to an inline notice
+ * with unblock guidance; stable string across the service-worker ↔ popup message boundary.
+ */
+export const SETTINGS_TEST_ERROR_CHROME_DENIED = 'SETTINGS_TEST_CHROME_NOTIFICATIONS_DENIED';
+
 // Permissions (example, expand as needed)
 export const PERMISSION_STORAGE = 'storage';
 export const PERMISSION_ALARMS = 'alarms';

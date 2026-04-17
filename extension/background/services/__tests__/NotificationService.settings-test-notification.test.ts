@@ -5,6 +5,7 @@ import { DEFAULT_EXTENSION_SETTINGS } from '../StorageService';
 import {
   SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
   SETTINGS_PREVIEW_AFTER_CLEAR_MS,
+  SETTINGS_TEST_ERROR_CHROME_DENIED,
 } from '../../../common/constants';
 import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../../common/settings-test-notification-copy';
 
@@ -32,6 +33,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
   let notificationsClear: ReturnType<typeof vi.fn>;
   let notificationsCreate: ReturnType<typeof vi.fn>;
   let notificationsGetAll: ReturnType<typeof vi.fn>;
+  let getPermissionLevel: ReturnType<typeof vi.fn>;
 
   function settingsWithPreviewEnabled(patch: Partial<ExtensionSettings> = {}): ExtensionSettings {
     return {
@@ -48,6 +50,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     notificationsClear = vi.fn().mockResolvedValue(true);
     notificationsCreate = vi.fn().mockImplementation((_id: string) => Promise.resolve(_id));
     notificationsGetAll = vi.fn().mockResolvedValue({});
+    getPermissionLevel = vi.fn().mockResolvedValue('granted');
 
     globalThis.chrome = {
       runtime: {
@@ -57,6 +60,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
         clear: notificationsClear,
         create: notificationsCreate,
         getAll: notificationsGetAll,
+        getPermissionLevel,
       },
     } as unknown as typeof chrome;
 
@@ -166,5 +170,28 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     expect(notificationsCreate).toHaveBeenCalledTimes(1);
     const id = notificationsCreate.mock.calls[0][0] as string;
     expect(id).toBe(`pr-alert|assigned|${pr.url}`);
+  });
+
+  it('throws CHROME_DENIED and never calls create when getPermissionLevel returns denied', async () => {
+    getPermissionLevel.mockResolvedValue('denied');
+    const svc = makeService(settingsWithPreviewEnabled());
+
+    await expect(svc.fireSettingsTestNotification('assigned')).rejects.toThrow(
+      SETTINGS_TEST_ERROR_CHROME_DENIED
+    );
+
+    expect(notificationsCreate).not.toHaveBeenCalled();
+    expect(playSound).not.toHaveBeenCalled();
+    expect(getSettings).not.toHaveBeenCalled();
+  });
+
+  it('proceeds normally when getPermissionLevel returns granted', async () => {
+    getPermissionLevel.mockResolvedValue('granted');
+    const svc = makeService(settingsWithPreviewEnabled());
+
+    await svc.fireSettingsTestNotification('assigned');
+
+    expect(notificationsCreate).toHaveBeenCalledTimes(1);
+    expect(getPermissionLevel).toHaveBeenCalledTimes(1);
   });
 });

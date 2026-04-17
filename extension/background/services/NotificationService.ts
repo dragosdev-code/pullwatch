@@ -6,9 +6,11 @@ import type { PullRequest, NotificationSound } from '../../common/types';
 import {
   SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
   SETTINGS_PREVIEW_AFTER_CLEAR_MS,
+  SETTINGS_TEST_ERROR_CHROME_DENIED,
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
 } from '../../common/constants';
+import { getChromeNotificationPermissionLevel } from '../../common/notification-permission';
 import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../common/settings-test-notification-copy';
 import { isPlayableSound } from '../../common/sound-config';
 import { effectiveAssignedNotifyOnDrafts } from '../../common/effective-assigned-draft-notify';
@@ -166,6 +168,14 @@ export class NotificationService implements INotificationService {
     const now = Date.now();
     if (now - this.lastSettingsTestAtMs[category] < SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS) {
       throw new Error(SETTINGS_TEST_ERROR_COOLDOWN);
+    }
+
+    // WHY [before settings read]: If Chrome denied this extension's notifications, skip storage reads,
+    // clears, and create — the popup maps this error to inline unblock guidance.
+    // WHY [not cached]: The user may toggle permission between Preview clicks; always re-query.
+    const permissionLevel = await getChromeNotificationPermissionLevel();
+    if (permissionLevel === 'denied') {
+      throw new Error(SETTINGS_TEST_ERROR_CHROME_DENIED);
     }
 
     const settings = await this.storageService.getExtensionSettings();

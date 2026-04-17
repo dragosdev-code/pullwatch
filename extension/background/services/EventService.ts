@@ -11,6 +11,7 @@ import type {
   SettingsNotificationTestPayload,
 } from '../../common/types';
 import {
+  SETTINGS_TEST_ERROR_CHROME_DENIED,
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
@@ -497,7 +498,8 @@ export class EventService implements IEventService {
           if (
             err instanceof Error &&
             (err.message === SETTINGS_TEST_ERROR_COOLDOWN ||
-              err.message === SETTINGS_TEST_ERROR_DISABLED)
+              err.message === SETTINGS_TEST_ERROR_DISABLED ||
+              err.message === SETTINGS_TEST_ERROR_CHROME_DENIED)
           ) {
             sendResponse({ success: false, error: err.message });
             return;
