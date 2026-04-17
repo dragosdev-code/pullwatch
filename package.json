@@ -16,6 +16,8 @@
     "test:ui": "vitest --ui",
     "canary:test": "vitest run --config vitest.canary.config.ts",
     "test:remote-patterns": "vitest run --config vitest.remote-patterns.config.ts",
+    "test:remote-patterns:production": "vitest run --config vitest.remote-patterns.config.ts --mode production",
+    "test:remote-patterns:production:parity": "vitest run --config vitest.remote-patterns.config.ts --mode production-parity",
     "test:remote-patterns:staging": "vitest run --config vitest.remote-patterns.config.ts --mode staging"
   },
   "dependencies": {

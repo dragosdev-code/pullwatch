@@ -15,16 +15,20 @@ import {
  * one via `--mode` (see npm scripts). If `process.env.REMOTE_PATTERNS_URL` is
  * already set (e.g. fork / custom raw file), that wins and mode is ignored.
  *
- * - `npm run test:remote-patterns` — production (`main`) patterns.json
- * - `npm run test:remote-patterns:staging` — same test file, `--mode staging`
+ * - `npm run test:remote-patterns` — production (`main`) patterns.json (default Vitest mode)
+ * - `npm run test:remote-patterns:production` — same URL, explicit `--mode production` (alias for clarity)
+ * - `npm run test:remote-patterns:staging` — `staging` branch patterns.json, `--mode staging`
+ * - `npm run test:remote-patterns:production:parity` — production URL + Act 4 (bundled `DEFAULT_PATTERNS` parity)
  *
- * Act 4 (DEFAULT_PATTERNS parity) follows from the resolved URL; see
- * `utils/remote-patterns-smoke-utils.ts`.
+ * Act 4: **on** for staging by default; **off** for production unless `production:parity` or
+ * `REMOTE_PATTERNS_COMPARE_DEFAULTS=true`. See `utils/remote-patterns-smoke-utils.ts`.
  */
 function resolveRemotePatternsUrlForSmoke(mode: string): string {
   const fromEnv = process.env.REMOTE_PATTERNS_URL?.trim();
   if (fromEnv) return fromEnv;
-  return mode === 'staging' ? REMOTE_PATTERNS_STAGING_URL : REMOTE_PATTERNS_URL;
+  if (mode === 'staging') return REMOTE_PATTERNS_STAGING_URL;
+  // production / main — default Vitest mode, `--mode production`, `--mode production-parity`, etc.
+  return REMOTE_PATTERNS_URL;
 }
 
 export default defineConfig(({ mode }) => ({
@@ -42,6 +46,9 @@ export default defineConfig(({ mode }) => ({
     retry: 0,
     env: {
       REMOTE_PATTERNS_URL: resolveRemotePatternsUrlForSmoke(mode),
+      ...(mode === 'production-parity'
+        ? { REMOTE_PATTERNS_COMPARE_DEFAULTS: 'true' }
+        : {}),
     },
   },
 }));

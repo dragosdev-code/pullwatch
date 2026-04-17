@@ -126,9 +126,9 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: 'happy-dom',
       include: ['src/**/*.{test,spec}.{ts,tsx}', 'extension/**/*.{test,spec}.ts'],
-      // The remote-patterns smoke test hits the network — keep it out of
-      // the default suite so `npm test` stays offline-safe for every dev.
-      exclude: ['**/remote-patterns-smoke*', '**/node_modules/**'],
+      // The remote-patterns smoke test hits the network — keep only that file
+      // out of the default suite so `npm test` stays offline-safe for every dev.
+      exclude: ['**/remote-patterns-smoke.test.ts', '**/node_modules/**'],
     },
   };
 });

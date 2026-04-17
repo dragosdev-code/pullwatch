@@ -6,8 +6,9 @@
  * (every `regex` compiles). Same checks the extension relies on.
  *
  * **Act 4 (conditional):** hosted `patterns` must deep-equal bundled
- * {@link DEFAULT_PATTERNS}. Gating (staging vs production) lives in
- * `utils/remote-patterns-smoke-utils.ts`.
+ * {@link DEFAULT_PATTERNS}. **Default:** staging URLs only; production opt-in via
+ * `REMOTE_PATTERNS_COMPARE_DEFAULTS` or `npm run test:remote-patterns:production:parity`.
+ * Full gating in `utils/remote-patterns-smoke-utils.ts`.
  *
  * ─── What this does NOT prove ───────────────────────────────────────
  * Regexes matching live GitHub HTML — that is the canary
@@ -18,8 +19,8 @@
  * `REMOTE_PATTERNS_COMPARE_DEFAULTS` — force Act 4 on (`true`) or off (`false`)
  * when the URL heuristic is wrong (e.g. fork not named `staging`).
  *
- * `npm run test:remote-patterns:staging` uses the same Vitest config with
- * `--mode staging` (URLs from `constants.ts`; see vitest.remote-patterns.config.ts).
+ * See `vitest.remote-patterns.config.ts` for `--mode production`, `staging`,
+ * `production-parity`, and env overrides.
  */
 
 import { REMOTE_PATTERNS_URL } from '../constants';
@@ -113,11 +114,11 @@ describe('Remote patterns.json smoke test', () => {
     }
   });
 
-  // ── Act 4: Staging must match bundled defaults (when parity is on) ─
+  // ── Act 4: Hosted patterns must match bundled defaults (when parity is on) ─
   // JSON round-trip normalizes key order so the diff is about content,
   // not serialization. Mismatch means someone updated default-patterns.ts
   // or patterns.json without syncing the other — fix before merging.
-  // Skipped for production URLs — see utils/remote-patterns-smoke-utils.ts.
+  // Default: staging only; production parity opt-in — see utils/remote-patterns-smoke-utils.ts.
 
   it.skipIf(!act4DefaultsParity)(
     'hosted patterns match DEFAULT_PATTERNS from default-patterns.ts',

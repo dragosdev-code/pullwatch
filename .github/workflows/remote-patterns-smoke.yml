@@ -16,7 +16,14 @@ on:
         description: >-
           Validate the staging branch instead of production (main branch).
           Useful for testing config changes on the staging branch before
-          merging to main.
+          merging to main. Takes precedence over "Production parity" if both are checked.
+        type: boolean
+        default: false
+      run_production_parity:
+        description: >-
+          Run production (main) patterns.json with Act 4 — hosted patterns must
+          match bundled DEFAULT_PATTERNS (same as npm run test:remote-patterns:production:parity).
+          Ignored when "Use staging URL" is checked. Scheduled runs never use this (Acts 1–3 only).
         type: boolean
         default: false
 
@@ -42,8 +49,14 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
-      # URLs live in extension/common/constants.ts. Staging script uses
-      # `vitest --mode staging` (see vitest.remote-patterns.config.ts). Act 4
-      # parity runs only for staging-style targets (see remote-patterns-smoke-utils).
+      # URLs: extension/common/constants.ts. Staging → Act 4 parity on; default production → Acts 1–3;
+      # production + "parity" input → test:remote-patterns:production:parity (see remote-patterns-smoke-utils).
       - name: Run remote patterns smoke test
-        run: npm run ${{ github.event_name == 'workflow_dispatch' && inputs.use_staging_url == true && 'test:remote-patterns:staging' || 'test:remote-patterns' }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.use_staging_url }}" = "true" ]; then
+            npm run test:remote-patterns:staging
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.run_production_parity }}" = "true" ]; then
+            npm run test:remote-patterns:production:parity
+          else
+            npm run test:remote-patterns
+          fi

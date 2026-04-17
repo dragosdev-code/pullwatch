@@ -314,8 +314,7 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
 
     // Multiline-safe: production HTML may break between the digit and "results".
     resultsCount: {
-      regex:
-        '<span(?=[^>]*data-testid="results-count")[^>]*>\\s*(\\d+)[\\s\\S]*?\\bresults\\b',
+      regex: '<span(?=[^>]*data-testid="results-count")[^>]*>\\s*(\\d+)[\\s\\S]*?\\bresults\\b',
       flags: 'i',
       captureGroups: { count: 1 },
     },
