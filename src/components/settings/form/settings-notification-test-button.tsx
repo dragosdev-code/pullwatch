@@ -102,7 +102,7 @@ export const SettingsNotificationTestButton = ({
       </button>
 
       {/* WHY [inline not tooltip]: Actionable steps need to stay visible until the next successful Preview. */}
-      {!chromeDenied && (
+      {chromeDenied && (
         <div
           role="status"
           className=" w-[313px] mt-2 flex items-start gap-2.5 rounded-lg border border-base-300 border-l-[3px] border-l-error bg-base-200 px-3 py-2.5"
