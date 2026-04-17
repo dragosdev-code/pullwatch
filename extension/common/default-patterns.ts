@@ -341,13 +341,15 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
     repoName: { regex: '/([^/]+/[^/]+)/pull', flags: '', captureGroups: { repoName: 1 } },
     prNumber: { regex: '/pull/(\\d+)', flags: '', captureGroups: { number: 1 } },
 
-    // Author login appears as a text node immediately before <span>opened.
-    // \w covers [a-zA-Z0-9_]; GitHub disallows underscores but \w is
-    // harmless here and simpler than a custom character class.
+    // WHY [author line]: The global pulls list uses clickable filter controls (repo/author)
+    // with data-testid="author-filter-link"; login text lives inside <button>…</button>, not
+    // as bare text before <span>opened. Alternation keeps one regex so remote patterns.json
+    // can ship a single entry; loginAlt preserves the older plain-text-before-opened shape.
     author: {
-      regex: '([\\w][\\w-]*)\\s*<span[^>]*>\\s*opened\\b',
+      regex:
+        '(?:<button[^>]*data-testid=["\']author-filter-link["\'][^>]*>([\\w][\\w-]*)</button>|([\\w][\\w-]*))\\s*<span[^>]*>\\s*opened\\b',
       flags: 'i',
-      captureGroups: { login: 1 },
+      captureGroups: { login: 1, loginAlt: 2 },
     },
 
     timestamp: [

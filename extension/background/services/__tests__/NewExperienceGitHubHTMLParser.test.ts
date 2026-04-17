@@ -54,4 +54,42 @@ describe('NewExperienceGitHubHTMLParser', () => {
     const patterns = compiledWithNePatch({});
     expect(NewExperienceGitHubHTMLParser.parseFromHTML(html, baseURL, patterns)).toBeNull();
   });
+
+  // WHY [author extraction]: Tier-2 canary compares each PR’s `author.login` from this HTML parser
+  // against `GitHubEmbeddedJsonPullHarvest` (embedded JSON). On `/pulls/search`, GitHub often renders
+  // the author as a filter control (`data-testid="author-filter-link"`) before `<span>opened`, not as
+  // bare text — a mismatch surfaces as `Unknown Author` and fails alignment. The two cases below pin
+  // the alternation regex: current button-in-row shape vs. plain-login-before-opened (still supported).
+
+  it('extracts author login from data-testid="author-filter-link" button before opened span', () => {
+    const html = `
+      <li class="PullsListItem-module__listItem__abc">
+        <a data-testid="listitem-title-link" href="/owner/repo/pull/42">Fix things</a>
+        <button type="button" data-testid="author-filter-link" aria-label="Filter by author alice-writer">alice-writer</button>
+        <span>opened </span>
+        <relative-time datetime="2026-03-29T12:00:00Z"></relative-time>
+        <span aria-label="Open"></span>
+      </li>
+    `;
+    const patterns = compiledWithNePatch({});
+    const prs = NewExperienceGitHubHTMLParser.parseFromHTML(html, baseURL, patterns);
+    expect(prs).toHaveLength(1);
+    expect(prs![0].author[0].login).toBe('alice-writer');
+    expect(prs![0].url).toBe('https://github.com/owner/repo/pull/42');
+  });
+
+  it('extracts author login from plain text before opened span (legacy shape)', () => {
+    const html = `
+      <li class="ListItem-module__listItem__xyz">
+        <a data-testid="listitem-title-link" href="/o/r/pull/1">Title</a>
+        legacy-user<span>opened</span>
+        <relative-time datetime="2026-01-02T00:00:00Z"></relative-time>
+        <span aria-label="Open"></span>
+      </li>
+    `;
+    const patterns = compiledWithNePatch({});
+    const prs = NewExperienceGitHubHTMLParser.parseFromHTML(html, baseURL, patterns);
+    expect(prs).toHaveLength(1);
+    expect(prs![0].author[0].login).toBe('legacy-user');
+  });
 });

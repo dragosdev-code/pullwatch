@@ -182,8 +182,14 @@ export class NewExperienceGitHubHTMLParser {
       : 'Unknown Repo';
 
     // ── Author ───────────────────────────────────────────────────────
+    // WHY [login / loginAlt]: newExperience.author uses one alternation regex (filter button vs
+    // plain text); same coalescing contract as GitHubHTMLParser.extractPRData for remote config.
     const authorMatch = rowHtml.match(ne.author.compiled);
-    const authorLogin = authorMatch?.[ne.author.captureGroups!.login]?.trim() || 'Unknown Author';
+    const ag = ne.author.captureGroups!;
+    const authorLoginRaw =
+      authorMatch?.[ag.login]?.trim() ||
+      (ag.loginAlt ? authorMatch?.[ag.loginAlt]?.trim() : undefined);
+    const authorLogin = authorLoginRaw || 'Unknown Author';
 
     // ── Timestamp ────────────────────────────────────────────────────
     let createdAt = new Date().toISOString();
