@@ -15,6 +15,7 @@
 
 import fs from 'node:fs';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { GITHUB_BASE_URL } from '../../extension/common/constants';
 import { isGitHubLoggedOutHtmlShell } from '../../extension/common/github-html-session';
 import { getGitHubVerificationCode } from './gmail-fetcher';
 import { HAS_GMAIL_SECRETS, REALISTIC_UA } from './config';
@@ -223,9 +224,17 @@ export class GitHubSession {
 
     // Detect incorrect credentials — must come after device-verification
     // handling because a successful OTP submission may redirect through
-    // /login momentarily.
+    // /login momentarily. Use pathname only: query strings (e.g. return_to=…/login)
+    // must not be treated as "still on /login".
+    let loginPath = '';
+    try {
+      loginPath = new URL(postLoginUrl).pathname;
+    } catch {
+      loginPath = postLoginUrl;
+    }
     const isLoginError =
-      postLoginUrl.includes('/login') ||
+      loginPath === '/login' ||
+      loginPath.startsWith('/login/') ||
       postLoginHtml.includes('Incorrect username or password');
 
     if (isLoginError) {
@@ -238,6 +247,8 @@ export class GitHubSession {
       return;
     }
 
+    await this.resolveAccountSwitcherIfPresent(username);
+
     this._isLoggedIn = true;
     console.log(`  ✓ [login] Successfully logged in as @${username} (fresh login)`);
 
@@ -246,6 +257,40 @@ export class GitHubSession {
     console.log(`  [state] Session state saved`);
 
     console.log('── Tier 2: beforeAll — Fresh login complete ──\n');
+  }
+
+  /**
+   * After password login GitHub may land on `/switch_account` ("Your accounts").
+   * Saving storage in that state leaves global `/pulls` as "Page not found" until
+   * an account is active. Opening the bot’s profile establishes the session.
+   */
+  private async resolveAccountSwitcherIfPresent(username: string): Promise<void> {
+    if (!this.page.url().includes('switch_account')) return;
+
+    console.log(
+      '  [login] Account switcher detected — activating session (required for global /pulls)...'
+    );
+    const profileUrl = `${GITHUB_BASE_URL}/${encodeURIComponent(username)}`;
+    try {
+      await this.page.goto(profileUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30_000,
+      });
+      const title = await this.page.title();
+      if (!/Page not found/i.test(title)) {
+        console.log(`  [login] Opened ${profileUrl} — session context established`);
+        return;
+      }
+      console.warn(`  [login] Profile URL returned Page not found — trying github.com home`);
+    } catch (err) {
+      console.warn(`  [login] Profile navigation failed: ${err}`);
+    }
+
+    await this.page.goto(GITHUB_BASE_URL, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    });
+    console.log(`  [login] Opened ${GITHUB_BASE_URL} as fallback after account switcher`);
   }
 
   // ── Private: device verification ─────────────────────────────────────

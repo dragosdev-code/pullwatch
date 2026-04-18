@@ -23,6 +23,7 @@ import type { PullRequest } from '../../extension/common/types';
 import type { CanaryTarget } from './config';
 import { assertPRValid } from './assertions';
 import { looksLikeNewPullsDashboard } from './dual-probe';
+import { isGitHubPageNotFoundDocument } from './github-page-signals';
 import { writeCanaryFailureSnapshot } from './failure-snapshot';
 import { isGitHubDegraded } from './github-status';
 import {
@@ -79,9 +80,18 @@ async function assertNonEmptyOrExplain(
     );
   }
 
+  const notFound = isGitHubPageNotFoundDocument(html);
+  if (notFound) {
+    console.warn(
+      `  [page] Document looks like GitHub’s "Page not found" shell — not a pulls list. Often caused by an incomplete account-switcher session after login; see canary/utils/github-session.ts (resolve account switcher).`
+    );
+  }
+
   const reason = degraded
     ? 'GitHub is reporting degraded status — this is likely a transient GitHub outage, not a DOM change.'
-    : domChangeReason;
+    : notFound
+      ? 'GitHub returned Page not found for this URL — session may be stuck on account switcher, or this account cannot open global /pulls. Not a DOM/parser regression from empty results.'
+      : domChangeReason;
 
   expect(
     prs.length,
