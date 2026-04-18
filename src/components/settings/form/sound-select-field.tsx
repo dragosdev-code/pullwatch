@@ -18,7 +18,7 @@ import {
 import { useCustomSounds } from '../../../hooks/use-custom-sounds';
 import { SoundPicker } from './sound-picker';
 import { CustomSoundEditor } from '../../custom-sound-editor';
-import { SoundPreviewButton } from './sound-preview-button';
+import { SoundPreviewButton } from '../../audio';
 import { MusicIcon } from '../../ui/icons';
 
 interface SoundSelectFieldProps {

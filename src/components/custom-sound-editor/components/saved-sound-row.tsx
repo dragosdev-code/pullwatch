@@ -1,6 +1,6 @@
 import type { SavedSoundRowProps } from '../types';
 import { CheckIcon, XIcon } from '../../ui/icons';
-import { SoundPreviewButton } from '../../settings/form/sound-preview-button';
+import { SoundPreviewButton } from '../../audio';
 
 export const SavedSoundRow = ({
   meta,

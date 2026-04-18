@@ -1,14 +1,14 @@
 import { useState, useCallback, useRef, useEffect, useId } from 'react';
-import type { NotificationSound } from '../../../../extension/common/types';
-import { isPlayableSound } from '../../../../extension/common/sound-config';
-import { chromeExtensionService } from '../../../services/chrome-extension-service';
+import type { NotificationSound } from '../../../extension/common/types';
+import { isPlayableSound } from '../../../extension/common/sound-config';
+import { chromeExtensionService } from '../../services/chrome-extension-service';
 import {
   claimPreviewSession,
   getActivePreviewSessionId,
   releasePreviewSession,
   subscribePreviewSession,
-} from '../../../services/sound-preview-session';
-import { PlayIcon, PlayingAnimation } from '../../ui/icons';
+} from '../../services/sound-preview-session';
+import { PlayIcon, PlayingAnimation } from '../ui/icons';
 
 interface SoundPreviewButtonProps {
   /** The sound to preview */

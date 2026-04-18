@@ -11,7 +11,7 @@ import {
 } from '../../../../extension/common/sound-config';
 import { useCustomSounds } from '../../../hooks/use-custom-sounds';
 import { chromeExtensionService } from '../../../services/chrome-extension-service';
-import { SoundPreviewButton } from './sound-preview-button';
+import { SoundPreviewButton } from '../../audio';
 import { CheckIcon, XIcon } from '../../ui/icons';
 
 interface SoundPickerProps {
