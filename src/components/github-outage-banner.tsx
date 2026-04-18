@@ -15,7 +15,7 @@ export const GitHubOutageBanner = () => {
         </p>
         <p className="text-[10px] text-base-content/70 leading-snug mt-0.5">
           Showing cached pull requests. GitHub may be slow, rate-limited, or having a partial outage
-          for the APIs this extension uses — usually back to normal within a few minutes.
+          for the APIs this extension uses. Usually back to normal within a few minutes.
         </p>
       </div>
     </div>

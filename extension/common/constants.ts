@@ -142,7 +142,7 @@ export const BADGE_TEXT_COLOR_INACTIVE = '#ffffff'; // White
 export const BADGE_TEXT_LOADING = '...';
 
 // Misc
-export const USER_AGENT = 'Mozilla/5.0 (compatible; GitHub PR Live Extension)';
+export const USER_AGENT = 'Mozilla/5.0 (compatible; Pullwatch)';
 
 // Dev Test Area
 export const STORAGE_KEY_DEV_TEST_SETTINGS = 'dev_test_settings';

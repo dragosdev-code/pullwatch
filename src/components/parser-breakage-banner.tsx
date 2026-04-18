@@ -11,7 +11,7 @@ export const ParserBreakageBanner = () => {
       <ArrowPathIcon className="w-4 h-4 text-warning shrink-0 mt-px animate-spin" />
       <div className="min-w-0">
         <p className="text-xs font-medium text-base-content leading-snug">
-          GitHub updated their UI — we&apos;re syncing our parsers.
+          GitHub updated their UI. We&apos;re syncing our parsers.
         </p>
         <p className="text-[10px] text-base-content/70 leading-snug mt-0.5">
           Data below may be slightly stale. This usually resolves within the hour.

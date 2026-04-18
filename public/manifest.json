@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "PR Live Extension",
-  "description": "A Chrome extension for real-time PR updates",
+  "name": "Pullwatch - PR Dashboard for GitHub",
+  "short_name": "Pullwatch",
+  "description": "Your GitHub PR inbox. Track assigned reviews, authored PRs, and merges using your active browser session. No tokens needed.",
   "version": "1.0.0",
   "icons": {
     "16": "logo-16.png",

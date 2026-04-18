@@ -15,7 +15,7 @@ export class RateLimitError extends Error {
  */
 export class ParserBreakageError extends Error {
   constructor(context: string) {
-    super(`GitHub page structure not recognized during ${context} — parser may need updating`);
+    super(`GitHub page structure not recognized during ${context}. Parser may need updating.`);
     this.name = 'ParserBreakageError';
   }
 }
