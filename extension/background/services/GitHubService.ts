@@ -28,16 +28,15 @@ import {
   isGitHubWebSessionAuthError,
 } from '../../common/errors';
 import { isOfflineError } from '../../common/network-utils';
-import { GitHubHTMLParser } from './GitHubHTMLParser';
-import { GitHubEmbeddedJsonPullHarvest } from './GitHubEmbeddedJsonPullHarvest';
-import { NewExperienceGitHubHTMLParser } from './NewExperienceGitHubHTMLParser';
+import { parsePullsListHTML } from '../../common/pulls-list-parser';
+import { toPullsSearchUrl } from '../../common/github-url-utils';
 import { delay } from '../../common/utils';
 import { isGitHubLoggedOutHtmlShell } from '../../common/github-html-session';
 
 /**
  * Which pulls *list URL* shape {@link GitHubService.fetchPRs} prefers first
- * (from the route hint). DOM shape is not tied to this — {@link GitHubService.parsePullsListHTML}
- * runs the same parser gauntlet for both.
+ * (from the route hint). DOM shape is not tied to this — the shared
+ * {@link parsePullsListHTML} gauntlet runs for both routes.
  */
 type RouteType = 'search' | 'legacy';
 
@@ -68,8 +67,9 @@ const TRANSIENT_MAX_RETRIES = 1;
 
 /**
  * GitHubService handles GitHub HTTP operations for fetching pull requests.
- * Pulls-list HTML is parsed via {@link GitHubService.parsePullsListHTML} (JSON,
- * new-experience HTML, then classic HTML); avatars are enriched by AvatarService.
+ * Pulls-list HTML is parsed via the shared {@link parsePullsListHTML} gauntlet
+ * (JSON, new-experience HTML, then classic HTML); avatars are enriched by
+ * AvatarService.
  */
 export class GitHubService implements IGitHubService {
   private debugService: IDebugService;
@@ -313,52 +313,17 @@ export class GitHubService implements IGitHubService {
     chrome.storage.local.remove(STORAGE_KEY_ROUTE_HINT).catch(() => {});
   }
 
-  // ─── URL transformation ─────────────────────────────────────────────────
-
-  /**
-   * Injects `/search` into a legacy `/pulls?q=…` URL to produce the new
-   * experience's `/pulls/search?q=…` form. Idempotent — already-transformed
-   * URLs pass through unchanged.
-   *
-   * All URL templates in constants.ts use the legacy form, so the waterfall
-   * calls this only for the `'search'` route; the original URL is already
-   * correct for the `'legacy'` route.
-   */
-  private static toSearchUrl(url: string): string {
-    if (url.includes('/pulls/search?')) return url;
-    return url.replace('/pulls?', '/pulls/search?');
-  }
-
   // ─── Parse pipeline (URL-agnostic) ───────────────────────────────────────
 
   /**
-   * Single gauntlet for every pulls-list HTML response, regardless of whether
-   * {@link fetchPRs} used `/pulls` or `/pulls/search`. GitHub’s DOM does not
-   * follow the URL under feature-flag rollout: JSON may be missing or reshaped
-   * while new-experience HTML is still present — skipping
-   * {@link NewExperienceGitHubHTMLParser} on the “legacy” URL produced silent
-   * empty lists. {@link ParserBreakageError} from {@link GitHubHTMLParser} or
-   * {@link NewExperienceGitHubHTMLParser} propagates so {@link fetchPRs} can try
-   * the alternate URL.
-   */
-  private parsePullsListHTML(html: string): PullRequest[] {
-    const jsonResult = GitHubEmbeddedJsonPullHarvest.extractFromHTML(html);
-    if (jsonResult !== null) return jsonResult;
-
-    const patterns = this.patternRegistryService.getPatterns();
-    const newExpResult = NewExperienceGitHubHTMLParser.parseFromHTML(html, this.baseURL, patterns);
-    if (newExpResult !== null) return newExpResult;
-
-    return GitHubHTMLParser.parseFromHTML(html, this.baseURL, patterns);
-  }
-
-  /**
    * Parses HTML for the route implied by the current URL attempt. Parsing is
-   * identical for both routes; the `route` argument is unused but kept so
-   * call sites stay explicit.
+   * identical for both routes (the `route` argument is kept so call sites
+   * stay explicit): the shared {@link parsePullsListHTML} gauntlet walks
+   * JSON → new-experience HTML → legacy HTML because GitHub's DOM does not
+   * follow the URL under feature-flag rollout.
    */
   private parseForRoute(html: string, _route: RouteType, _context: string): PullRequest[] {
-    return this.parsePullsListHTML(html);
+    return parsePullsListHTML(html, this.baseURL, this.patternRegistryService.getPatterns());
   }
 
   // ─── Waterfall fetch orchestrator ───────────────────────────────────────
@@ -399,8 +364,8 @@ export class GitHubService implements IGitHubService {
     const primaryRoute: RouteType = hint ?? 'search';
     const fallbackRoute: RouteType = primaryRoute === 'search' ? 'legacy' : 'search';
 
-    const primaryUrl = primaryRoute === 'search' ? GitHubService.toSearchUrl(url) : url;
-    const fallbackUrl = fallbackRoute === 'search' ? GitHubService.toSearchUrl(url) : url;
+    const primaryUrl = primaryRoute === 'search' ? toPullsSearchUrl(url) : url;
+    const fallbackUrl = fallbackRoute === 'search' ? toPullsSearchUrl(url) : url;
 
     const hintSource: 'search' | 'legacy' | 'none' = hint ?? 'none';
 
