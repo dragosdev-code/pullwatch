@@ -14,7 +14,7 @@ When the canary test fails because GitHub changed their DOM, follow this runbook
 | Playwright login, session cache | [`canary/utils/github-session.ts`](utils/github-session.ts) |
 | Entry tests | [`canary/parser.canary.test.ts`](parser.canary.test.ts) |
 | Failure HTML snapshots (gitignored) | `canary/snapshots/` — written on parse throw from [`canary/utils/failure-snapshot.ts`](utils/failure-snapshot.ts) |
-| 404 vs empty list | [`canary/utils/github-page-signals.ts`](utils/github-page-signals.ts) — `isGitHubPageNotFoundDocument`; Playwright completes [`resolveAccountSwitcherIfPresent`](utils/github-session.ts) after login so global `/pulls` is not GitHub’s 404 shell |
+| 404 vs empty list | [`canary/utils/github-page-signals.ts`](utils/github-page-signals.ts) — `isGitHubPageNotFoundDocument`; Playwright runs [`resolveAccountSwitcherIfPresent`](utils/github-session.ts) after password login, and **`getPageHTML`** auto-recovers once (profile → retry `/pulls`, then rewrites `storageState`) if cached session still hits GitHub’s “Page not found” on global pulls |
 
 ---
 

@@ -16,3 +16,8 @@ export function isGitHubPageNotFoundDocument(html: string): boolean {
     /\bpage not found\b.*github/i.test(head)
   );
 }
+
+/** Matches GitHub’s 404 document title (HTTP may still be 200). */
+export function isGitHubPageNotFoundTitle(title: string): boolean {
+  return /page not found/i.test(title);
+}

@@ -17,8 +17,15 @@ import fs from 'node:fs';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { GITHUB_BASE_URL } from '../../extension/common/constants';
 import { isGitHubLoggedOutHtmlShell } from '../../extension/common/github-html-session';
+import {
+  isGitHubPageNotFoundDocument,
+  isGitHubPageNotFoundTitle,
+} from './github-page-signals';
 import { getGitHubVerificationCode } from './gmail-fetcher';
 import { HAS_GMAIL_SECRETS, REALISTIC_UA } from './config';
+
+/** Shared `page.goto` options for GitHub navigations (fast first paint, bounded timeout). */
+const GOTO_OPTS = { waitUntil: 'domcontentloaded' as const, timeout: 30_000 };
 
 export interface GitHubSessionOptions {
   username: string;
@@ -98,31 +105,118 @@ export class GitHubSession {
   }
 
   /**
-   * Navigates to a URL, waits for GitHub's client-side hydration to
-   * finish rendering search results, and returns the full page HTML.
-   *
-   * The 2 s settle delay exists because GitHub's PR search pages render
-   * a server-side shell and then hydrate the actual result rows via JS.
+   * Navigates to a URL, waits for document load and (on the new `/pulls/search`
+   * dashboard) for list markers to attach, then returns the full page HTML.
    */
   async getPageHTML(url: string): Promise<string> {
-    console.log(`  [navigate] Going to ${url} ...`);
-    await this.page.goto(url, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
-    });
+    const html = await this.loadPullsPageWithRecovery(url);
+    return html;
+  }
 
-    const pageUrl = this.page.url();
-    const pageTitle = await this.page.title();
+  /**
+   * After `goto(..., domcontentloaded)`, wait for the `load` event, then — only for
+   * the React search dashboard — for `results-count` or a row link so empty and
+   * non-empty lists both resolve without a fixed sleep (Playwright-recommended
+   * condition waits). Legacy `/pulls?q=` and repo `/pulls` tabs rely on `load` only.
+   */
+  private async settleAfterPullsNavigation(requestedUrl: string): Promise<void> {
+    await this.page.waitForLoadState('load', { timeout: 25_000 });
+    if (!requestedUrl.includes('/pulls/search')) return;
+
+    const searchSurface = this.page
+      .locator('[data-testid="results-count"]')
+      .or(this.page.locator('[data-testid="listitem-title-link"]').first());
+    await searchSurface.waitFor({ state: 'attached', timeout: 20_000 });
+  }
+
+  /**
+   * `goto` + {@link settleAfterPullsNavigation}, then snapshot URL/title/HTML.
+   */
+  private async navigateToUrlAndCapture(requestedUrl: string): Promise<{
+    html: string;
+    title: string;
+    finalUrl: string;
+  }> {
+    await this.page.goto(requestedUrl, GOTO_OPTS);
+    console.log('  [navigate] Waiting for load / pulls surface readiness...');
+    await this.settleAfterPullsNavigation(requestedUrl);
+    const finalUrl = this.page.url();
+    const title = await this.page.title();
+    const html = await this.page.content();
+    return { html, title, finalUrl };
+  }
+
+  /**
+   * Loads `url`, with one automatic recovery if global `/pulls` returns GitHub’s
+   * “Page not found” shell (stale `storageState`, incomplete account switcher, etc.).
+   * Re-establishes context via profile → retry; persists cookies when recovery fixes it.
+   */
+  private async loadPullsPageWithRecovery(url: string): Promise<string> {
+    console.log(`  [navigate] Going to ${url} ...`);
+    let { html, title: pageTitle, finalUrl: pageUrl } = await this.navigateToUrlAndCapture(url);
+
     console.log(`  [navigate] Landed on: ${pageUrl}`);
     console.log(`  [navigate] Page title: "${pageTitle}"`);
-
-    console.log('  [navigate] Waiting 2s for dynamic content to settle...');
-    await this.page.waitForTimeout(2_000);
-
-    const html = await this.page.content();
     console.log(`  [html] Captured page HTML: ${html.length} bytes`);
 
+    const isPullsRoute = url.includes('/pulls');
+    const looks404 =
+      isPullsRoute &&
+      (isGitHubPageNotFoundDocument(html) || isGitHubPageNotFoundTitle(pageTitle));
+
+    if (looks404 && this._isLoggedIn) {
+      console.warn(
+        '  [navigate] Global pulls URL returned GitHub’s Page-not-found shell — recovering session (profile/home + single retry)...'
+      );
+      await this.refreshActiveUserContextForStaleSession();
+      console.log(`  [navigate] Retrying: ${url}`);
+      ({ html, title: pageTitle, finalUrl: pageUrl } = await this.navigateToUrlAndCapture(url));
+      console.log(`  [navigate] After recovery — landed on: ${pageUrl}`);
+      console.log(`  [navigate] After recovery — page title: "${pageTitle}"`);
+      console.log(`  [html] Captured page HTML after recovery: ${html.length} bytes`);
+
+      const still404 =
+        isGitHubPageNotFoundDocument(html) || isGitHubPageNotFoundTitle(pageTitle);
+      if (still404) {
+        throw new Error(
+          `[canary] GitHub still returned "Page not found" for global pulls after session recovery. ` +
+            `Delete ${this.options.stateFile} locally, or in CI run the workflow with "force fresh login". ` +
+            `This is a browser/session issue, not a parser regression.`
+        );
+      }
+
+      try {
+        await this.context.storageState({ path: this.options.stateFile });
+        console.log(`  [state] Updated ${this.options.stateFile} after pulls 404 recovery (fixes next run’s cache)`);
+      } catch (e) {
+        console.warn(`  [state] Could not persist storage after recovery: ${e}`);
+      }
+    }
+
     return html;
+  }
+
+  /**
+   * Opens the bot profile (or github.com) so an active user context exists before `/pulls`.
+   * Same idea as {@link resolveAccountSwitcherIfPresent} but for cached sessions that 404 on pulls.
+   */
+  private async refreshActiveUserContextForStaleSession(): Promise<void> {
+    const username = this.options.username;
+    const profileUrl = `${GITHUB_BASE_URL}/${encodeURIComponent(username)}`;
+    try {
+      await this.page.goto(profileUrl, GOTO_OPTS);
+      const title = await this.page.title();
+      if (!isGitHubPageNotFoundTitle(title)) {
+        console.log(`  [navigate] Recovery: opened ${profileUrl}`);
+        return;
+      }
+      console.warn(`  [navigate] Recovery: profile URL still Page not found — trying ${GITHUB_BASE_URL}`);
+    } catch (err) {
+      console.warn(`  [navigate] Recovery: profile navigation failed: ${err}`);
+    }
+
+    await this.page.goto(GITHUB_BASE_URL, GOTO_OPTS);
+    console.log(`  [navigate] Recovery: opened ${GITHUB_BASE_URL}`);
   }
 
   /**
@@ -150,10 +244,7 @@ export class GitHubSession {
    */
   private async validateCachedSession(): Promise<boolean> {
     console.log('  [state] Validating session — navigating to https://github.com/login ...');
-    await this.page.goto('https://github.com/login', {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
-    });
+    await this.page.goto('https://github.com/login', GOTO_OPTS);
 
     const landedUrl = this.page.url();
     if (landedUrl !== 'https://github.com/login') {
@@ -272,10 +363,7 @@ export class GitHubSession {
     );
     const profileUrl = `${GITHUB_BASE_URL}/${encodeURIComponent(username)}`;
     try {
-      await this.page.goto(profileUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30_000,
-      });
+      await this.page.goto(profileUrl, GOTO_OPTS);
       const title = await this.page.title();
       if (!/Page not found/i.test(title)) {
         console.log(`  [login] Opened ${profileUrl} — session context established`);
@@ -286,10 +374,7 @@ export class GitHubSession {
       console.warn(`  [login] Profile navigation failed: ${err}`);
     }
 
-    await this.page.goto(GITHUB_BASE_URL, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
-    });
+    await this.page.goto(GITHUB_BASE_URL, GOTO_OPTS);
     console.log(`  [login] Opened ${GITHUB_BASE_URL} as fallback after account switcher`);
   }
 
