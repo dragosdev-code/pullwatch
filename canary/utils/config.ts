@@ -7,9 +7,13 @@
  * CI log, making it obvious which tier will execute before any test starts.
  */
 
-// ── GitHub coordinates ───────────────────────────────────────────────────
+import { GITHUB_BASE_URL } from '../../extension/common/constants';
+import { toPullsSearchUrl } from '../../extension/common/github-url-utils';
 
-export const GITHUB_BASE = 'https://github.com';
+// Re-export for call sites that only import canary config (same string as production).
+export { GITHUB_BASE_URL };
+
+// ── GitHub coordinates ───────────────────────────────────────────────────
 
 /**
  * Separate `storageState` paths per bot so CI cache and local runs never mix cookies
@@ -65,17 +69,6 @@ export const BROWSER_HEADERS: Record<string, string> = {
   'Sec-Fetch-User': '?1',
 };
 
-/**
- * Same transform as the extension’s search-route URL in {@link GitHubService}: the new
- * global pulls experience is served from `/pulls/search?q=…`. Chapter 2 must hit that path
- * so the HTML we parse matches what the waterfall probes first in production.
- * Idempotent if the URL already uses `/pulls/search?`.
- */
-export function toPullsSearchUrl(url: string): string {
-  if (url.includes('/pulls/search?')) return url;
-  return url.replace('/pulls?', '/pulls/search?');
-}
-
 // ── Canary targets ───────────────────────────────────────────────────────
 
 export interface CanaryTarget {
@@ -99,12 +92,12 @@ export interface CanaryTarget {
 export const PUBLIC_TARGETS: CanaryTarget[] = [
   {
     label: 'Public: Open PRs (facebook/react)',
-    url: `${GITHUB_BASE}/facebook/react/pulls`,
+    url: `${GITHUB_BASE_URL}/facebook/react/pulls`,
     requireResults: true,
   },
   {
     label: 'Public: Open PRs (microsoft/vscode)',
-    url: `${GITHUB_BASE}/microsoft/vscode/pulls`,
+    url: `${GITHUB_BASE_URL}/microsoft/vscode/pulls`,
     requireResults: true,
   },
 ];
@@ -117,12 +110,12 @@ export const PUBLIC_TARGETS: CanaryTarget[] = [
 export const AUTH_TARGETS: CanaryTarget[] = [
   {
     label: 'Auth: Assigned PRs (review-requested:@me)',
-    url: `${GITHUB_BASE}/pulls?q=is%3Aopen+is%3Apr+user-review-requested%3A%40me+`,
+    url: `${GITHUB_BASE_URL}/pulls?q=is%3Aopen+is%3Apr+user-review-requested%3A%40me+`,
     requireResults: false,
   },
   {
     label: 'Auth: Merged PRs (author:@me)',
-    url: `${GITHUB_BASE}/pulls?q=is%3Apr+is%3Amerged+author%3A%40me`,
+    url: `${GITHUB_BASE_URL}/pulls?q=is%3Apr+is%3Amerged+author%3A%40me`,
     requireResults: true,
   },
 ];

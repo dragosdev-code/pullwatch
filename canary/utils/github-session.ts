@@ -15,6 +15,7 @@
 
 import fs from 'node:fs';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { isGitHubLoggedOutHtmlShell } from '../../extension/common/github-html-session';
 import { getGitHubVerificationCode } from './gmail-fetcher';
 import { HAS_GMAIL_SECRETS, REALISTIC_UA } from './config';
 
@@ -153,8 +154,19 @@ export class GitHubSession {
       timeout: 30_000,
     });
 
-    if (this.page.url() !== 'https://github.com/login') {
-      console.log(`  ✓ [state] Cached session VALID — redirected to: ${this.page.url()}`);
+    const landedUrl = this.page.url();
+    if (landedUrl !== 'https://github.com/login') {
+      console.log(`  ✓ [state] Cached session VALID — redirected to: ${landedUrl}`);
+      this._isLoggedIn = true;
+      console.log('── Tier 2: beforeAll — Using cached session ──\n');
+      return true;
+    }
+
+    const loginHtml = await this.page.content();
+    if (!isGitHubLoggedOutHtmlShell(loginHtml, landedUrl)) {
+      console.log(
+        '  ✓ [state] Cached session VALID — HTML shows authenticated shell despite /login URL (redirect probe alone can miss auth drift)'
+      );
       this._isLoggedIn = true;
       console.log('── Tier 2: beforeAll — Using cached session ──\n');
       return true;

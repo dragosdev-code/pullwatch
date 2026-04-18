@@ -2,6 +2,18 @@
 
 When the canary test fails because GitHub changed their DOM, follow this runbook to diagnose, fix, test, and deploy updated regex patterns.
 
+## Code map (on-call: open this first)
+
+| Runbook topic | Canary module |
+|---------------|----------------|
+| Tier 1 / Chapter 1 legacy parse, structural `assertPRValid` | [`canary/utils/parse-orchestrator.ts`](utils/parse-orchestrator.ts) (`parseAndAssert`), [`canary/utils/assertions.ts`](utils/assertions.ts) |
+| Chapter 2 JSON vs HTML dual-probe, `CANARY_*` markers | [`canary/utils/dual-probe.ts`](utils/dual-probe.ts), [`canary/utils/markers.ts`](utils/markers.ts) |
+| Shared production waterfall (JSON → new HTML → legacy) | [`extension/common/pulls-list-parser.ts`](../extension/common/pulls-list-parser.ts) — `parseSearchRouteAndAssert` delegates here |
+| GitHub Status API outage disambiguation | [`canary/utils/github-status.ts`](utils/github-status.ts) |
+| Targets, headers, env diagnostics | [`canary/utils/config.ts`](utils/config.ts) — uses `GITHUB_BASE_URL` and shared [`extension/common/github-url-utils.ts`](../extension/common/github-url-utils.ts) (`toPullsSearchUrl`) |
+| Playwright login, session cache | [`canary/utils/github-session.ts`](utils/github-session.ts) |
+| Entry tests | [`canary/parser.canary.test.ts`](parser.canary.test.ts) |
+
 ---
 
 ## How the System Works
@@ -16,7 +28,7 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 **Two listing experiences** — Production uses different strategies by route:
 
 - **Legacy global pulls** (`/pulls?q=…`) — `GitHubHTMLParser` + the legacy pattern set (`prRowSelectors`, `prLink`, etc.).
-- **New global pulls** (`/pulls/search?q=…`) — `GitHubService` tries `GitHubEmbeddedJsonPullHarvest` first (SSR `<script type="…" data-target="react-app.embeddedData">` payload), then `NewExperienceGitHubHTMLParser` if JSON is missing. The **new experience** uses the optional `patterns.newExperience` block in `patterns.json` (separate from legacy keys).
+- **New global pulls** (`/pulls/search?q=…`) — same `parsePullsListHTML` gauntlet as legacy URL attempts: `GitHubEmbeddedJsonPullHarvest` first, then `NewExperienceGitHubHTMLParser`, then `GitHubHTMLParser`. The **new experience** uses the optional `patterns.newExperience` block in `patterns.json` (separate from legacy keys).
 
 **Canary layout** — `canary/parser.canary.test.ts` runs **Tier 1** (public repo lists, legacy parser only) and **Tier 2** (authenticated Playwright): **Chapter 1** hits legacy `/pulls?q=…` with `GitHubHTMLParser`; **Chapter 2** hits `/pulls/search?q=…`, asserts embedded JSON, runs `NewExperienceGitHubHTMLParser` as a dual-probe, and **requires matching fields** (title, repo, type, author, number, createdAt) per PR when JSON and HTML row counts agree. Tier 2 uses **two bot accounts** (`GH_CANARY_USERNAME_LEGACY` / `GH_CANARY_USERNAME_NEW`) plus shared `GH_CANARY_PASSWORD`, isolated `storageState` files, and **one shared Chromium** process.
 
@@ -34,14 +46,19 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 | `extension/background/services/GitHubHTMLParser.ts` | Legacy listing parser — consumes compiled legacy patterns only; zero hardcoded selectors |
 | `extension/background/services/NewExperienceGitHubHTMLParser.ts` | New-dashboard listing parser — consumes `patterns.newExperience` only; zero hardcoded selectors |
 | `extension/background/services/GitHubEmbeddedJsonPullHarvest.ts` | Extracts PR rows from the new pulls dashboard SSR JSON blob (primary path for `/pulls/search`) |
-| `extension/background/services/GitHubService.ts` | Production router: `parseSearchRoute` = JSON harvest then new-experience HTML then legacy fallback |
+| `extension/background/services/GitHubService.ts` | Production router: shared `parsePullsListHTML` (JSON → new-experience HTML → legacy) |
+| `extension/common/pulls-list-parser.ts` | Shared waterfall used by `GitHubService` and canary `parseSearchRouteAndAssert` |
+| `extension/common/github-url-utils.ts` | `toPullsSearchUrl` — production and canary Chapter 2 URLs |
 | `extension/background/services/PatternRegistryService.ts` | Fetches remote `patterns.json`, caches in `chrome.storage.local`, 6-hour TTL |
 | `extension/common/constants.ts` | `REMOTE_PATTERNS_URL`, `REMOTE_PATTERNS_STAGING_URL`, `PATTERN_REFRESH_TTL_MS` (6h) — single source of truth for smoke-test fetch targets |
 | `vitest.remote-patterns.config.ts` | Vitest config for the remote schema smoke: sets `REMOTE_PATTERNS_URL` from constants via `--mode` (`staging` vs default production), or respects a pre-set `REMOTE_PATTERNS_URL` for forks |
 | `extension/common/errors.ts` | `ParserBreakageError` definition |
 | `canary/parser.canary.test.ts` | Canary suite: Tier 1 public; Tier 2 shared browser, Chapter 1 legacy pulls, Chapter 2 `/pulls/search` |
-| `canary/utils/assertions.ts` | `parseAndAssert`, `parseSearchRouteAndAssert`, `observeNewExperienceSearchObservability`, `assertPRValid`, markers `CANARY_EMBEDDED_JSON_DRIFT` / `CANARY_NEW_HTML_FALLBACK_DEGRADED`, JSON-vs-HTML field alignment |
-| `canary/utils/config.ts` | Targets (`PUBLIC_TARGETS`, `AUTH_TARGETS`, `AUTH_TARGETS_SEARCH`), `BROWSER_HEADERS`, dual-bot env flags, `toPullsSearchUrl()` |
+| `canary/utils/assertions.ts` | `assertPRValid`, `checkAvatarCoverage` — structural PR contract only |
+| `canary/utils/parse-orchestrator.ts` | `parseAndAssert`, `parseSearchRouteAndAssert` (delegates to shared `parsePullsListHTML`) |
+| `canary/utils/dual-probe.ts` | `observeNewExperienceSearchObservability`, JSON-vs-HTML field alignment |
+| `canary/utils/markers.ts` | `CANARY_EMBEDDED_JSON_DRIFT` / `CANARY_NEW_HTML_FALLBACK_DEGRADED` (CI grep targets) |
+| `canary/utils/config.ts` | Targets (`PUBLIC_TARGETS`, `AUTH_TARGETS`, `AUTH_TARGETS_SEARCH`), `BROWSER_HEADERS`, dual-bot env flags; imports `GITHUB_BASE_URL` + `toPullsSearchUrl` from extension common |
 | `canary/utils/github-session.ts` | Playwright login, cached `storageState`, optional shared `Browser`, Gmail OTP for device verification |
 | `.github/workflows/canary-parser-test.yml` | Hourly cron; secrets for legacy/new usernames + password + Gmail; `tee canary.log`; grep markers → CRITICAL JSON drift vs NOTICE HTML degraded Discord; failure alert with outage disambiguation |
 
