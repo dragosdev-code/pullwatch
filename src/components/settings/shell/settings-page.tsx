@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useForm, FormProvider } from 'react-hook-form';
+import { SettingsPageHeader } from './settings-page-header';
 import { SettingsSection } from '../shared/components/settings-section';
 import { ToggleField } from '../shared/components/toggle-field';
 import { SavedIndicator } from '../shared/components/saved-indicator';
@@ -84,28 +85,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
   if (isLoading) {
     return (
       <div className="flex flex-col h-full">
-        <div className="flex items-center gap-3 px-4 pt-3 pb-2 shrink-0">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="p-1.5 rounded-lg hover:bg-base-300 text-base-content/50 hover:text-base-content transition-colors duration-200 cursor-pointer shrink-0"
-            aria-label="Close settings"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="2"
-              stroke="currentColor"
-              className="size-4"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <h1 className="text-base font-bold text-base-content leading-none">Settings</h1>
-        </div>
+        <SettingsPageHeader onClose={onClose} />
         <div className="flex-1 flex items-center justify-center">
           <div className="flex items-center gap-2">
             <div className="animate-spin size-4 border-2 border-primary border-t-transparent rounded-full" />
@@ -119,31 +99,9 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
   return (
     <FormProvider {...methods}>
       <div className="flex flex-col h-full">
-        <div className="flex items-center gap-3 px-4 pt-3 pb-2 shrink-0">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="p-1.5 rounded-lg hover:bg-base-300 text-base-content/50 hover:text-base-content transition-colors duration-200 cursor-pointer shrink-0"
-            aria-label="Close settings"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="2"
-              stroke="currentColor"
-              className="size-4"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          <h1 className="text-base font-bold text-base-content leading-none">Settings</h1>
-
+        <SettingsPageHeader onClose={onClose}>
           <SavedIndicator visible={savedVisible} flashId={savedFlashId} />
-        </div>
+        </SettingsPageHeader>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 flex flex-col gap-5">
           <SettingsSection title="To Review PRs">
