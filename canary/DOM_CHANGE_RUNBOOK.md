@@ -59,8 +59,12 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 | `canary/utils/parse-orchestrator.ts` | `parseAndAssert`, `parseSearchRouteAndAssert` (delegates to shared `parsePullsListHTML`) |
 | `canary/utils/dual-probe.ts` | `observeNewExperienceSearchObservability`, JSON-vs-HTML field alignment |
 | `canary/utils/markers.ts` | `CANARY_EMBEDDED_JSON_DRIFT` / `CANARY_NEW_HTML_FALLBACK_DEGRADED` (CI grep targets) |
-| `canary/utils/config.ts` | Targets (`PUBLIC_TARGETS`, `AUTH_TARGETS`, `AUTH_TARGETS_SEARCH`), `BROWSER_HEADERS`, dual-bot env flags; imports `GITHUB_BASE_URL` + `toPullsSearchUrl` from extension common |
-| `canary/utils/github-session.ts` | Playwright login, cached `storageState`, optional shared `Browser`, Gmail OTP for device verification |
+| `canary/utils/config.ts` | Targets (`PUBLIC_TARGETS`, `AUTH_TARGETS`, `AUTH_TARGETS_SEARCH`), `BROWSER_HEADERS`, `loadCanaryEnv()` / `canaryEnv`, `GITHUB_BASE_URL`, `toPullsSearchUrl` via extension common |
+| `canary/utils/text-normalization.ts` | `normalizePullUrl`, `normalizeTitleForCompare`, etc. — JSON vs HTML row alignment in Chapter 2 |
+| `canary/utils/github-status.ts` | `isGitHubDegraded` — outage vs DOM ambiguity in `parse-orchestrator` |
+| `canary/utils/failure-snapshot.ts` | Writes `canary/snapshots/*.html` when parsing throws |
+| `canary/utils/gmail-fetcher.ts` | Gmail OTP polling for Playwright device verification |
+| `canary/utils/github-session.ts` | Playwright login, cached `storageState`, optional shared `Browser`; uses `extension/common/github-html-session.ts` for an extra logged-in signal on `/login` |
 | `.github/workflows/canary-parser-test.yml` | Hourly cron; secrets for legacy/new usernames + password + Gmail; `tee canary.log`; grep markers → CRITICAL JSON drift vs NOTICE HTML degraded Discord; failure alert with outage disambiguation |
 
 ### Remote Config (`patterns.json`)
@@ -111,7 +115,7 @@ Open the failed GitHub Actions run. The CI logs tell you exactly what broke.
 **Which chapter failed?**
 
 - **Chapter 1** (`/pulls?q=…`, labels like `Auth: Assigned PRs…`) — legacy `GitHubHTMLParser` + legacy pattern keys (`prRowSelectors`, `prLink`, …).
-- **Chapter 2** (`/pulls/search?q=…`, labels like `Auth (search): …`) — embedded JSON + `NewExperienceGitHubHTMLParser` dual-probe; assertions described in `canary/utils/assertions.ts`.
+- **Chapter 2** (`/pulls/search?q=…`, labels like `Auth (search): …`) — embedded JSON + `NewExperienceGitHubHTMLParser` dual-probe in `canary/utils/dual-probe.ts` (`observeNewExperienceSearchObservability`, `assertNewExperienceJsonHtmlFieldAlignment`); shared waterfall in `parseSearchRouteAndAssert` → `extension/common/pulls-list-parser.ts`.
 
 ### Error: `ParserBreakageError` thrown
 
