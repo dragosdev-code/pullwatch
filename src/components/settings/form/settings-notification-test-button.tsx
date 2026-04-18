@@ -96,9 +96,14 @@ export const SettingsNotificationTestButton = ({
             : 'hover:bg-base-200 hover:cursor-pointer'
         }`}
       >
-        <BellIcon className="size-2.5" />
+        <span className="inline-flex size-2.5 shrink-0 items-center justify-center">
+          {cooldown ? (
+            <SettingsTestCooldownRing active viewSize={10} />
+          ) : (
+            <BellIcon className="size-2.5" />
+          )}
+        </span>
         <span className="mb-[0.5px]">Preview</span>
-        {cooldown ? <SettingsTestCooldownRing active /> : null}
       </button>
 
       {/* WHY [inline not tooltip]: Actionable steps need to stay visible until the next successful Preview. */}
