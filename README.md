@@ -3,7 +3,7 @@
 
   <h1>Pullwatch</h1>
 
-  <p><strong>Your GitHub pull request inbox in the toolbar, sorted and session-based, with rate-limit-aware background sync.</strong></p>
+  <p><strong>Your GitHub PR Inbox. Sorted. No Tokens. No Noise.</strong></p>
 
   <p>
     <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19" /></a>
@@ -25,15 +25,15 @@ Pullwatch keeps the PRs you care about visible without living on [github.com](ht
 
 ## Features
 
-| | |
-| --- | --- |
-| **Session-based access** | Reads GitHub HTML you can already see while signed in. No PATs or OAuth flows. |
-| **Three-tab inbox** | **To review** (pending vs already-reviewed sections), **Authored** (ordered by author review state: changes requested, approved, pending, commented, draft), **Merged** (recently shipped). |
-| **Notifications** | Desktop notifications and sounds for **assigned**, **merged**, and **authored** work, plus draft-related options for assigned PRs (notify on drafts is off by default). |
-| **Themes** | **35** built-in [DaisyUI](https://daisyui.com/) themes on **Tailwind CSS 4**. |
-| **Background sync** | Default fetch cadence is **3 minutes** (see `FETCH_INTERVAL_MS` in [`extension/common/constants.ts`](extension/common/constants.ts)). Sync respects rate limits and pauses when you are offline. |
-| **Resilient parsing** | HTML list parsing uses a **`/pulls/search` vs legacy `/pulls`** route hint with fallback. Remote pattern updates come from [`dragosdev-code/pr-live-config`](https://github.com/dragosdev-code/pr-live-config), with a refresh interval defined in code. |
-| **Fast popup** | UI hydrates from **`chrome.storage.local`**. Background fetches can bypass short-lived caches so data stays fresh. |
+|                          |                                                                                                                                                                                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session-based access** | Reads GitHub HTML you can already see while signed in. No PATs or OAuth flows.                                                                                                                                                                           |
+| **Three-tab inbox**      | **To review** (pending vs already-reviewed sections), **Authored** (ordered by author review state: changes requested, approved, pending, commented, draft), **Merged** (recently shipped).                                                              |
+| **Notifications**        | Desktop notifications and sounds for **assigned**, **merged**, and **authored** work, plus draft-related options for assigned PRs (notify on drafts is off by default).                                                                                  |
+| **Themes**               | **35** built-in [DaisyUI](https://daisyui.com/) themes on **Tailwind CSS 4**.                                                                                                                                                                            |
+| **Background sync**      | Default fetch cadence is **3 minutes** (see `FETCH_INTERVAL_MS` in [`extension/common/constants.ts`](extension/common/constants.ts)). Sync respects rate limits and pauses when you are offline.                                                         |
+| **Resilient parsing**    | HTML list parsing uses a **`/pulls/search` vs legacy `/pulls`** route hint with fallback. Remote pattern updates come from [`dragosdev-code/pr-live-config`](https://github.com/dragosdev-code/pr-live-config), with a refresh interval defined in code. |
+| **Fast popup**           | UI hydrates from **`chrome.storage.local`**. Background fetches can bypass short-lived caches so data stays fresh.                                                                                                                                       |
 
 ## Architecture (short)
 
@@ -65,27 +65,27 @@ flowchart LR
 
 ## Tech stack
 
-| Area | Packages / tools |
-| --- | --- |
-| UI | React 19, **TanStack React Query**, **Zustand**, **react-hook-form**, **Valibot**, **@heroicons/react**, **@react-spring/web**, **react-focus-lock** |
-| Styling | **Tailwind CSS 4**, **@tailwindcss/vite**, **DaisyUI** 5 |
-| Dates | **date-fns** |
-| Build | **Vite** 8, **TypeScript** ~5.8, **@vitejs/plugin-react**, **vite-plugin-static-copy** |
-| Quality | **Vitest**, **@testing-library/react**, **Playwright**, **oxlint** |
+| Area    | Packages / tools                                                                                                                                     |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UI      | React 19, **TanStack React Query**, **Zustand**, **react-hook-form**, **Valibot**, **@heroicons/react**, **@react-spring/web**, **react-focus-lock** |
+| Styling | **Tailwind CSS 4**, **@tailwindcss/vite**, **DaisyUI** 5                                                                                             |
+| Dates   | **date-fns**                                                                                                                                         |
+| Build   | **Vite** 8, **TypeScript** ~5.8, **@vitejs/plugin-react**, **vite-plugin-static-copy**                                                               |
+| Quality | **Vitest**, **@testing-library/react**, **Playwright**, **oxlint**                                                                                   |
 
 ## Permissions (why they exist)
 
 Declared in [`public/manifest.json`](public/manifest.json):
 
-| Permission | Role |
-| --- | --- |
-| `storage` | Persist PR lists, settings, route hints, and rate-limit state. |
-| `notifications` | Optional desktop alerts for new or updated PRs. |
-| `alarms` | Periodic background sync. |
-| `offscreen` | Offscreen document for audio and related APIs not available in the service worker alone. |
-| `https://github.com/*` | Fetch signed-in HTML for pulls lists and related pages. |
-| `https://avatars.githubusercontent.com/*` | Load avatar images for enriched rows. |
-| `https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*` | Download remote parser / pattern config JSON. |
+| Permission                                                          | Role                                                                                     |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `storage`                                                           | Persist PR lists, settings, route hints, and rate-limit state.                           |
+| `notifications`                                                     | Optional desktop alerts for new or updated PRs.                                          |
+| `alarms`                                                            | Periodic background sync.                                                                |
+| `offscreen`                                                         | Offscreen document for audio and related APIs not available in the service worker alone. |
+| `https://github.com/*`                                              | Fetch signed-in HTML for pulls lists and related pages.                                  |
+| `https://avatars.githubusercontent.com/*`                           | Load avatar images for enriched rows.                                                    |
+| `https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*` | Download remote parser / pattern config JSON.                                            |
 
 ## Development
 
