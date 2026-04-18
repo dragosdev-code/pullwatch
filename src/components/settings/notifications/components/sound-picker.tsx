@@ -12,7 +12,7 @@ import {
 import { useCustomSounds } from '../../../../hooks/use-custom-sounds';
 import { chromeExtensionService } from '../../../../services/chrome-extension-service';
 import { SoundPreviewButton } from '../../../audio';
-import { CheckIcon, XIcon } from '../../../ui/icons';
+import { CheckIcon, XMarkIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 
 interface SoundPickerProps {
   /** Currently selected sound */
@@ -71,7 +71,7 @@ const SoundOption = ({
       <div className="flex-1 min-w-0 pointer-events-none">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm text-base-content">{definition.name}</span>
-          {isSelected && <CheckIcon className="size-3.5 text-primary" />}
+          {isSelected && <CheckIcon className="size-3.5 text-primary" strokeWidth={2.5} />}
         </div>
         <p className="text-xs text-base-content/60 truncate">{definition.description}</p>
       </div>
@@ -137,7 +137,7 @@ const CustomSoundOptionRow = ({
           className="btn btn-ghost btn-sm btn-circle text-success hover:bg-success/15 shrink-0"
           aria-label="Confirm delete"
         >
-          <CheckIcon className="size-4 text-success" />
+          <CheckIcon className="size-4 text-success" strokeWidth={2.5} />
         </button>
         <button
           type="button"
@@ -145,7 +145,7 @@ const CustomSoundOptionRow = ({
           className="btn btn-ghost btn-sm btn-circle text-base-content/50 hover:text-base-content hover:bg-base-300/50 shrink-0"
           aria-label="Cancel delete"
         >
-          <XIcon className="size-3.5" width={14} height={14} />
+          <XMarkIcon className="size-3.5" strokeWidth={2} />
         </button>
       </div>
     );
@@ -164,7 +164,7 @@ const CustomSoundOptionRow = ({
           className="btn btn-ghost btn-xs btn-circle text-base-content/30 hover:text-error hover:bg-error/10"
           aria-label={`Delete ${meta.name}`}
         >
-          <XIcon className="size-2.5" width={10} height={10} />
+          <XMarkIcon className="size-2.5" strokeWidth={2} />
         </button>
       }
     />
@@ -349,18 +349,7 @@ export const SoundPicker = ({
               <span className="font-medium text-sm text-base-content">Custom</span>
               <p className="text-xs text-base-content/60">Upload and trim your own sounds</p>
             </div>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="size-4 text-base-content/40 shrink-0"
-            >
-              <path d="M9 18l6-6-6-6" />
-            </svg>
+            <ChevronRightIcon className="size-4 text-base-content/40 shrink-0" strokeWidth={2} />
           </div>
         </div>
 

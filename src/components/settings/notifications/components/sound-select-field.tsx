@@ -19,7 +19,7 @@ import { useCustomSounds } from '../../../../hooks/use-custom-sounds';
 import { SoundPicker } from './sound-picker';
 import { CustomSoundEditor } from '../../../custom-sound-editor';
 import { SoundPreviewButton } from '../../../audio';
-import { MusicIcon } from '../../../ui/icons';
+import { MusicalNoteIcon } from '@heroicons/react/24/outline';
 
 interface SoundSelectFieldProps {
   name: string;
@@ -71,7 +71,7 @@ function SoundPickerTriggerButton({
     >
       {/* Sizing only: cell width = max(icon+name, Change) so the pill never clips “Change” or shrinks past the idle label. */}
       <span className="col-start-1 row-start-1 flex min-w-0 items-center gap-1.5 px-2.5 opacity-0 pointer-events-none">
-        <MusicIcon className="size-3 shrink-0" />
+        <MusicalNoteIcon className="size-3 shrink-0" strokeWidth={2} />
         <span className="min-w-0 max-w-48 truncate">{displayName}</span>
       </span>
       <span className="col-start-1 row-start-1 flex min-w-0 items-center px-2.5 opacity-0 pointer-events-none">
@@ -80,7 +80,7 @@ function SoundPickerTriggerButton({
 
       <span className="col-start-1 row-start-1 z-10 flex min-w-0 items-center gap-1.5 px-2.5 transition-[gap] duration-300 ease-out motion-reduce:duration-0 group-hover:gap-0">
         <span className="flex w-3 shrink-0 justify-center overflow-hidden transition-[width,opacity] duration-300 ease-out motion-reduce:duration-0 group-hover:w-0 group-hover:opacity-0">
-          <MusicIcon className="size-3 shrink-0" />
+          <MusicalNoteIcon className="size-3 shrink-0" strokeWidth={2} />
         </span>
         <span className="relative min-h-[1.25em] min-w-0 max-w-48 flex-1 overflow-hidden">
           <span className="block truncate transition-opacity duration-300 ease-out motion-reduce:duration-0 opacity-100 group-hover:opacity-0">

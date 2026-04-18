@@ -17,7 +17,7 @@ import { DEFAULT_SETTINGS } from '../types';
 import type { ExtensionSettings } from '../types';
 import { useExtensionSettings } from '../../../hooks/use-extension-settings';
 import { useLinkBehavior } from '../../../hooks/use-link-behavior';
-import { InfoCircleIcon } from '../../ui/icons';
+import { InformationCircleIcon } from '@heroicons/react/24/outline';
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -137,7 +137,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
                   role="status"
                   className="mt-2 rounded-lg border border-base-300 border-l-[3px] border-l-info bg-base-200 px-3 py-2.5 flex items-start gap-2.5"
                 >
-                  <InfoCircleIcon className="w-4 h-4 text-info shrink-0 mt-px" />
+                  <InformationCircleIcon className="w-4 h-4 text-info shrink-0 mt-px" />
                   <p className="text-xs font-medium text-base-content leading-snug min-w-0">
                     Draft PRs will leave your 'To Review' list after the next sync, or after using
                     the Refresh Button from the top right of the popup.

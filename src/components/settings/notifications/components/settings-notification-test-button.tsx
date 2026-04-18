@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import { BellIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { chromeExtensionService } from '../../../../services/chrome-extension-service';
 import {
   SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
@@ -8,7 +8,6 @@ import {
   SETTINGS_TEST_ERROR_DISABLED,
 } from '../../../../../extension/common/constants';
 import { SettingsTestCooldownRing } from './settings-test-cooldown-ring';
-import { BellIcon } from '../../../ui/icons';
 
 type TestCategory = 'assigned' | 'merged';
 
@@ -100,7 +99,7 @@ export const SettingsNotificationTestButton = ({
           {cooldown ? (
             <SettingsTestCooldownRing active viewSize={10} />
           ) : (
-            <BellIcon className="size-2.5" />
+            <BellIcon className="size-2.5" strokeWidth={2} />
           )}
         </span>
         <span className="mb-[0.5px]">Preview</span>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useTheme } from '../../../../hooks/use-theme';
 import { RandomThemeButton } from './random-theme-button';
-import { CheckIcon } from '../../../ui/icons';
+import { CheckIcon } from '@heroicons/react/24/outline';
 
 const THEMES = [
   'light',
@@ -150,7 +150,9 @@ export const ThemePicker = () => {
                   {name}
                 </span>
 
-                {isActive && <CheckIcon className="size-3.5 shrink-0 text-primary" />}
+                {isActive && (
+                  <CheckIcon className="size-3.5 shrink-0 text-primary" strokeWidth={2.5} />
+                )}
               </button>
             );
           })}
