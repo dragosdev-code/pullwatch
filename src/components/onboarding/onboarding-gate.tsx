@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { useOnboarding } from '../../hooks/use-onboarding';
-import { LoggedOutView } from './logged-out-view';
-import { OnboardingReveal } from './onboarding-reveal';
+import { OnboardingOverlay, type OnboardingPhase } from './onboarding-overlay';
 
 type OnboardingGateProps = {
   children: ReactNode;
@@ -11,6 +10,11 @@ type OnboardingGateProps = {
  * WHY [overlay + inert]: PR lists hydrate into TanStack Query before paint; this gate keeps the
  * main tree mounted (so hooks + storage sync keep running) while blocking interaction and SR(screen reader)
  * exposure until onboarding clears — no cache tricks and no layout dimension changes at handoff.
+ *
+ * WHY [single shell, phase-driven]: `showLoggedOutLayer` and `showFirstRunReveal` are mutually
+ * exclusive but used to be rendered as two independent overlays, so the `isLoggedIn` flip
+ * unmounted one dialog and mounted another in the same commit — a visible flash even when the
+ * state change was correct. Collapsing to one shell with a phase crossfade removes the flash.
  */
 export function OnboardingGate({ children }: OnboardingGateProps) {
   const {
@@ -25,6 +29,12 @@ export function OnboardingGate({ children }: OnboardingGateProps) {
     prefersReducedMotion,
     markRevealComplete,
   } = useOnboarding();
+
+  const phase: OnboardingPhase | null = showLoggedOutLayer
+    ? 'loggedOut'
+    : showFirstRunReveal
+      ? 'reveal'
+      : null;
 
   return (
     <div className="relative h-[400px] w-[380px] overflow-hidden">
@@ -41,19 +51,14 @@ export function OnboardingGate({ children }: OnboardingGateProps) {
         <div className="absolute inset-0 z-40 bg-[#5b616b]" aria-busy="true" aria-label="Loading" />
       ) : null}
 
-      {showLoggedOutLayer ? (
-        <LoggedOutView
+      {phase ? (
+        <OnboardingOverlay
+          phase={phase}
+          prefersReducedMotion={prefersReducedMotion}
           refreshState={refreshState}
           refreshErrorMessage={refreshErrorMessage}
           refreshInfoMessage={refreshInfoMessage}
-          prefersReducedMotion={prefersReducedMotion}
           onRefresh={refreshGitHubSession}
-        />
-      ) : null}
-
-      {showFirstRunReveal ? (
-        <OnboardingReveal
-          reducedMotion={prefersReducedMotion}
           onRevealComplete={markRevealComplete}
         />
       ) : null}
