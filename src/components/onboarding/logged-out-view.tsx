@@ -1,5 +1,6 @@
 import { memo, useCallback, useId, useMemo } from 'react';
 import { animated, useTransition } from '@react-spring/web';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { GITHUB_BASE_URL } from '../../../extension/common/constants';
 import { isExtensionContext } from '../../utils/is-extension-context';
 import type { OnboardingRefreshState } from '../../hooks/use-onboarding';
@@ -117,7 +118,7 @@ export const LoggedOutView = memo(function LoggedOutView({
           </p>
         </div>
 
-        <div className="flex w-full flex-col gap-2.5 pt-1">
+        <div className="flex w-full flex-col items-center gap-3 pt-1">
           <button
             type="button"
             onClick={openGitHubLogin}
@@ -130,54 +131,47 @@ export const LoggedOutView = memo(function LoggedOutView({
           >
             Log in to GitHub
           </button>
-          <div
-            className="flex w-full flex-col gap-1.5 rounded-xl px-2.5 py-2"
-            style={{
-              background: 'rgba(0,0,0,0.14)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
-            }}
-          >
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={busy}
-              aria-busy={busy}
-              style={{
-                color: ONBOARDING_TEXT_PRIMARY,
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.12)',
-              }}
-              className={`relative flex h-10 w-full cursor-pointer items-center justify-center rounded-lg text-[12px] font-medium transition-opacity disabled:cursor-wait disabled:opacity-60 ${busy && !motionOff ? 'pw-onboarding-refresh-btn-busy' : ''}`}
-            >
-              <span className="relative z-1">
-                {busy ? 'Checking session…' : 'Refresh status'}
-              </span>
-              {busy && !motionOff ? (
-                <span className="pw-onboarding-refresh-sweep-track" aria-hidden>
-                  <span className="pw-onboarding-refresh-sweep-bar" />
-                </span>
-              ) : null}
-            </button>
 
-            <div className="grid min-h-[47px] w-full text-left *:col-start-1 *:row-start-1">
-              {feedbackTransitions((style, item) => (
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={busy}
+            aria-busy={busy}
+            className="group inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11.5px] font-medium transition-colors duration-200 hover:bg-white/[0.06] disabled:cursor-wait disabled:opacity-60"
+            style={{ color: ONBOARDING_TEXT_MUTED }}
+          >
+            <ArrowPathIcon
+              aria-hidden
+              strokeWidth={2.25}
+              className={`h-3.5 w-3.5 ${busy && !motionOff ? 'animate-spin' : ''}`}
+            />
+            <span>{busy ? 'Checking session…' : 'Refresh status'}</span>
+          </button>
+
+          <div className="grid min-h-[62px] w-full *:col-start-1 *:row-start-1">
+            {feedbackTransitions((style, item) => {
+              const toneColor =
+                item.tone === 'error'
+                  ? '#ffb4b4'
+                  : item.tone === 'info'
+                    ? 'rgba(255, 220, 188, 0.95)'
+                    : ONBOARDING_TEXT_SOFT;
+              return (
                 <animated.p
-                  className="text-[11px] leading-snug"
-                  style={{
-                    ...style,
-                    color:
-                      item.tone === 'error'
-                        ? '#ffb4b4'
-                        : item.tone === 'info'
-                          ? 'rgba(255, 220, 188, 0.95)'
-                          : ONBOARDING_TEXT_SOFT,
-                  }}
+                  className="inline-flex items-start justify-center gap-1.5 px-1 text-center text-[11px] leading-snug"
+                  style={{ ...style, color: toneColor }}
                 >
-                  {item.text}
+                  {item.tone !== 'hint' ? (
+                    <span
+                      aria-hidden
+                      className="mt-[5px] h-1 w-1 shrink-0 rounded-full"
+                      style={{ background: 'currentColor' }}
+                    />
+                  ) : null}
+                  <span>{item.text}</span>
                 </animated.p>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       </div>
