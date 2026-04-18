@@ -17,8 +17,6 @@
 
 Pullwatch keeps the PRs you care about visible without living on [github.com](https://github.com). It uses your **existing GitHub browser session** (no personal access tokens and no OAuth app). A Manifest **V3** service worker syncs review requests, authored PRs, and recently merged work on a schedule, with backoff when GitHub signals rate limits.
 
-> **Note:** Until the listing is published, Chrome may still show the packaged manifest name **PR Live Extension** (`public/manifest.json`). The product name used here is **Pullwatch**.
-
 ## Install
 
 **Chrome Web Store:** coming soon (link will be added when the listing is live).
