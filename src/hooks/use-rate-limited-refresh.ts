@@ -1,6 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { UseMutationResult } from '@tanstack/react-query';
-import { MIN_REFRESH_INTERVAL_MS } from '../../extension/common/constants';
+import {
+  MIN_REFRESH_INTERVAL_MS,
+  STORAGE_KEY_LAST_MANUAL_REFRESH_AT,
+} from '../../extension/common/constants';
 import type { PullRequest } from '../../extension/common/types';
 
 /** Upper bound for indeterminate fetch ring progress (ms) — actual completion snaps to 100%. */
@@ -67,6 +70,10 @@ export const useRateLimitedRefresh = ({
   clearGlobalError,
   setGlobalError,
 }: UseRateLimitedRefreshOptions): UseRateLimitedRefreshResult => {
+  const hasSessionStorage =
+    typeof chrome !== 'undefined' && chrome.storage?.session !== undefined;
+
+  const [sessionHydrated, setSessionHydrated] = useState(!hasSessionStorage);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastAllowedRefreshAt, setLastAllowedRefreshAt] = useState(0);
   const lastAllowedRefreshAtRef = useRef(0);
@@ -83,13 +90,61 @@ export const useRateLimitedRefresh = ({
     refreshMergedPRsMutation.isPending ||
     refreshAuthoredPRsMutation.isPending;
 
+  // WHY [backend-only timestamp]: `EventService` writes `last_manual_refresh_at` to `chrome.storage.session`.
+  // The popup hydrates and listens on `onChanged` — an optimistic popup write would make the service worker
+  // read that value and throttle the wave that just started.
+  useEffect(() => {
+    if (!hasSessionStorage) return;
+
+    let cancelled = false;
+    void chrome.storage.session
+      .get(STORAGE_KEY_LAST_MANUAL_REFRESH_AT)
+      .then((sessionRecord) => {
+        if (cancelled) return;
+        const persistedLastManualRefreshAtMs = sessionRecord[STORAGE_KEY_LAST_MANUAL_REFRESH_AT] as
+          | number
+          | undefined;
+        const lastManualRefreshAtMs = persistedLastManualRefreshAtMs ?? 0;
+        setLastAllowedRefreshAt(lastManualRefreshAtMs);
+        lastAllowedRefreshAtRef.current = lastManualRefreshAtMs;
+        setSessionHydrated(true);
+      })
+      .catch(() => {
+        if (!cancelled) setSessionHydrated(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasSessionStorage]);
+
+  useEffect(() => {
+    if (!hasSessionStorage || typeof chrome.storage?.onChanged === 'undefined') return;
+
+    const listener = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string
+    ) => {
+      if (areaName !== 'session') return;
+      const manualRefreshChange = changes[STORAGE_KEY_LAST_MANUAL_REFRESH_AT];
+      if (manualRefreshChange?.newValue != null) {
+        const lastManualRefreshAtMs = manualRefreshChange.newValue as number;
+        setLastAllowedRefreshAt(lastManualRefreshAtMs);
+        lastAllowedRefreshAtRef.current = lastManualRefreshAtMs;
+      }
+    };
+
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, [hasSessionStorage]);
+
   // Only tick while a cooldown countdown or fetch-progress animation is active.
   // When idle (no refresh triggered yet), the interval never starts — zero re-renders.
   const needsTick = lastAllowedRefreshAt > 0 || manualFetchInProgress;
   useEffect(() => {
     if (!needsTick) return;
-    const id = window.setInterval(() => setTickNow(Date.now()), 250);
-    return () => window.clearInterval(id);
+    const cooldownTickIntervalId = window.setInterval(() => setTickNow(Date.now()), 250);
+    return () => window.clearInterval(cooldownTickIntervalId);
   }, [needsTick]);
 
   useEffect(() => {
@@ -100,12 +155,15 @@ export const useRateLimitedRefresh = ({
       prevManualFetchPendingRef.current = true;
     } else {
       if (prevManualFetchPendingRef.current) {
-        const duration = Date.now() - fetchStartedAtRef.current;
-        setLastFetchDurationMs(duration);
+        const fetchDurationMs = Date.now() - fetchStartedAtRef.current;
+        setLastFetchDurationMs(fetchDurationMs);
         setFetchCompleteFlash(true);
-        const t = window.setTimeout(() => setFetchCompleteFlash(false), FETCH_COMPLETE_FLASH_MS);
+        const fetchCompleteFlashTimeoutId = window.setTimeout(
+          () => setFetchCompleteFlash(false),
+          FETCH_COMPLETE_FLASH_MS
+        );
         prevManualFetchPendingRef.current = false;
-        return () => window.clearTimeout(t);
+        return () => window.clearTimeout(fetchCompleteFlashTimeoutId);
       }
       prevManualFetchPendingRef.current = false;
     }
@@ -113,7 +171,11 @@ export const useRateLimitedRefresh = ({
 
   const timeSinceLastRefresh = tickNow - lastAllowedRefreshAt;
   const timeRemainingMs = Math.max(0, MIN_REFRESH_INTERVAL_MS - timeSinceLastRefresh);
-  const canRefresh = lastAllowedRefreshAt === 0 || timeSinceLastRefresh >= MIN_REFRESH_INTERVAL_MS;
+  // WHY [hydration gate]: Until `session.get` returns, do not allow a click that the backend would throttle —
+  // avoids a flash of “ready” before we know the persisted cooldown (see plan: defensive `canRefresh`).
+  const canRefresh =
+    sessionHydrated &&
+    (lastAllowedRefreshAt === 0 || timeSinceLastRefresh >= MIN_REFRESH_INTERVAL_MS);
 
   const cooldownProgress01 =
     lastAllowedRefreshAt === 0
@@ -123,9 +185,9 @@ export const useRateLimitedRefresh = ({
   let fetchProgress01 = 0;
   let fetchElapsedSeconds = 0;
   if (manualFetchInProgress && fetchStartedAtRef.current > 0) {
-    const elapsed = tickNow - fetchStartedAtRef.current;
-    fetchElapsedSeconds = elapsed / 1000;
-    fetchProgress01 = Math.min(0.94, elapsed / FETCH_RING_ESTIMATED_MAX_MS);
+    const fetchElapsedMs = tickNow - fetchStartedAtRef.current;
+    fetchElapsedSeconds = fetchElapsedMs / 1000;
+    fetchProgress01 = Math.min(0.94, fetchElapsedMs / FETCH_RING_ESTIMATED_MAX_MS);
   } else if (fetchCompleteFlash) {
     fetchProgress01 = 1;
   }
@@ -135,21 +197,24 @@ export const useRateLimitedRefresh = ({
 
     setIsRefreshing(true);
 
-    const currentTime = Date.now();
-    const timeSinceLast = currentTime - lastAllowedRefreshAtRef.current;
+    const clickTimeMs = Date.now();
+    const timeSinceLastManualRefreshMs = clickTimeMs - lastAllowedRefreshAtRef.current;
 
-    if (timeSinceLast >= MIN_REFRESH_INTERVAL_MS) {
+    if (timeSinceLastManualRefreshMs >= MIN_REFRESH_INTERVAL_MS) {
       setLastInteractionWasThrottled(false);
-      lastAllowedRefreshAtRef.current = currentTime;
-      setLastAllowedRefreshAt(currentTime);
+      // WHY [in-memory only]: Authoritative `last_manual_refresh_at` is written by EventService; `onChanged`
+      // reconciles. Do not write session here — it would race the backend gate (see hook hydration comment).
+      lastAllowedRefreshAtRef.current = clickTimeMs;
+      setLastAllowedRefreshAt(clickTimeMs);
       try {
         await Promise.all([
           refreshPRsMutation.mutateAsync(),
           refreshMergedPRsMutation.mutateAsync(),
           refreshAuthoredPRsMutation.mutateAsync(),
         ]);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to refresh PRs';
+      } catch (mutationError) {
+        const errorMessage =
+          mutationError instanceof Error ? mutationError.message : 'Failed to refresh PRs';
         setGlobalError(errorMessage);
       }
     } else {

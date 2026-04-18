@@ -51,6 +51,9 @@ export const CACHE_TTL_MS = 60 * 1000; // 1 minute
 // Minimum time between manual refreshes to prevent rate limiting (30 seconds)
 export const MIN_REFRESH_INTERVAL_MS = 30 * 1000; // 30 seconds
 
+/** Unix ms of last allowed manual refresh wave start — written only by `EventService` to `chrome.storage.session`. */
+export const STORAGE_KEY_LAST_MANUAL_REFRESH_AT = 'last_manual_refresh_at';
+
 // GitHub fetch timeout — guarantees deduplication locks in PRService clear even if GitHub hangs
 export const GITHUB_FETCH_TIMEOUT_MS = 30_000;
 

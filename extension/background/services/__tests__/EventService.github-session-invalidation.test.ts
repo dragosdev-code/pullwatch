@@ -27,6 +27,17 @@ describe('EventService GitHub web-session invalidation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      'chrome',
+      {
+        storage: {
+          session: {
+            get: vi.fn().mockResolvedValue({}),
+            set: vi.fn().mockResolvedValue(undefined),
+          },
+        },
+      } as unknown as typeof chrome
+    );
     clearGitHubWebSessionCaches = vi.fn().mockResolvedValue(undefined);
     setDefaultBadge = vi.fn().mockResolvedValue(undefined);
 
