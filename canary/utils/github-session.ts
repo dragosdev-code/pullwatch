@@ -123,9 +123,12 @@ export class GitHubSession {
     await this.page.waitForLoadState('load', { timeout: 25_000 });
     if (!requestedUrl.includes('/pulls/search')) return;
 
-    const searchSurface = this.page
-      .locator('[data-testid="results-count"]')
-      .or(this.page.locator('[data-testid="listitem-title-link"]').first());
+    // Non-empty `/pulls/search` can render both `results-count` and row title links.
+    // `locator.or()` matches *all* union members, so waitFor hits strict-mode (2+ nodes).
+    // Comma CSS + `.first()` waits until either signal exists while resolving to one element.
+    const searchSurface = this.page.locator(
+      '[data-testid="results-count"], [data-testid="listitem-title-link"]',
+    ).first();
     await searchSurface.waitFor({ state: 'attached', timeout: 20_000 });
   }
 
