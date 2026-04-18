@@ -3,7 +3,7 @@
 
   <h1>Pullwatch</h1>
 
-  <p><strong>Your GitHub pull request inbox in the toolbar—sorted, session-based, and rate-limit aware.</strong></p>
+  <p><strong>Your GitHub pull request inbox in the toolbar, sorted and session-based, with rate-limit-aware background sync.</strong></p>
 
   <p>
     <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19" /></a>
@@ -27,18 +27,18 @@ Pullwatch keeps the PRs you care about visible without living on [github.com](ht
 
 | | |
 | --- | --- |
-| **Session-based access** | Reads GitHub HTML you can already see while signed in—no PATs or OAuth flows. |
+| **Session-based access** | Reads GitHub HTML you can already see while signed in. No PATs or OAuth flows. |
 | **Three-tab inbox** | **To review** (pending vs already-reviewed sections), **Authored** (ordered by author review state: changes requested, approved, pending, commented, draft), **Merged** (recently shipped). |
-| **Notifications** | Desktop notifications and sounds per category (**assigned**, **merged**, **authored**); draft-related options for assigned work (e.g. notify on drafts off by default). |
+| **Notifications** | Desktop notifications and sounds for **assigned**, **merged**, and **authored** work, plus draft-related options for assigned PRs (notify on drafts is off by default). |
 | **Themes** | **35** built-in [DaisyUI](https://daisyui.com/) themes on **Tailwind CSS 4**. |
-| **Background sync** | Default fetch cadence **3 minutes** (`FETCH_INTERVAL_MS` in [`extension/common/constants.ts`](extension/common/constants.ts)); respects rate-limit state and skips work when offline. |
-| **Resilient parsing** | HTML list parsing with a **`/pulls/search` vs legacy `/pulls`** route hint and fallback; remote pattern updates from [`dragosdev-code/pr-live-config`](https://github.com/dragosdev-code/pr-live-config) (TTL in code). |
-| **Fast popup** | UI hydrates from **`chrome.storage.local`**; background fetches can bypass short-lived caches so data stays fresh. |
+| **Background sync** | Default fetch cadence is **3 minutes** (see `FETCH_INTERVAL_MS` in [`extension/common/constants.ts`](extension/common/constants.ts)). Sync respects rate limits and pauses when you are offline. |
+| **Resilient parsing** | HTML list parsing uses a **`/pulls/search` vs legacy `/pulls`** route hint with fallback. Remote pattern updates come from [`dragosdev-code/pr-live-config`](https://github.com/dragosdev-code/pr-live-config), with a refresh interval defined in code. |
+| **Fast popup** | UI hydrates from **`chrome.storage.local`**. Background fetches can bypass short-lived caches so data stays fresh. |
 
 ## Architecture (short)
 
 - **Popup:** React 19 UI, **TanStack Query** for server-state style refresh flows, **Zustand** for local UI state.
-- **Background:** Service worker (`extension/background/main.ts`) wires alarms → **`EventService`** → **`PRService`** / **`GitHubService`**. **`AlarmService`** owns the periodic alarm; **`RateLimitService`** applies exponential backoff toward GitHub **429**s.
+- **Background:** Service worker (`extension/background/main.ts`) wires alarms → **`EventService`** → **`PRService`** / **`GitHubService`**. **`AlarmService`** owns the periodic alarm, and **`RateLimitService`** applies exponential backoff toward GitHub **429**s.
 - **Concurrency:** Manual refresh paths use **`chrome.storage.session`** plus coordinated “wave” handling in **`EventService`** so overlapping refreshes do not stampede GitHub.
 - **Offscreen document** (`offscreen`): used for capabilities such as audio playback (see manifest `offscreen` permission).
 
@@ -111,11 +111,11 @@ npm run build
 
 Then in Chrome: open `chrome://extensions`, enable **Developer mode**, **Load unpacked**, and choose the **`dist`** directory.
 
-**Other scripts:**
+**Other scripts**
 
-- `npm run dev` — Vite dev server for UI development.
-- `npm test` / `npm run test:run` — Vitest.
-- `npm run lint` — Oxlint.
+- **`npm run dev`** runs the Vite dev server for UI development.
+- **`npm test`** and **`npm run test:run`** run Vitest.
+- **`npm run lint`** runs Oxlint.
 
 ## Contributing
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pullwatch",
-  "description": "Your GitHub pull requests in one place: reviews you owe, PRs you wrote, and recent merges. Uses your browser session—no API tokens.",
+  "description": "Pullwatch lists reviews you owe, your authored PRs, and recent merges using your GitHub browser session. No API tokens.",
   "version": "1.0.0",
   "icons": {
     "16": "logo-16.png",

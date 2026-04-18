@@ -113,7 +113,7 @@ export const LoggedOutView = memo(function LoggedOutView({
             Sign in to GitHub
           </h1>
           <p className="text-[13px] leading-relaxed" style={{ color: ONBOARDING_TEXT_MUTED }}>
-            Pullwatch reads your PR lists from your logged-in GitHub session in the browser — no
+            Pullwatch reads your PR lists from your logged-in GitHub session in the browser. No
             tokens to paste, no OAuth dance in the popup.
           </p>
         </div>

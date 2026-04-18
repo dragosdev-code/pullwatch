@@ -83,7 +83,7 @@ export const NotificationLooperPanel = () => {
         <div className="flex items-center gap-2">
           <span className="inline-block w-2 h-2 rounded-full bg-error animate-pulse" />
           <span className="text-[10px] text-base-content/70">
-            Running — {sentCount} notification{sentCount !== 1 ? 's' : ''} sent
+            Running: {sentCount} notification{sentCount !== 1 ? 's' : ''} sent
           </span>
         </div>
       )}

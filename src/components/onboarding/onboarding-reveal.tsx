@@ -221,7 +221,7 @@ export const OnboardingReveal = memo(function OnboardingReveal({
           }}
         >
           Pullwatch is synced with your GitHub session. Your lists update quietly in the
-          background — open this popup whenever you want the live view.
+          background. Open this popup whenever you want the live view.
         </animated.p>
 
         <animated.div style={springs[3]} className="flex justify-center">
