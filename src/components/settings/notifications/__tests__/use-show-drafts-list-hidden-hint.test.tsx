@@ -2,24 +2,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { PullRequest } from '../../../../extension/common/types';
-import { queryKeys } from '../../../constants/query-keys';
+import type { PullRequest } from '../../../../../extension/common/types';
+import { queryKeys } from '../../../../constants/query-keys';
 import {
   hasDraftPRsInAssignedCache,
   useShowDraftsListHiddenHint,
-} from '../use-show-drafts-list-hidden-hint';
+} from '../hooks/use-show-drafts-list-hidden-hint';
 
 const { readAssignedPrsFromLocalStorage } = vi.hoisted(() => ({
   readAssignedPrsFromLocalStorage: vi.fn(),
 }));
 
-vi.mock('../../../services/chrome-extension-service', () => ({
+vi.mock('../../../../services/chrome-extension-service', () => ({
   chromeExtensionService: {
     readAssignedPrsFromLocalStorage,
   },
 }));
 
-vi.mock('../../../utils/is-extension-context', () => ({
+vi.mock('../../../../utils/is-extension-context', () => ({
   isExtensionContext: () => true,
 }));
 

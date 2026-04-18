@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useSpring, animated } from '@react-spring/web';
 import { SettingsPage } from './settings-page';
-import { GearIcon } from '../ui/icons';
+import { GearIcon } from '../../ui/icons';
 
 type SettingsPosition = 'left' | 'center' | 'right';
 

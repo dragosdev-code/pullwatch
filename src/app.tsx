@@ -17,7 +17,7 @@ import { usePrListsStorageSync } from './hooks/use-pr-lists-storage-sync';
 import { useGlobalError, useClearGlobalError } from './stores/global-error';
 import { useDebugMode } from './stores/debug';
 import { DiagnosticsSurface } from './diagnostics-surface';
-import { SettingsOverlay } from './components/settings/settings-overlay';
+import { SettingsOverlay } from './components/settings';
 import { ParserBreakageBanner } from './components/parser-breakage-banner';
 import { GitHubOutageBanner } from './components/github-outage-banner';
 import { TAB_IDS } from './constants/tabs';

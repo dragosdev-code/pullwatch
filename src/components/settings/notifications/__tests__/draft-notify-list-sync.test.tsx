@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { render, act, waitFor } from '@testing-library/react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useForm, type UseFormReturn } from 'react-hook-form';
-import { useAssignedDraftNotifyListSync } from '../use-assigned-draft-notify-list-sync';
-import { DEFAULT_SETTINGS, type ExtensionSettings } from '../types';
+import { useAssignedDraftNotifyListSync } from '../hooks/use-assigned-draft-notify-list-sync';
+import { DEFAULT_SETTINGS, type ExtensionSettings } from '../../types';
 
 /**
  * `sync.draftNotifyPreferred` is **React state in the hook only** — it is never written to

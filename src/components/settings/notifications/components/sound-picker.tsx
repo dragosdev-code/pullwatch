@@ -3,16 +3,16 @@ import type {
   CustomSoundId,
   CustomSoundMeta,
   NotificationSound,
-} from '../../../../extension/common/types';
+} from '../../../../../extension/common/types';
 import {
   SOUND_DEFINITIONS,
   isPlayableSound,
   type SoundDefinition,
-} from '../../../../extension/common/sound-config';
-import { useCustomSounds } from '../../../hooks/use-custom-sounds';
-import { chromeExtensionService } from '../../../services/chrome-extension-service';
-import { SoundPreviewButton } from '../../audio';
-import { CheckIcon, XIcon } from '../../ui/icons';
+} from '../../../../../extension/common/sound-config';
+import { useCustomSounds } from '../../../../hooks/use-custom-sounds';
+import { chromeExtensionService } from '../../../../services/chrome-extension-service';
+import { SoundPreviewButton } from '../../../audio';
+import { CheckIcon, XIcon } from '../../../ui/icons';
 
 interface SoundPickerProps {
   /** Currently selected sound */

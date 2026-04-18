@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
-import { AssignedDraftNotifySettingsBlock } from '../assigned-draft-notify-settings-block';
-import { DEFAULT_SETTINGS, type ExtensionSettings } from '../types';
+import { AssignedDraftNotifySettingsBlock } from '../components/assigned-draft-notify-settings-block';
+import { DEFAULT_SETTINGS, type ExtensionSettings } from '../../types';
 
 /**
  * `Partial<ExtensionSettings>` only shallow-partializes: a provided `assigned` value must still

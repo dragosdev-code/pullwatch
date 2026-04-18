@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { LinkOpenBehavior } from '../../../hooks/use-link-behavior';
+import type { LinkOpenBehavior } from '../../../../hooks/use-link-behavior';
 
 interface LinkBehaviorFieldProps {
   value: LinkOpenBehavior;

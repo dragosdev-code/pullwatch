@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSpring, animated, to } from '@react-spring/web';
-import { DiceIcon } from '../../ui/icons';
+import { DiceIcon } from '../../../ui/icons';
 
 interface RandomThemeButtonProps {
   themes: readonly string[];

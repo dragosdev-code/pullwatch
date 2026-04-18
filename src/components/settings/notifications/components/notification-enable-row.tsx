@@ -1,5 +1,5 @@
 import { useFormContext } from 'react-hook-form';
-import type { ExtensionSettings } from '../types';
+import type { ExtensionSettings } from '../../types';
 import { NotificationPreviewInfoTip } from './notification-preview-info-tip';
 import { SettingsNotificationTestButton } from './settings-notification-test-button';
 

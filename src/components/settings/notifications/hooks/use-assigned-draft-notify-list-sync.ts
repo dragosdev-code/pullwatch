@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import type { ExtensionSettings } from './types';
+import type { ExtensionSettings } from '../../types';
 
 export interface UseAssignedDraftNotifyListSyncParams {
   methods: UseFormReturn<ExtensionSettings>;

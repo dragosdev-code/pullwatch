@@ -1,14 +1,14 @@
 import { useCallback, useState } from 'react';
 import { ExclamationCircleIcon } from '@heroicons/react/24/outline';
-import { chromeExtensionService } from '../../../services/chrome-extension-service';
+import { chromeExtensionService } from '../../../../services/chrome-extension-service';
 import {
   SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
   SETTINGS_TEST_ERROR_CHROME_DENIED,
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
-} from '../../../../extension/common/constants';
+} from '../../../../../extension/common/constants';
 import { SettingsTestCooldownRing } from './settings-test-cooldown-ring';
-import { BellIcon } from '../../ui/icons';
+import { BellIcon } from '../../../ui/icons';
 
 type TestCategory = 'assigned' | 'merged';
 

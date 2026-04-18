@@ -1,7 +1,7 @@
 import { Controller, type Control } from 'react-hook-form';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
-import { ToggleFieldLayout } from './form/toggle-field';
-import type { ExtensionSettings } from './types';
+import { ToggleFieldLayout } from '../../shared/components/toggle-field';
+import type { ExtensionSettings } from '../../types';
 
 interface AssignedDraftNotifySettingsBlockProps {
   control: Control<ExtensionSettings>;

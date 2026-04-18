@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useTheme } from '../../../hooks/use-theme';
+import { useTheme } from '../../../../hooks/use-theme';
 import { RandomThemeButton } from './random-theme-button';
-import { CheckIcon } from '../../ui/icons';
+import { CheckIcon } from '../../../ui/icons';
 
 const THEMES = [
   'light',

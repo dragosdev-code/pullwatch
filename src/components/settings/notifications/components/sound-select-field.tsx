@@ -7,19 +7,19 @@ import {
   type ReactNode,
 } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
-import type { ExtensionSettings } from '../types';
-import type { NotificationSound, CustomSoundId } from '../../../../extension/common/types';
+import type { ExtensionSettings } from '../../types';
+import type { NotificationSound, CustomSoundId } from '../../../../../extension/common/types';
 import {
   getSoundDefinition,
   isPlayableSound,
   isCustomSoundId,
   resolvePlayableSoundOrFallback,
-} from '../../../../extension/common/sound-config';
-import { useCustomSounds } from '../../../hooks/use-custom-sounds';
+} from '../../../../../extension/common/sound-config';
+import { useCustomSounds } from '../../../../hooks/use-custom-sounds';
 import { SoundPicker } from './sound-picker';
-import { CustomSoundEditor } from '../../custom-sound-editor';
-import { SoundPreviewButton } from '../../audio';
-import { MusicIcon } from '../../ui/icons';
+import { CustomSoundEditor } from '../../../custom-sound-editor';
+import { SoundPreviewButton } from '../../../audio';
+import { MusicIcon } from '../../../ui/icons';
 
 interface SoundSelectFieldProps {
   name: string;

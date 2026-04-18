@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useFormContext } from 'react-hook-form';
-import type { ExtensionSettings } from '../types';
+import type { ExtensionSettings } from '../../types';
 
 export type ToggleFieldColor = 'primary' | 'warning';
 
