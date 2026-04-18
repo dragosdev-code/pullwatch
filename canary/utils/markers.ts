@@ -25,3 +25,7 @@ export const CANARY_MARKER_NEW_HTML_FALLBACK_DEGRADED = 'CANARY_NEW_HTML_FALLBAC
  */
 export const CANARY_RUNBOOK_JSON_DRIFT_HINT =
   'See canary/DOM_CHANGE_RUNBOOK.md#step-2--identify-which-pattern-broke';
+
+/** Appended to `ParserBreakageError` contexts in the canary (legacy / waterfall). */
+export const CANARY_RUNBOOK_PARSER_BREAKAGE_HINT =
+  'See canary/DOM_CHANGE_RUNBOOK.md#step-2--identify-which-pattern-broke';

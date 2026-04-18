@@ -17,15 +17,18 @@ import { expect } from 'vitest';
 import { GitHubHTMLParser } from '../../extension/background/services/GitHubHTMLParser';
 import { DEFAULT_COMPILED_PATTERNS } from '../../extension/common/default-patterns';
 import { GITHUB_BASE_URL } from '../../extension/common/constants';
+import { ParserBreakageError } from '../../extension/common/errors';
 import { parsePullsListHTML } from '../../extension/common/pulls-list-parser';
 import type { PullRequest } from '../../extension/common/types';
 import type { CanaryTarget } from './config';
 import { assertPRValid } from './assertions';
 import { looksLikeNewPullsDashboard } from './dual-probe';
+import { writeCanaryFailureSnapshot } from './failure-snapshot';
 import { isGitHubDegraded } from './github-status';
 import {
   CANARY_MARKER_EMBEDDED_JSON_DRIFT,
   CANARY_RUNBOOK_JSON_DRIFT_HINT,
+  CANARY_RUNBOOK_PARSER_BREAKAGE_HINT,
 } from './markers';
 
 /**
@@ -101,10 +104,14 @@ export async function parseAndAssert(html: string, target: CanaryTarget): Promis
   try {
     prs = GitHubHTMLParser.parseFromHTML(html, GITHUB_BASE_URL, DEFAULT_COMPILED_PATTERNS);
   } catch (error) {
+    writeCanaryFailureSnapshot(html, target.label);
     const snippet = html.slice(0, 5000);
     console.error(
       `\n=== PARSER THREW — HTML SNIPPET (first 5000 chars) for "${target.label}" ===\n${snippet}\n===\n`
     );
+    if (error instanceof ParserBreakageError) {
+      error.message = `${error.message} ${CANARY_RUNBOOK_PARSER_BREAKAGE_HINT}`;
+    }
     throw error;
   }
 
@@ -152,10 +159,14 @@ export async function parseSearchRouteAndAssert(
       },
     });
   } catch (error) {
+    writeCanaryFailureSnapshot(html, target.label);
     const snippet = html.slice(0, 5000);
     console.error(
       `\n=== SEARCH ROUTE PARSE THREW — HTML SNIPPET (first 5000 chars) for "${target.label}" ===\n${snippet}\n===\n`
     );
+    if (error instanceof ParserBreakageError) {
+      error.message = `${error.message} ${CANARY_RUNBOOK_PARSER_BREAKAGE_HINT}`;
+    }
     throw error;
   }
 

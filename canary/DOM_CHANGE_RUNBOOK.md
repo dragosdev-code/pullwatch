@@ -13,6 +13,7 @@ When the canary test fails because GitHub changed their DOM, follow this runbook
 | Targets, headers, env diagnostics | [`canary/utils/config.ts`](utils/config.ts) — uses `GITHUB_BASE_URL` and shared [`extension/common/github-url-utils.ts`](../extension/common/github-url-utils.ts) (`toPullsSearchUrl`) |
 | Playwright login, session cache | [`canary/utils/github-session.ts`](utils/github-session.ts) |
 | Entry tests | [`canary/parser.canary.test.ts`](parser.canary.test.ts) |
+| Failure HTML snapshots (gitignored) | `canary/snapshots/` — written on parse throw from [`canary/utils/failure-snapshot.ts`](utils/failure-snapshot.ts) |
 
 ---
 

@@ -33,6 +33,7 @@ import {
   STATE_FILE_NEW,
   BROWSER_HEADERS,
 } from './utils/config';
+import { GitHubOutageError, RateLimitError } from '../extension/common/errors';
 import { parseAndAssert, parseSearchRouteAndAssert } from './utils/parse-orchestrator';
 import { observeNewExperienceSearchObservability } from './utils/dual-probe';
 import { checkAvatarCoverage } from './utils/assertions';
@@ -74,6 +75,14 @@ async function fetchWithRetry(
       );
       await sleep(delayMs);
       continue;
+    }
+    // Align with `GitHubService` / production retry classification for logs and `instanceof` checks.
+    if (resp.status === 429) {
+      const retryAfter = parseInt(resp.headers.get('retry-after') ?? '0', 10) || 0;
+      throw new RateLimitError(`canary fetch ${url}`, retryAfter);
+    }
+    if (resp.status >= 500 && resp.status < 600) {
+      throw new GitHubOutageError(`canary fetch ${url}`, resp.status);
     }
     return resp;
   }
