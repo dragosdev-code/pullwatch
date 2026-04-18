@@ -10,7 +10,7 @@ When the canary test fails because GitHub changed their DOM, follow this runbook
 | Chapter 2 JSON vs HTML dual-probe, `CANARY_*` markers | [`canary/utils/dual-probe.ts`](utils/dual-probe.ts), [`canary/utils/markers.ts`](utils/markers.ts) |
 | Shared production waterfall (JSON → new HTML → legacy) | [`extension/common/pulls-list-parser.ts`](../extension/common/pulls-list-parser.ts) — `parseSearchRouteAndAssert` delegates here |
 | GitHub Status API outage disambiguation | [`canary/utils/github-status.ts`](utils/github-status.ts) |
-| Targets, headers, env diagnostics | [`canary/utils/config.ts`](utils/config.ts) — uses `GITHUB_BASE_URL` and shared [`extension/common/github-url-utils.ts`](../extension/common/github-url-utils.ts) (`toPullsSearchUrl`) |
+| Targets, headers, env diagnostics | [`canary/utils/config.ts`](utils/config.ts) — `loadCanaryEnv()` / `canaryEnv` discriminated union, `GITHUB_BASE_URL`, shared [`extension/common/github-url-utils.ts`](../extension/common/github-url-utils.ts) (`toPullsSearchUrl`) |
 | Playwright login, session cache | [`canary/utils/github-session.ts`](utils/github-session.ts) |
 | Entry tests | [`canary/parser.canary.test.ts`](parser.canary.test.ts) |
 | Failure HTML snapshots (gitignored) | `canary/snapshots/` — written on parse throw from [`canary/utils/failure-snapshot.ts`](utils/failure-snapshot.ts) |
