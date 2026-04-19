@@ -67,28 +67,56 @@ export class AlarmService implements IAlarmService {
   }
 
   /**
+   * Compares the live Chrome alarm's repeat cadence to the interval implied by
+   * {@link resolveEffectiveFetchIntervalMs} (production constant or dev override in storage).
+   *
+   * WHY [not only `getAlarm` truthiness]: `setupFetchAlarm` runs on every wake; override state can
+   * change while the worker slept (e.g. persisted `STORAGE_KEY_ALARM_OVERRIDE`). Returning early
+   * whenever *an* alarm exists would leave PR fetches on a stale `periodInMinutes` until something
+   * else recreates the alarm.
+   */
+  private alarmRepeatCadenceMatchesInterval(
+    alarm: chrome.alarms.Alarm,
+    effectiveIntervalMs: number
+  ): boolean {
+    if (alarm.periodInMinutes == null || alarm.periodInMinutes <= 0) {
+      return false;
+    }
+    const alarmIntervalMs = alarm.periodInMinutes * 60 * 1000;
+    return Math.abs(alarmIntervalMs - effectiveIntervalMs) < 1;
+  }
+
+  /**
    * Sets up the fetch alarm for periodic PR fetching.
    */
   async setupFetchAlarm(): Promise<void> {
     try {
       this.debugService.log('[AlarmService] Setting up fetch alarm...');
 
+      const intervalMs = await this.getEffectiveFetchIntervalMs();
+      const periodInMinutes = this.intervalMsToAlarmMinutes(intervalMs);
+
       const existingAlarm = await this.getAlarm(EVENT_FETCH_PRS);
 
-      if (existingAlarm) {
-        this.debugService.log('[AlarmService] Fetch alarm already exists:', existingAlarm);
+      if (existingAlarm && this.alarmRepeatCadenceMatchesInterval(existingAlarm, intervalMs)) {
+        this.debugService.log('[AlarmService] Fetch alarm already matches effective cadence:', existingAlarm);
         return;
       }
 
-      const intervalMs = await this.getEffectiveFetchIntervalMs();
-      const periodInMinutes = this.intervalMsToAlarmMinutes(intervalMs);
+      if (existingAlarm) {
+        this.debugService.log(
+          '[AlarmService] Fetch alarm cadence out of sync with effective interval; recreating',
+          { periodInMinutes: existingAlarm.periodInMinutes, effectiveIntervalMs: intervalMs }
+        );
+        await this.clearAlarm(EVENT_FETCH_PRS);
+      }
 
       await this.createAlarm(EVENT_FETCH_PRS, {
         periodInMinutes,
       });
 
       this.debugService.log(
-        `[AlarmService] Fetch alarm created with period: ${periodInMinutes} minutes`
+        `[AlarmService] Fetch alarm ${existingAlarm ? 're' : ''}created with period: ${periodInMinutes} minutes`
       );
     } catch (error) {
       this.debugService.error('[AlarmService] Error setting up fetch alarm:', error);
@@ -292,10 +320,7 @@ export class AlarmService implements IAlarmService {
       const allAlarms = await this.getAllAlarms();
       const fetchAlarm = await this.getAlarm(EVENT_FETCH_PRS);
       const overrideState = await this.getOverrideState();
-      const currentIntervalMs =
-        overrideState.overridden && overrideState.intervalMs == null
-          ? undefined
-          : this.resolveEffectiveFetchIntervalMs(overrideState);
+      const currentIntervalMs = this.resolveEffectiveFetchIntervalMs(overrideState);
 
       const status = {
         totalAlarms: allAlarms.length,
