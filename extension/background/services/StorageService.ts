@@ -41,7 +41,6 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
     notificationsEnabled: false,
     sound: 'ping',
   },
-  fetchInterval: 60000, // 1 minute default
 };
 
 /**
@@ -110,7 +109,6 @@ export class StorageService implements IStorageService {
         ...DEFAULT_EXTENSION_SETTINGS.authored,
         ...settings.authored,
       },
-      fetchInterval: settings.fetchInterval ?? DEFAULT_EXTENSION_SETTINGS.fetchInterval,
     };
   }
 

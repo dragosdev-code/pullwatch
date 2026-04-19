@@ -134,8 +134,6 @@ export interface ExtensionSettings {
   merged: MergedSettings;
   /** Authored PR notification settings (reserved for future use) */
   authored: AuthoredSettings;
-  /** Fetch interval in milliseconds (applies to all PR types) */
-  fetchInterval: number;
 }
 
 // User-specific data (example)
