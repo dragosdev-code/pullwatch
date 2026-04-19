@@ -7,7 +7,7 @@ import {
   STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_ROUTE_HINT,
 } from '../../../common/constants';
-import { DEFAULT_EXTENSION_SETTINGS } from '../StorageService';
+import { DEFAULT_EXTENSION_SETTINGS } from '../../../common/extension-settings-defaults';
 
 type StoredPRData = { prs: PullRequest[]; timestamp: number } | null;
 

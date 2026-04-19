@@ -22,26 +22,10 @@ import {
 } from '../../common/constants';
 import { isTransientExtensionStorageError } from '../../common/errors';
 import { runWithTransientStorageRetry } from '../../common/transient-storage-retry';
-
-/**
- * Default settings matching the UI defaults from src/components/settings/types.ts
- */
-export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
-  assigned: {
-    notificationsEnabled: true,
-    notifyOnDrafts: false,
-    sound: 'ping',
-    showDraftsInList: true,
-  },
-  merged: {
-    notificationsEnabled: false,
-    sound: 'bell',
-  },
-  authored: {
-    notificationsEnabled: false,
-    sound: 'ping',
-  },
-};
+import {
+  DEFAULT_EXTENSION_SETTINGS,
+  ensureCompleteSettings,
+} from '../../common/extension-settings-defaults';
 
 /**
  * StorageService handles Chrome extension storage operations with validation and error handling.
@@ -94,26 +78,6 @@ export class StorageService implements IStorageService {
       this.logStorageException('[StorageService] Failed to initialize:', error);
       throw error;
     }
-  }
-
-  /**
-   * Ensures all required settings fields exist by merging with defaults
-   */
-  private ensureCompleteSettings(settings: ExtensionSettings): ExtensionSettings {
-    return {
-      assigned: {
-        ...DEFAULT_EXTENSION_SETTINGS.assigned,
-        ...settings.assigned,
-      },
-      merged: {
-        ...DEFAULT_EXTENSION_SETTINGS.merged,
-        ...settings.merged,
-      },
-      authored: {
-        ...DEFAULT_EXTENSION_SETTINGS.authored,
-        ...settings.authored,
-      },
-    };
   }
 
   // --- IStorageService Implementation ---
@@ -257,7 +221,7 @@ export class StorageService implements IStorageService {
   async getExtensionSettings(): Promise<ExtensionSettings> {
     try {
       const stored = await this.getSync<ExtensionSettings>(STORAGE_KEY_SETTINGS);
-      const result = this.ensureCompleteSettings(stored || DEFAULT_EXTENSION_SETTINGS);
+      const result = ensureCompleteSettings(stored);
       this.debugService.log('[StorageService] Retrieved settings:', result);
       return result;
     } catch (error) {
@@ -272,7 +236,7 @@ export class StorageService implements IStorageService {
   async setExtensionSettings(settings: Partial<ExtensionSettings>): Promise<void> {
     try {
       const currentSettings = await this.getExtensionSettings();
-      const updatedSettings = this.ensureCompleteSettings({
+      const updatedSettings = ensureCompleteSettings({
         ...currentSettings,
         ...settings,
       });

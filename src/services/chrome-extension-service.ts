@@ -13,11 +13,15 @@ import {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_MERGED_PRS,
+  STORAGE_KEY_SETTINGS,
 } from '../../extension/common/constants';
+import {
+  DEFAULT_EXTENSION_SETTINGS,
+  ensureCompleteSettings,
+} from '../../extension/common/extension-settings-defaults';
 import { runWithTransientStorageRetry } from '../../extension/common/transient-storage-retry';
 import {
   DEV_TEST_ACTION,
-  EVENT_SETTINGS_UPDATED,
   PR_DATA_ACTION,
   PREVIEW_SOUND_ACTION,
   SETTINGS_ACTION,
@@ -28,6 +32,7 @@ import {
  * Single entry point from the popup for Chrome extension APIs:
  * - **Background** — `sendMessage` for work that must run in the service worker.
  * - **Local storage** — direct `chrome.storage.local` reads for persisted PR lists; no message, no SW wake.
+ * - **Sync storage** — settings reads use `chrome.storage.sync` directly (same merge as `StorageService`); saves still go through the worker.
  */
 export class ChromeExtensionService {
   /**
@@ -43,6 +48,10 @@ export class ChromeExtensionService {
 
   private canReadLocalStorage(): boolean {
     return this.isExtensionContext() && typeof chrome.storage?.local?.get === 'function';
+  }
+
+  private canReadSyncStorage(): boolean {
+    return this.isExtensionContext() && typeof chrome.storage?.sync?.get === 'function';
   }
 
   private prsFromStoredEnvelope(value: unknown): PullRequest[] {
@@ -122,10 +131,25 @@ export class ChromeExtensionService {
   }
 
   /**
-   * Gets extension settings from Chrome storage (sync).
+   * Loads extension settings from `chrome.storage.sync` using the same merge as
+   * `StorageService.getExtensionSettings` in the background script (`ensureCompleteSettings`).
+   *
+   * WHY [no sendMessage]: Hydrating the popup should not wake the service worker; `getSettings` is
+   * on the hot path for every open.
    */
   async getSettings(): Promise<ExtensionSettings> {
-    return this.sendMessage<ExtensionSettings>(SETTINGS_ACTION.getSettings);
+    if (!this.canReadSyncStorage()) {
+      throw new Error('Extension sync storage not available');
+    }
+    try {
+      const result = await runWithTransientStorageRetry(() =>
+        chrome.storage.sync.get(STORAGE_KEY_SETTINGS)
+      );
+      const raw = result[STORAGE_KEY_SETTINGS] as ExtensionSettings | undefined;
+      return ensureCompleteSettings(raw);
+    } catch {
+      return DEFAULT_EXTENSION_SETTINGS;
+    }
   }
 
   /**
@@ -180,24 +204,31 @@ export class ChromeExtensionService {
   }
 
   /**
-   * Sets up a listener specifically for settings changes.
-   * This listens for updates from other contexts (background, other tabs).
+   * Subscribes to `chrome.storage.onChanged` for the settings key (sync area).
+   *
+   * WHY [storage vs runtime message]: Any writer that updates `chrome.storage.sync` — including
+   * this extension on save and cross-device sync — triggers the same path, without requiring the
+   * service worker to broadcast `settingsUpdated`.
    */
   onSettingsChange(callback: (settings: ExtensionSettings) => void): () => void {
     if (!this.isExtensionContext()) {
       return () => {};
     }
 
-    const messageListener = (message: RuntimeMessage) => {
-      if (message.action === EVENT_SETTINGS_UPDATED && 'data' in message && message.data) {
-        callback(message.data as ExtensionSettings);
-      }
+    const storageListener = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string
+    ) => {
+      if (areaName !== 'sync') return;
+      const change = changes[STORAGE_KEY_SETTINGS];
+      if (!change?.newValue) return;
+      callback(ensureCompleteSettings(change.newValue as ExtensionSettings));
     };
 
-    chrome.runtime.onMessage.addListener(messageListener);
+    chrome.storage.onChanged.addListener(storageListener);
 
     return () => {
-      chrome.runtime.onMessage.removeListener(messageListener);
+      chrome.storage.onChanged.removeListener(storageListener);
     };
   }
 
