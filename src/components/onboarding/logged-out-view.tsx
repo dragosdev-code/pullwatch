@@ -137,7 +137,7 @@ export const LoggedOutView = memo(function LoggedOutView({
             onClick={onRefresh}
             disabled={busy}
             aria-busy={busy}
-            className="group inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11.5px] font-medium transition-colors duration-200 hover:bg-white/[0.06] disabled:cursor-wait disabled:opacity-60"
+            className="group inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11.5px] font-medium transition-colors duration-200 hover:bg-white/6 disabled:cursor-wait disabled:opacity-60"
             style={{ color: ONBOARDING_TEXT_MUTED }}
           >
             <ArrowPathIcon

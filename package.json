@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "icons": "node scripts/generate-extension-icons.mjs",
-    "build": "tsc -b && vite build",
-    "build:analyze": "tsc -b && vite build --mode analyze && explorer dist/stats.html",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && vite build",
+    "build:analyze": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && vite build --mode analyze && explorer dist/stats.html",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "preview": "vite preview",
