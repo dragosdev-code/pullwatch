@@ -85,7 +85,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
   if (isLoading) {
     return (
       <div className="flex flex-col h-full">
-        <SettingsPageHeader onClose={onClose} />
+        <SettingsPageHeader onClose={onClose} linkBehavior={linkBehavior} />
         <div className="flex-1 flex items-center justify-center">
           <div className="flex items-center gap-2">
             <div className="animate-spin size-4 border-2 border-primary border-t-transparent rounded-full" />
@@ -99,7 +99,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
   return (
     <FormProvider {...methods}>
       <div className="flex flex-col h-full">
-        <SettingsPageHeader onClose={onClose}>
+        <SettingsPageHeader onClose={onClose} linkBehavior={linkBehavior}>
           <SavedIndicator visible={savedVisible} flashId={savedFlashId} />
         </SettingsPageHeader>
 

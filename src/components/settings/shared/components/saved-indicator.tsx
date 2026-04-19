@@ -89,7 +89,7 @@ export const SavedIndicator = ({ visible, flashId }: SavedIndicatorProps) => {
     show ? (
       <animated.div
         style={style}
-        className="flex items-center gap-1 ml-auto"
+        className="flex items-center gap-1"
         role="status"
         aria-live="polite"
       >
