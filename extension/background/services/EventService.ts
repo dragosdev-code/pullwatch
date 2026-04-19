@@ -14,14 +14,10 @@ import {
   SETTINGS_TEST_ERROR_CHROME_DENIED,
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
-  MIN_REFRESH_INTERVAL_MS,
-  STORAGE_KEY_LAST_MANUAL_REFRESH_AT,
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
 } from '../../common/constants';
-import {
-  GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE,
-  isGitHubWebSessionAuthError,
-} from '../../common/errors';
+import { isGitHubWebSessionAuthError } from '../../common/errors';
+import { ManualPrRefreshCoordinator } from './coordinators/ManualPrRefreshCoordinator';
 import {
   DEV_TEST_ACTION,
   EVENT_FETCH_PRS,
@@ -48,8 +44,6 @@ export class EventService implements IEventService {
   private debugService: IDebugService;
   private serviceContainer: ServiceContainer;
   private initialized = false;
-  /** Coalesces parallel manual refresh messages (assigned/merged/authored) into one alarm reset. */
-  private fetchAlarmPushBackInFlight: Promise<void> | null = null;
   /**
    * Count of overlapping PR fetch operations (manual messages run in parallel; alarm is one block).
    * WHY [UI flag]: a single boolean per handler would clear `pr_fetch_in_progress` while sibling fetches still run.
@@ -57,18 +51,21 @@ export class EventService implements IEventService {
    * see that method for the account-swap ordering contract with {@link PRService}.
    */
   private prUiFetchDepth = 0;
-  /**
-   * WHY [manual refresh only]: Parallel `fetch*` messages share one wave; set after `session.get` resolves
-   * so siblings re-check this flag and skip the time window (see `shouldThrottleManualRefresh`).
-   */
-  private manualRefreshWaveActive = false;
-  /** WHY [vs prUiFetchDepth]: Only manual `fetch*` handlers increment this — alarms must not clear `manualRefreshWaveActive`. */
-  private manualRefreshDepth = 0;
+  private readonly manualRefreshCoordinator: ManualPrRefreshCoordinator;
   private readonly dispatchTable: Map<RequestRuntimeAction, MessageHandler>;
 
   constructor(debugService: IDebugService, serviceContainer: ServiceContainer) {
     this.debugService = debugService;
     this.serviceContainer = serviceContainer;
+
+    this.manualRefreshCoordinator = new ManualPrRefreshCoordinator({
+      debugService,
+      serviceContainer,
+      withPrUiFetchIndicator: (fn) => this.withPrUiFetchIndicator(fn),
+      invalidateGitHubWebSessionAfterAuthFailure: () =>
+        this.invalidateGitHubWebSessionAfterAuthFailure(),
+      logCatchAsWarningIfAuth: (ctx, err) => this.logCatchAsWarningIfAuth(ctx, err),
+    });
 
     this.dispatchTable = new Map<RequestRuntimeAction, MessageHandler>([
       [PR_DATA_ACTION.fetchAssignedPRs, (m, r) => this.handleAssignedPRDataActions(m, r)],
@@ -309,53 +306,8 @@ export class EventService implements IEventService {
     message: RuntimeMessage,
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
-    try {
-      const prService = this.serviceContainer.getService('prService');
-
-      if (!this.isMessageAction(message, PR_DATA_ACTION.fetchAssignedPRs)) return;
-
-      if (await this.shouldThrottleManualRefresh()) {
-        this.debugService.log(
-          '[EventService] Manual refresh throttled — returning stored assigned PRs'
-        );
-        const storedPRs = await prService.getStoredAssignedPRs();
-        sendResponse({ success: true, data: storedPRs });
-        return;
-      }
-      this.manualRefreshDepth += 1;
-      try {
-        this.debugService.log(
-          '[EventService] Manual refresh - fetching fresh assigned PRs from GitHub'
-        );
-        await this.coalescedPushBackFetchAlarm();
-        const prs = await this.withPrUiFetchIndicator(async () =>
-          prService.fetchAndUpdateAssignedPRs(true)
-        );
-        this.debugService.log(
-          `[EventService] fetchAndUpdateAssignedPRs returned ${prs.length} PRs`
-        );
-
-        const response = { success: true, data: prs };
-        this.debugService.log(`[EventService] Sending response with fresh assigned PRs`);
-        sendResponse(response);
-      } finally {
-        this.manualRefreshDepth -= 1;
-        if (this.manualRefreshDepth === 0) {
-          this.manualRefreshWaveActive = false;
-        }
-      }
-    } catch (error) {
-      if (isGitHubWebSessionAuthError(error)) {
-        await this.invalidateGitHubWebSessionAfterAuthFailure();
-      }
-      this.logCatchAsWarningIfAuth('Error handling assigned PR data actions', error);
-      sendResponse({
-        success: false,
-        error: isGitHubWebSessionAuthError(error)
-          ? GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE
-          : 'Failed to handle assigned PR action',
-      });
-    }
+    if (!this.isMessageAction(message, PR_DATA_ACTION.fetchAssignedPRs)) return;
+    return this.manualRefreshCoordinator.run('assigned', sendResponse);
   }
 
   /**
@@ -365,48 +317,8 @@ export class EventService implements IEventService {
     message: RuntimeMessage,
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
-    try {
-      const prService = this.serviceContainer.getService('prService');
-
-      if (!this.isMessageAction(message, PR_DATA_ACTION.fetchMergedPRs)) return;
-
-      if (await this.shouldThrottleManualRefresh()) {
-        this.debugService.log(
-          '[EventService] Manual refresh throttled — returning stored merged PRs'
-        );
-        const storedPRs = await prService.getStoredMergedPRs();
-        sendResponse({ success: true, data: storedPRs });
-        return;
-      }
-      this.manualRefreshDepth += 1;
-      try {
-        this.debugService.log(
-          '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
-        );
-        await this.coalescedPushBackFetchAlarm();
-        const merged = await this.withPrUiFetchIndicator(async () =>
-          prService.updateMergedPRs(true)
-        );
-        this.debugService.log(`[EventService] updateMergedPRs returned ${merged.length} PRs`);
-        sendResponse({ success: true, data: merged });
-      } finally {
-        this.manualRefreshDepth -= 1;
-        if (this.manualRefreshDepth === 0) {
-          this.manualRefreshWaveActive = false;
-        }
-      }
-    } catch (error) {
-      if (isGitHubWebSessionAuthError(error)) {
-        await this.invalidateGitHubWebSessionAfterAuthFailure();
-      }
-      this.logCatchAsWarningIfAuth('Error handling merged PR data actions', error);
-      sendResponse({
-        success: false,
-        error: isGitHubWebSessionAuthError(error)
-          ? GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE
-          : 'Failed to handle merged PR action',
-      });
-    }
+    if (!this.isMessageAction(message, PR_DATA_ACTION.fetchMergedPRs)) return;
+    return this.manualRefreshCoordinator.run('merged', sendResponse);
   }
 
   /**
@@ -445,104 +357,22 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Ensures concurrent manual refresh handlers share one alarm reschedule (popup fires three messages).
-   */
-  private coalescedPushBackFetchAlarm(): Promise<void> {
-    if (this.fetchAlarmPushBackInFlight !== null) {
-      return this.fetchAlarmPushBackInFlight;
-    }
-    const alarmService = this.serviceContainer.getService('alarmService');
-    const pending = alarmService.rescheduleFetchAlarmFromNow().finally(() => {
-      this.fetchAlarmPushBackInFlight = null;
-    });
-    this.fetchAlarmPushBackInFlight = pending;
-    return pending;
-  }
-
-  /**
-   * Determines whether a manual refresh wave should be throttled.
-   *
-   * WHY [dual mechanism]: In-memory `manualRefreshWaveActive` coordinates parallel `fetch*` handlers in one
-   * SW activation; `chrome.storage.session` carries `last_manual_refresh_at` across service worker sleep.
-   *
-   * @returns `true` = throttled (caller returns stored PRs only); `false` = allowed (GitHub fetch).
-   */
-  private async shouldThrottleManualRefresh(): Promise<boolean> {
-    if (this.manualRefreshWaveActive) {
-      return false;
-    }
-
-    const result = await chrome.storage.session.get(STORAGE_KEY_LAST_MANUAL_REFRESH_AT);
-    const lastAt = (result[STORAGE_KEY_LAST_MANUAL_REFRESH_AT] as number | undefined) ?? 0;
-
-    // WHY [double-check-after-await]: Parallel handlers all await `get` together; the leader sets
-    // `manualRefreshWaveActive` before yielding — siblings must not time-check against a timestamp
-    // the leader just wrote, nor claim a second `session.set`.
-    if (this.manualRefreshWaveActive) {
-      return false;
-    }
-
-    if (Date.now() - lastAt < MIN_REFRESH_INTERVAL_MS) {
-      return true;
-    }
-
-    this.manualRefreshWaveActive = true;
-
-    chrome.storage.session.set({ [STORAGE_KEY_LAST_MANUAL_REFRESH_AT]: Date.now() }).catch((err) => {
-      this.debugService.error('[EventService] Failed to persist manual refresh timestamp:', err);
-    });
-
-    return false;
-  }
-
-  /**
    * Authored `fetch*` action — same contract as {@link handleAssignedPRDataActions}.
    */
   async handleAuthoredPRDataActions(
     message: RuntimeMessage,
     sendResponse: (response: MessageResponse) => void
   ): Promise<void> {
-    try {
-      const prService = this.serviceContainer.getService('prService');
+    if (!this.isMessageAction(message, PR_DATA_ACTION.fetchAuthoredPRs)) return;
+    return this.manualRefreshCoordinator.run('authored', sendResponse);
+  }
 
-      if (!this.isMessageAction(message, PR_DATA_ACTION.fetchAuthoredPRs)) return;
-
-      if (await this.shouldThrottleManualRefresh()) {
-        this.debugService.log(
-          '[EventService] Manual refresh throttled — returning stored authored PRs'
-        );
-        const storedPRs = await prService.getStoredAuthoredPRs();
-        sendResponse({ success: true, data: storedPRs });
-        return;
-      }
-      this.manualRefreshDepth += 1;
-      try {
-        this.debugService.log(
-          '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
-        );
-        await this.coalescedPushBackFetchAlarm();
-        const authored = await this.withPrUiFetchIndicator(async () =>
-          prService.updateAuthoredPRs(true)
-        );
-        sendResponse({ success: true, data: authored });
-      } finally {
-        this.manualRefreshDepth -= 1;
-        if (this.manualRefreshDepth === 0) {
-          this.manualRefreshWaveActive = false;
-        }
-      }
-    } catch (error) {
-      if (isGitHubWebSessionAuthError(error)) {
-        await this.invalidateGitHubWebSessionAfterAuthFailure();
-      }
-      this.logCatchAsWarningIfAuth('Error handling authored PR data actions', error);
-      sendResponse({
-        success: false,
-        error: isGitHubWebSessionAuthError(error)
-          ? GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE
-          : 'Failed to handle authored PR action',
-      });
-    }
+  /**
+   * Back-compat accessor for tests that probe wave state without reaching into the coordinator.
+   * Kept readable so existing suites (`manual-refresh-throttle.test.ts`) keep working unchanged.
+   */
+  get manualRefreshWaveActive(): boolean {
+    return this.manualRefreshCoordinator.manualRefreshWaveActive;
   }
 
   /**
