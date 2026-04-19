@@ -51,12 +51,17 @@ export class PRService implements IPRService {
   private rateLimitService: IRateLimitService;
   private healthStatusService: IHealthStatusService;
   private initialized = false;
-  private assignedFetchInProgress: Promise<PullRequest[]> | null = null;
-  private assignedFetchOpts: { forceRefresh: boolean; bypassCache: boolean } | null = null;
-  private mergedFetchInProgress: Promise<PullRequest[]> | null = null;
-  private mergedFetchOpts: { forceRefresh: boolean; bypassCache: boolean } | null = null;
-  private authoredFetchInProgress: Promise<PullRequest[]> | null = null;
-  private authoredFetchOpts: { forceRefresh: boolean; bypassCache: boolean } | null = null;
+  /**
+   * One entry per list (assigned / merged / authored) while its fetch is in flight.
+   *
+   * WHY [shared slot]: {@link withInflightDedup} uses this to dedupe concurrent callers for the
+   * same list and to decide whether to wait-and-retry when a later caller needs stricter flags
+   * (e.g. the alarm's `bypassCache: true` must not fold into a weaker popup fetch).
+   */
+  private inflightFetches = new Map<
+    'assigned' | 'merged' | 'authored',
+    { promise: Promise<PullRequest[]>; opts: { forceRefresh: boolean; bypassCache: boolean } }
+  >();
   private cycleBaselineLogin: string | null = null;
   private cycleBaselineLoaded = false;
   private clearedRouteHintForSwapKey: string | null = null;
@@ -190,31 +195,9 @@ export class PRService implements IPRService {
     forceRefresh = false,
     bypassCache = false
   ): Promise<PullRequest[]> {
-    while (true) {
-      if (this.assignedFetchInProgress && this.assignedFetchOpts) {
-        const o = this.assignedFetchOpts;
-        const needStricter = (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
-        if (!needStricter) {
-          this.debugService.log('[PRService] Assigned fetch already in progress, reusing');
-          return this.assignedFetchInProgress;
-        }
-        this.debugService.log(
-          '[PRService] Assigned fetch in progress with weaker flags; awaiting then retrying'
-        );
-        await this.assignedFetchInProgress;
-        continue;
-      }
-
-      this.assignedFetchOpts = { forceRefresh, bypassCache };
-      this.assignedFetchInProgress = this.doFetchAndUpdateAssignedPRs(
-        forceRefresh,
-        bypassCache
-      ).finally(() => {
-        this.assignedFetchInProgress = null;
-        this.assignedFetchOpts = null;
-      });
-      return this.assignedFetchInProgress;
-    }
+    return this.withInflightDedup('assigned', { forceRefresh, bypassCache }, 'Assigned', () =>
+      this.doFetchAndUpdateAssignedPRs(forceRefresh, bypassCache)
+    );
   }
 
   /** Missing GitHub cookie session is normal; do not log it as a service fault. */
@@ -254,6 +237,88 @@ export class PRService implements IPRService {
       return stored.prs;
     }
     return null;
+  }
+
+  /**
+   * Coalesces overlapping fetches for one list. If an earlier fetch is in flight with at least the
+   * flags the new caller asks for, reuse its promise. If the new caller needs **stricter** flags
+   * (e.g. alarm's `bypassCache: true` while the popup started with cache allowed), wait for the
+   * weaker run to finish and start a fresh one — never attach a cache-only result to a caller that
+   * must hit GitHub.
+   */
+  private async withInflightDedup(
+    slot: 'assigned' | 'merged' | 'authored',
+    opts: { forceRefresh: boolean; bypassCache: boolean },
+    logLabel: 'Assigned' | 'Merged' | 'Authored',
+    work: () => Promise<PullRequest[]>
+  ): Promise<PullRequest[]> {
+    while (true) {
+      const existing = this.inflightFetches.get(slot);
+      if (existing) {
+        const o = existing.opts;
+        const needStricter =
+          (opts.bypassCache && !o.bypassCache) || (opts.forceRefresh && !o.forceRefresh);
+        if (!needStricter) {
+          this.debugService.log(`[PRService] ${logLabel} fetch already in progress, reusing`);
+          return existing.promise;
+        }
+        this.debugService.log(
+          `[PRService] ${logLabel} fetch in progress with weaker flags; awaiting then retrying`
+        );
+        await existing.promise;
+        continue;
+      }
+
+      const promise = work().finally(() => {
+        this.inflightFetches.delete(slot);
+      });
+      this.inflightFetches.set(slot, { promise, opts });
+      return promise;
+    }
+  }
+
+  /**
+   * Centralizes the domain-error taxonomy shared by every list fetch: parser breakage and GitHub
+   * outage recover by returning the stale list and signaling health; rate-limit records the hit
+   * then re-throws; anything else logs and re-throws.
+   *
+   * WHY [badge only for assigned]: The toolbar badge reflects the user's pending review count,
+   * which lives in the assigned list. Merged and authored errors must NOT paint the error badge —
+   * an outage while fetching a secondary list would otherwise hide a healthy assigned count.
+   */
+  private async handleDomainFetchError(
+    error: unknown,
+    params: {
+      listKind: 'assigned' | 'merged' | 'authored';
+      oldPRs: PullRequest[];
+      updateBadgeOnError: boolean;
+      transportErrorLabel: string;
+    }
+  ): Promise<PullRequest[]> {
+    const { listKind, oldPRs, updateBadgeOnError, transportErrorLabel } = params;
+
+    if (error instanceof ParserBreakageError) {
+      this.debugService.warn(
+        `[PRService] ${error.message} — preserving ${oldPRs.length} stored ${listKind} PRs.`
+      );
+      if (updateBadgeOnError) await this.badgeService.setErrorBadge();
+      await this.healthStatusService.signalParserBreakage(error.message);
+      return oldPRs;
+    }
+    if (error instanceof GitHubOutageError) {
+      this.debugService.warn(
+        `[PRService] ${error.message} — preserving ${oldPRs.length} stored ${listKind} PRs.`
+      );
+      if (updateBadgeOnError) await this.badgeService.setErrorBadge();
+      await this.healthStatusService.signalGitHubOutage(error.message);
+      return oldPRs;
+    }
+    if (error instanceof RateLimitError) {
+      this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
+    }
+    this.logPrFetchFailure(transportErrorLabel, error);
+    if (updateBadgeOnError) await this.badgeService.setErrorBadge();
+    throw error;
   }
 
   private async doFetchAndUpdateAssignedPRs(
@@ -313,31 +378,14 @@ export class PRService implements IPRService {
       this.debugService.log(`[PRService] Successfully updated ${allPRs.length} PRs`);
       return allPRs;
     } catch (error) {
-      if (error instanceof ParserBreakageError) {
-        this.debugService.warn(
-          `[PRService] ${error.message} — preserving ${oldPRs.length} stored assigned PRs.`
-        );
-        await this.badgeService.setErrorBadge();
-        await this.healthStatusService.signalParserBreakage(error.message);
-        return oldPRs;
-      }
-      // A GitHub outage is not actionable by the user, so wiping their PR
-      // list adds confusion for no benefit. Return stale data and show a
-      // distinct banner; the next successful alarm tick refreshes automatically.
-      if (error instanceof GitHubOutageError) {
-        this.debugService.warn(
-          `[PRService] ${error.message} — preserving ${oldPRs.length} stored assigned PRs.`
-        );
-        await this.badgeService.setErrorBadge();
-        await this.healthStatusService.signalGitHubOutage(error.message);
-        return oldPRs;
-      }
-      if (error instanceof RateLimitError) {
-        this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
-      }
-      this.logPrFetchFailure('Error fetching and updating PRs', error);
-      await this.badgeService.setErrorBadge();
-      throw error;
+      // WHY [updateBadgeOnError: true]: Assigned owns the toolbar count; outage / parser / transport
+      // failures must paint the error badge so the icon matches the stale list we hand back.
+      return this.handleDomainFetchError(error, {
+        listKind: 'assigned',
+        oldPRs,
+        updateBadgeOnError: true,
+        transportErrorLabel: 'Error fetching and updating PRs',
+      });
     }
   }
 
@@ -530,30 +578,9 @@ export class PRService implements IPRService {
   }
 
   async updateAuthoredPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
-    while (true) {
-      if (this.authoredFetchInProgress && this.authoredFetchOpts) {
-        const o = this.authoredFetchOpts;
-        const needStricter = (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
-        if (!needStricter) {
-          this.debugService.log('[PRService] Authored fetch already in progress, reusing');
-          return this.authoredFetchInProgress;
-        }
-        this.debugService.log(
-          '[PRService] Authored fetch in progress with weaker flags; awaiting then retrying'
-        );
-        await this.authoredFetchInProgress;
-        continue;
-      }
-
-      this.authoredFetchOpts = { forceRefresh, bypassCache };
-      this.authoredFetchInProgress = this.doUpdateAuthoredPRs(forceRefresh, bypassCache).finally(
-        () => {
-          this.authoredFetchInProgress = null;
-          this.authoredFetchOpts = null;
-        }
-      );
-      return this.authoredFetchInProgress;
-    }
+    return this.withInflightDedup('authored', { forceRefresh, bypassCache }, 'Authored', () =>
+      this.doUpdateAuthoredPRs(forceRefresh, bypassCache)
+    );
   }
 
   private async doUpdateAuthoredPRs(
@@ -592,25 +619,14 @@ export class PRService implements IPRService {
       );
       return freshAuthoredPRs;
     } catch (error) {
-      if (error instanceof ParserBreakageError) {
-        this.debugService.warn(
-          `[PRService] ${error.message} — preserving ${oldPRs.length} stored authored PRs.`
-        );
-        await this.healthStatusService.signalParserBreakage(error.message);
-        return oldPRs;
-      }
-      if (error instanceof GitHubOutageError) {
-        this.debugService.warn(
-          `[PRService] ${error.message} — preserving ${oldPRs.length} stored authored PRs.`
-        );
-        await this.healthStatusService.signalGitHubOutage(error.message);
-        return oldPRs;
-      }
-      if (error instanceof RateLimitError) {
-        this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
-      }
-      this.logPrFetchFailure('Error updating authored PRs', error);
-      throw error;
+      // WHY [updateBadgeOnError: false]: Authored is a secondary list — its failures must not
+      // blow away a healthy assigned badge count.
+      return this.handleDomainFetchError(error, {
+        listKind: 'authored',
+        oldPRs,
+        updateBadgeOnError: false,
+        transportErrorLabel: 'Error updating authored PRs',
+      });
     }
   }
 
@@ -627,28 +643,9 @@ export class PRService implements IPRService {
    * @param bypassCache - Ignore TTL cache and always refetch (periodic alarm).
    */
   async updateMergedPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
-    while (true) {
-      if (this.mergedFetchInProgress && this.mergedFetchOpts) {
-        const o = this.mergedFetchOpts;
-        const needStricter = (bypassCache && !o.bypassCache) || (forceRefresh && !o.forceRefresh);
-        if (!needStricter) {
-          this.debugService.log('[PRService] Merged fetch already in progress, reusing');
-          return this.mergedFetchInProgress;
-        }
-        this.debugService.log(
-          '[PRService] Merged fetch in progress with weaker flags; awaiting then retrying'
-        );
-        await this.mergedFetchInProgress;
-        continue;
-      }
-
-      this.mergedFetchOpts = { forceRefresh, bypassCache };
-      this.mergedFetchInProgress = this.doUpdateMergedPRs(forceRefresh, bypassCache).finally(() => {
-        this.mergedFetchInProgress = null;
-        this.mergedFetchOpts = null;
-      });
-      return this.mergedFetchInProgress;
-    }
+    return this.withInflightDedup('merged', { forceRefresh, bypassCache }, 'Merged', () =>
+      this.doUpdateMergedPRs(forceRefresh, bypassCache)
+    );
   }
 
   private async doUpdateMergedPRs(
@@ -710,25 +707,14 @@ export class PRService implements IPRService {
       );
       return mergedPRsWithStatus;
     } catch (error) {
-      if (error instanceof ParserBreakageError) {
-        this.debugService.warn(
-          `[PRService] ${error.message} — preserving ${oldPRs.length} stored merged PRs.`
-        );
-        await this.healthStatusService.signalParserBreakage(error.message);
-        return oldPRs;
-      }
-      if (error instanceof GitHubOutageError) {
-        this.debugService.warn(
-          `[PRService] ${error.message} — preserving ${oldPRs.length} stored merged PRs.`
-        );
-        await this.healthStatusService.signalGitHubOutage(error.message);
-        return oldPRs;
-      }
-      if (error instanceof RateLimitError) {
-        this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
-      }
-      this.logPrFetchFailure('Error updating merged PRs', error);
-      throw error;
+      // WHY [updateBadgeOnError: false]: Merged is a secondary list — its failures must not
+      // blow away a healthy assigned badge count.
+      return this.handleDomainFetchError(error, {
+        listKind: 'merged',
+        oldPRs,
+        updateBadgeOnError: false,
+        transportErrorLabel: 'Error updating merged PRs',
+      });
     }
   }
 

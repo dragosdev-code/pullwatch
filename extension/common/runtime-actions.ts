@@ -6,11 +6,8 @@
 export const EVENT_FETCH_PRS = 'fetchPRs' as const;
 
 export const PR_DATA_ACTION = {
-  getAssignedPRs: 'getAssignedPRs',
   fetchAssignedPRs: 'fetchAssignedPRs',
-  getMergedPRs: 'getMergedPRs',
   fetchMergedPRs: 'fetchMergedPRs',
-  getAuthoredPRs: 'getAuthoredPRs',
   fetchAuthoredPRs: 'fetchAuthoredPRs',
 } as const;
 
@@ -48,9 +45,6 @@ export const DEV_TEST_ACTION = {
 } as const;
 
 export const BROADCAST_ACTION = {
-  assignedPrDataUpdated: 'assignedPrDataUpdated',
-  mergedPrDataUpdated: 'mergedPrDataUpdated',
-  authoredPrDataUpdated: 'authoredPrDataUpdated',
   settingsUpdated: 'settingsUpdated',
   parserBreakageDetected: 'parserBreakageDetected',
   parserBreakageCleared: 'parserBreakageCleared',

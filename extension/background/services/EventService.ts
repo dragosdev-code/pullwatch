@@ -71,11 +71,8 @@ export class EventService implements IEventService {
     this.serviceContainer = serviceContainer;
 
     this.dispatchTable = new Map<RequestRuntimeAction, MessageHandler>([
-      [PR_DATA_ACTION.getAssignedPRs, (m, r) => this.handleAssignedPRDataActions(m, r)],
       [PR_DATA_ACTION.fetchAssignedPRs, (m, r) => this.handleAssignedPRDataActions(m, r)],
-      [PR_DATA_ACTION.getMergedPRs, (m, r) => this.handleMergedPRDataActions(m, r)],
       [PR_DATA_ACTION.fetchMergedPRs, (m, r) => this.handleMergedPRDataActions(m, r)],
-      [PR_DATA_ACTION.getAuthoredPRs, (m, r) => this.handleAuthoredPRDataActions(m, r)],
       [PR_DATA_ACTION.fetchAuthoredPRs, (m, r) => this.handleAuthoredPRDataActions(m, r)],
       [SETTINGS_ACTION.saveSettings, (m, r) => this.handleSettingsActions(m, r)],
       [SETTINGS_ACTION.getSettings, (m, r) => this.handleSettingsActions(m, r)],
@@ -305,9 +302,8 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Assigned PR actions: `get*` returns the persisted snapshot only (for tools or callers that
-   * still message the background). The popup list UI reads `chrome.storage.local` directly so it
-   * does not wake the service worker. `fetch*` is user-initiated refresh: GitHub + storage + alarm pushback.
+   * Assigned `fetch*` action: user-initiated refresh — GitHub + storage + alarm pushback.
+   * The popup reads the persisted list from `chrome.storage.local` directly (no SW wake).
    */
   async handleAssignedPRDataActions(
     message: RuntimeMessage,
@@ -316,42 +312,36 @@ export class EventService implements IEventService {
     try {
       const prService = this.serviceContainer.getService('prService');
 
-      if (this.isMessageAction(message, PR_DATA_ACTION.getAssignedPRs)) {
-        const storedPRs = await prService.getStoredAssignedPRs();
-        this.debugService.log(
-          `[EventService] getAssignedPRs: returning ${storedPRs.length} stored assigned PRs`
-        );
-        sendResponse({ success: true, data: storedPRs });
-      } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchAssignedPRs)) {
-        if (await this.shouldThrottleManualRefresh()) {
-          this.debugService.log(
-            '[EventService] Manual refresh throttled — returning stored assigned PRs'
-          );
-          const storedPRs = await prService.getStoredAssignedPRs();
-          sendResponse({ success: true, data: storedPRs });
-          return;
-        }
-        this.manualRefreshDepth += 1;
-        try {
-          this.debugService.log(
-            '[EventService] Manual refresh - fetching fresh assigned PRs from GitHub'
-          );
-          await this.coalescedPushBackFetchAlarm();
-          const prs = await this.withPrUiFetchIndicator(async () =>
-            prService.fetchAndUpdateAssignedPRs(true)
-          );
-          this.debugService.log(
-            `[EventService] fetchAndUpdateAssignedPRs returned ${prs.length} PRs`
-          );
+      if (!this.isMessageAction(message, PR_DATA_ACTION.fetchAssignedPRs)) return;
 
-          const response = { success: true, data: prs };
-          this.debugService.log(`[EventService] Sending response with fresh assigned PRs`);
-          sendResponse(response);
-        } finally {
-          this.manualRefreshDepth -= 1;
-          if (this.manualRefreshDepth === 0) {
-            this.manualRefreshWaveActive = false;
-          }
+      if (await this.shouldThrottleManualRefresh()) {
+        this.debugService.log(
+          '[EventService] Manual refresh throttled — returning stored assigned PRs'
+        );
+        const storedPRs = await prService.getStoredAssignedPRs();
+        sendResponse({ success: true, data: storedPRs });
+        return;
+      }
+      this.manualRefreshDepth += 1;
+      try {
+        this.debugService.log(
+          '[EventService] Manual refresh - fetching fresh assigned PRs from GitHub'
+        );
+        await this.coalescedPushBackFetchAlarm();
+        const prs = await this.withPrUiFetchIndicator(async () =>
+          prService.fetchAndUpdateAssignedPRs(true)
+        );
+        this.debugService.log(
+          `[EventService] fetchAndUpdateAssignedPRs returned ${prs.length} PRs`
+        );
+
+        const response = { success: true, data: prs };
+        this.debugService.log(`[EventService] Sending response with fresh assigned PRs`);
+        sendResponse(response);
+      } finally {
+        this.manualRefreshDepth -= 1;
+        if (this.manualRefreshDepth === 0) {
+          this.manualRefreshWaveActive = false;
         }
       }
     } catch (error) {
@@ -369,8 +359,7 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Merged PR actions — same contract as {@link handleAssignedPRDataActions}: get is snapshot-only,
-   * fetch is manual GitHub refresh with alarm reschedule.
+   * Merged `fetch*` action — same contract as {@link handleAssignedPRDataActions}.
    */
   async handleMergedPRDataActions(
     message: RuntimeMessage,
@@ -379,37 +368,31 @@ export class EventService implements IEventService {
     try {
       const prService = this.serviceContainer.getService('prService');
 
-      if (this.isMessageAction(message, PR_DATA_ACTION.getMergedPRs)) {
-        const storedPRs = await prService.getStoredMergedPRs();
+      if (!this.isMessageAction(message, PR_DATA_ACTION.fetchMergedPRs)) return;
+
+      if (await this.shouldThrottleManualRefresh()) {
         this.debugService.log(
-          `[EventService] getMergedPRs: returning ${storedPRs.length} stored merged PRs`
+          '[EventService] Manual refresh throttled — returning stored merged PRs'
         );
+        const storedPRs = await prService.getStoredMergedPRs();
         sendResponse({ success: true, data: storedPRs });
-      } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchMergedPRs)) {
-        if (await this.shouldThrottleManualRefresh()) {
-          this.debugService.log(
-            '[EventService] Manual refresh throttled — returning stored merged PRs'
-          );
-          const storedPRs = await prService.getStoredMergedPRs();
-          sendResponse({ success: true, data: storedPRs });
-          return;
-        }
-        this.manualRefreshDepth += 1;
-        try {
-          this.debugService.log(
-            '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
-          );
-          await this.coalescedPushBackFetchAlarm();
-          const merged = await this.withPrUiFetchIndicator(async () =>
-            prService.updateMergedPRs(true)
-          );
-          this.debugService.log(`[EventService] updateMergedPRs returned ${merged.length} PRs`);
-          sendResponse({ success: true, data: merged });
-        } finally {
-          this.manualRefreshDepth -= 1;
-          if (this.manualRefreshDepth === 0) {
-            this.manualRefreshWaveActive = false;
-          }
+        return;
+      }
+      this.manualRefreshDepth += 1;
+      try {
+        this.debugService.log(
+          '[EventService] Manual refresh - fetching fresh merged PRs from GitHub'
+        );
+        await this.coalescedPushBackFetchAlarm();
+        const merged = await this.withPrUiFetchIndicator(async () =>
+          prService.updateMergedPRs(true)
+        );
+        this.debugService.log(`[EventService] updateMergedPRs returned ${merged.length} PRs`);
+        sendResponse({ success: true, data: merged });
+      } finally {
+        this.manualRefreshDepth -= 1;
+        if (this.manualRefreshDepth === 0) {
+          this.manualRefreshWaveActive = false;
         }
       }
     } catch (error) {
@@ -513,7 +496,7 @@ export class EventService implements IEventService {
   }
 
   /**
-   * Authored PR actions — same contract as {@link handleAssignedPRDataActions}.
+   * Authored `fetch*` action — same contract as {@link handleAssignedPRDataActions}.
    */
   async handleAuthoredPRDataActions(
     message: RuntimeMessage,
@@ -522,36 +505,30 @@ export class EventService implements IEventService {
     try {
       const prService = this.serviceContainer.getService('prService');
 
-      if (this.isMessageAction(message, PR_DATA_ACTION.getAuthoredPRs)) {
-        const storedPRs = await prService.getStoredAuthoredPRs();
+      if (!this.isMessageAction(message, PR_DATA_ACTION.fetchAuthoredPRs)) return;
+
+      if (await this.shouldThrottleManualRefresh()) {
         this.debugService.log(
-          `[EventService] getAuthoredPRs: returning ${storedPRs.length} stored authored PRs`
+          '[EventService] Manual refresh throttled — returning stored authored PRs'
         );
+        const storedPRs = await prService.getStoredAuthoredPRs();
         sendResponse({ success: true, data: storedPRs });
-      } else if (this.isMessageAction(message, PR_DATA_ACTION.fetchAuthoredPRs)) {
-        if (await this.shouldThrottleManualRefresh()) {
-          this.debugService.log(
-            '[EventService] Manual refresh throttled — returning stored authored PRs'
-          );
-          const storedPRs = await prService.getStoredAuthoredPRs();
-          sendResponse({ success: true, data: storedPRs });
-          return;
-        }
-        this.manualRefreshDepth += 1;
-        try {
-          this.debugService.log(
-            '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
-          );
-          await this.coalescedPushBackFetchAlarm();
-          const authored = await this.withPrUiFetchIndicator(async () =>
-            prService.updateAuthoredPRs(true)
-          );
-          sendResponse({ success: true, data: authored });
-        } finally {
-          this.manualRefreshDepth -= 1;
-          if (this.manualRefreshDepth === 0) {
-            this.manualRefreshWaveActive = false;
-          }
+        return;
+      }
+      this.manualRefreshDepth += 1;
+      try {
+        this.debugService.log(
+          '[EventService] Manual refresh - fetching fresh authored PRs from GitHub'
+        );
+        await this.coalescedPushBackFetchAlarm();
+        const authored = await this.withPrUiFetchIndicator(async () =>
+          prService.updateAuthoredPRs(true)
+        );
+        sendResponse({ success: true, data: authored });
+      } finally {
+        this.manualRefreshDepth -= 1;
+        if (this.manualRefreshDepth === 0) {
+          this.manualRefreshWaveActive = false;
         }
       }
     } catch (error) {
