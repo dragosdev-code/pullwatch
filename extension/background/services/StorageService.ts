@@ -46,7 +46,11 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
 /**
  * StorageService handles Chrome extension storage operations with validation and error handling.
  * Provides a clean abstraction over Chrome storage APIs with type safety.
- * Uses chrome.storage.sync for settings (cross-device) and chrome.storage.local for PRs (device-specific).
+ *
+ * WHY [sync vs local]: `chrome.storage.sync` holds user settings (cross-device); `chrome.storage.local`
+ * holds PR lists, alarm overrides, rate-limit blobs, and other device-local data. The popup reads PR
+ * lists from **local** without messaging the service worker (`src/services/chrome-extension-service.ts`);
+ * the background is the primary writer for those keys through this service.
  */
 export class StorageService implements IStorageService {
   private debugService: IDebugService;
@@ -443,11 +447,25 @@ export class StorageService implements IStorageService {
   async remove(key: string): Promise<void> {
     try {
       await runWithTransientStorageRetry(() => this.localStorage.remove([key]));
+      // WHY [fingerprint]: Same invariant as {@link clearGitHubWebSessionCaches} — a PR-list key
+      // removed outside `setStoredPRs` must not leave a stale fingerprint or the next write of
+      // identical payloads would no-op while disk is empty (tests/debug helpers can call `remove` alone).
+      if (this.isPrListStorageKey(key)) {
+        this.lastWrittenFingerprint.delete(key);
+      }
       this.debugService.log(`[StorageService] Removed local key '${key}'`);
     } catch (error) {
       this.logStorageException(`[StorageService] Error removing local key '${key}':`, error);
       throw error;
     }
+  }
+
+  private isPrListStorageKey(key: string): boolean {
+    return (
+      key === STORAGE_KEY_ASSIGNED_PRS ||
+      key === STORAGE_KEY_MERGED_PRS ||
+      key === STORAGE_KEY_AUTHORED_PRS
+    );
   }
 
   /**
