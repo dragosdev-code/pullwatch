@@ -7,7 +7,7 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 const CLOSE_SPIN_RESET_MS = 1000;
 
 const BUTTON_CLASS =
-  'group p-1.5 rounded-lg shrink-0 cursor-pointer outline-none text-base-content/50 hover:text-primary hover:bg-base-300 transition-[color,background-color] duration-200 ease-out focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-base-100 motion-reduce:transition-none';
+  'group p-1.5 rounded-full shrink-0 cursor-pointer outline-none text-base-content/50 hover:text-primary hover:bg-base-300 transition-[color,background-color] duration-200 ease-out focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-base-100 motion-reduce:transition-none';
 
 export const usePostCloseSpinSuppress = (durationMs: number) => {
   const [iconKey, setIconKey] = useState(0);

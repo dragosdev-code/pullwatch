@@ -103,7 +103,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
           <SavedIndicator visible={savedVisible} flashId={savedFlashId} />
         </SettingsPageHeader>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 flex flex-col gap-5">
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-5 pb-4 pt-3 flex flex-col gap-5">
           <SettingsSection title="To Review PRs">
             <NotificationEnableRow
               name="assigned.notificationsEnabled"
