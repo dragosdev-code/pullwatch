@@ -37,6 +37,20 @@ type MessageHandler = (
 ) => Promise<void> | void;
 
 /**
+ * WHY [grouped registration]: Several runtime action strings share one handler; looping keeps the
+ * dispatch map typo-resistant and makes that sharing obvious when adding a new action.
+ */
+function registerDispatchGroup(
+  map: Map<RequestRuntimeAction, MessageHandler>,
+  handler: MessageHandler,
+  ...actions: RequestRuntimeAction[]
+): void {
+  for (const action of actions) {
+    map.set(action, handler);
+  }
+}
+
+/**
  * EventService coordinates Chrome extension events and handles message routing.
  * Central hub for all extension events, messages, and service coordination.
  */
@@ -67,26 +81,58 @@ export class EventService implements IEventService {
       logCatchAsWarningIfAuth: (ctx, err) => this.logCatchAsWarningIfAuth(ctx, err),
     });
 
-    this.dispatchTable = new Map<RequestRuntimeAction, MessageHandler>([
-      [PR_DATA_ACTION.fetchAssignedPRs, (m, r) => this.handleAssignedPRDataActions(m, r)],
-      [PR_DATA_ACTION.fetchMergedPRs, (m, r) => this.handleMergedPRDataActions(m, r)],
-      [PR_DATA_ACTION.fetchAuthoredPRs, (m, r) => this.handleAuthoredPRDataActions(m, r)],
-      [SETTINGS_ACTION.saveSettings, (m, r) => this.handleSettingsActions(m, r)],
-      [SETTINGS_ACTION.getSettings, (m, r) => this.handleSettingsActions(m, r)],
-      [SETTINGS_ACTION.testSettingsNotification, (m, r) => this.handleSettingsActions(m, r)],
-      [EVENT_PLAY_SOUND, (m, r) => this.handleOffscreenActions(m, r)],
-      [EVENT_OFFSCREEN_READY, (m, r) => this.handleOffscreenActions(m, r)],
-      [PREVIEW_SOUND_ACTION.previewSound, (m, r) => this.handlePreviewSoundAction(m, r)],
-      [PREVIEW_SOUND_ACTION.stopPreviewSound, (m, r) => this.handleStopPreviewSoundAction(m, r)],
-      [DEV_TEST_ACTION.fireNotification, (m, r) => this.handleDevTestActions(m, r)],
-      [DEV_TEST_ACTION.startLoop, (m, r) => this.handleDevTestActions(m, r)],
-      [DEV_TEST_ACTION.stopLoop, (m, r) => this.handleDevTestActions(m, r)],
-      [DEV_TEST_ACTION.getLooperState, (m, r) => this.handleDevTestActions(m, r)],
-      [DEV_TEST_ACTION.overrideAlarm, (m, r) => this.handleDevTestActions(m, r)],
-      [DEV_TEST_ACTION.restoreAlarm, (m, r) => this.handleDevTestActions(m, r)],
-      [DEV_TEST_ACTION.getAlarmState, (m, r) => this.handleDevTestActions(m, r)],
-      [DEV_TEST_ACTION.getScraperUrls, (m, r) => this.handleDevTestActions(m, r)],
-    ]);
+    const dispatchTable = new Map<RequestRuntimeAction, MessageHandler>();
+    registerDispatchGroup(
+      dispatchTable,
+      (m, r) => this.handleAssignedPRDataActions(m, r),
+      PR_DATA_ACTION.fetchAssignedPRs
+    );
+    registerDispatchGroup(
+      dispatchTable,
+      (m, r) => this.handleMergedPRDataActions(m, r),
+      PR_DATA_ACTION.fetchMergedPRs
+    );
+    registerDispatchGroup(
+      dispatchTable,
+      (m, r) => this.handleAuthoredPRDataActions(m, r),
+      PR_DATA_ACTION.fetchAuthoredPRs
+    );
+    registerDispatchGroup(
+      dispatchTable,
+      (m, r) => this.handleSettingsActions(m, r),
+      SETTINGS_ACTION.saveSettings,
+      SETTINGS_ACTION.getSettings,
+      SETTINGS_ACTION.testSettingsNotification
+    );
+    registerDispatchGroup(
+      dispatchTable,
+      (m, r) => this.handleOffscreenActions(m, r),
+      EVENT_PLAY_SOUND,
+      EVENT_OFFSCREEN_READY
+    );
+    registerDispatchGroup(
+      dispatchTable,
+      (m, r) => this.handlePreviewSoundAction(m, r),
+      PREVIEW_SOUND_ACTION.previewSound
+    );
+    registerDispatchGroup(
+      dispatchTable,
+      (m, r) => this.handleStopPreviewSoundAction(m, r),
+      PREVIEW_SOUND_ACTION.stopPreviewSound
+    );
+    registerDispatchGroup(
+      dispatchTable,
+      (m, r) => this.handleDevTestActions(m, r),
+      DEV_TEST_ACTION.fireNotification,
+      DEV_TEST_ACTION.startLoop,
+      DEV_TEST_ACTION.stopLoop,
+      DEV_TEST_ACTION.getLooperState,
+      DEV_TEST_ACTION.overrideAlarm,
+      DEV_TEST_ACTION.restoreAlarm,
+      DEV_TEST_ACTION.getAlarmState,
+      DEV_TEST_ACTION.getScraperUrls
+    );
+    this.dispatchTable = dispatchTable;
   }
 
   /**
