@@ -97,7 +97,14 @@ export class RateLimitService implements IRateLimitService {
   }
 
   getState(): RateLimitState {
-    return { ...this.state };
+    const snapshot = { ...this.state };
+    // WHY [derive isLimited for observers]: Internal `isLimited` stays true until recordSuccess()
+    // so `shouldSkipFetch` and persistence share one object; callers of getState() need the same
+    // notion of "in backoff" as shouldSkipFetch — false once `retryAfterTimestamp` has passed, even
+    // before a successful fetch clears the stored counters.
+    snapshot.isLimited =
+      snapshot.retryAfterTimestamp !== null && Date.now() < snapshot.retryAfterTimestamp;
+    return snapshot;
   }
 
   async dispose(): Promise<void> {

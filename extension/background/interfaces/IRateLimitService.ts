@@ -29,7 +29,8 @@ export interface IRateLimitService extends IService {
   shouldSkipFetch(): boolean;
 
   /**
-   * Returns the current rate limit state for debugging.
+   * Snapshot for debugging / UI. `isLimited` reflects whether backoff is **currently active**
+   * (`now < retryAfterTimestamp`), not only the internal flag cleared on {@link recordSuccess}.
    */
   getState(): RateLimitState;
 }
