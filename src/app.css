@@ -47,11 +47,37 @@
   background-color: #5b616b;
 }
 
+/* Chrome extension popups often give `html`/`body` an indefinite width; `%` and
+   `fit-content` on `#root` then collapse. Pin the shell to match `OnboardingGate`
+   (`h-[400px] w-[380px]`). */
+html,
+body {
+  margin: 0;
+  width: 100%;
+  min-width: 380px;
+  min-height: 400px;
+  box-sizing: border-box;
+}
+
 /* Chromium (extension popup): opacity/width animations on one control can retarget subpixel
    smoothing for unrelated text; grayscale AA on the whole UI stays visually stable. */
 #root {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 400px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#pw-app-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
 }
 
 :where(
@@ -85,6 +111,82 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* —— Theme ripple ——
+   A cloned, pointer-events:none mirror of #pw-app-root tagged with the pre-swap
+   data-theme sits on top; its clip-path shrinks from a full-coverage circle at
+   the click origin to 0, unveiling the live (new-theme, interactive) tree
+   underneath. No View Transitions, no top layer, no hit-testing compromise.
+   Orchestrated from src/lib/theme-ripple.ts. */
+
+@property --pw-ripple-x {
+  syntax: '<length>';
+  initial-value: 0px;
+  inherits: true;
+}
+@property --pw-ripple-y {
+  syntax: '<length>';
+  initial-value: 0px;
+  inherits: true;
+}
+/* Animated by pw-ripple-reveal; drives the radius of the transparent disc
+   growing in the mirror's radial-gradient mask. @property registration is
+   required — without it, CSS interpolates `<length>` as a raw string and the
+   mask doesn't re-rasterize per frame. */
+@property --pw-ripple-r {
+  syntax: '<length>';
+  initial-value: 0px;
+  inherits: true;
+}
+
+@keyframes pw-ripple-reveal {
+  from {
+    --pw-ripple-r: 0px;
+  }
+  to {
+    --pw-ripple-r: var(--pw-ripple-max, 0px);
+  }
+}
+
+.pw-theme-mirror {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--color-base-100);
+  contain: layout paint;
+  /* The mask is opaque everywhere (showing the old-theme clone) except inside
+     a transparent disc at the click origin; the disc's radius animates 0 →
+     --pw-ripple-max so the live, new-theme tree underneath is revealed outward
+     from the clicked element. 1px feather keeps the edge anti-aliased. */
+  -webkit-mask: radial-gradient(
+    circle at var(--pw-ripple-x) var(--pw-ripple-y),
+    transparent calc(var(--pw-ripple-r) - 1px),
+    black var(--pw-ripple-r)
+  );
+  mask: radial-gradient(
+    circle at var(--pw-ripple-x) var(--pw-ripple-y),
+    transparent calc(var(--pw-ripple-r) - 1px),
+    black var(--pw-ripple-r)
+  );
+  animation: 620ms cubic-bezier(0.16, 1.11, 0.3, 1) both pw-ripple-reveal;
+}
+
+/* The clone drops its `#pw-app-root` id; this class restores the layout rules
+   it depended on so the mirror paints identically to the live tree. */
+.pw-theme-mirror-clone {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-theme-mirror {
+    display: none;
   }
 }
 

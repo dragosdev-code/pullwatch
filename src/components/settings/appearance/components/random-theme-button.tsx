@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSpring, animated, to } from '@react-spring/web';
 import { DiceIcon } from '../../../ui/icons';
 
 interface RandomThemeButtonProps {
   themes: readonly string[];
   currentTheme: string;
-  onRandomize: (theme: string) => void;
+  onRandomize: (theme: string, origin?: { x: number; y: number }) => void;
   onScrollToTheme?: (theme: string, smooth?: boolean) => void;
+  onAnimatingChange?: (animating: boolean) => void;
 }
 
 export const RandomThemeButton = ({
@@ -14,13 +15,19 @@ export const RandomThemeButton = ({
   currentTheme,
   onRandomize,
   onScrollToTheme,
+  onAnimatingChange,
 }: RandomThemeButtonProps) => {
   const [animating, setAnimating] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const [springs, api] = useSpring(() => ({
     rotate: 0,
     scale: 1,
   }));
+
+  useEffect(() => {
+    onAnimatingChange?.(animating);
+  }, [animating, onAnimatingChange]);
 
   const handleRandomize = () => {
     if (animating) return;
@@ -44,7 +51,12 @@ export const RandomThemeButton = ({
         });
       },
       onRest: () => {
-        onRandomize(pick);
+        // Resolve the button's rect at commit time — popup can resize mid-spin.
+        const rect = buttonRef.current?.getBoundingClientRect();
+        const origin = rect
+          ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+          : undefined;
+        onRandomize(pick, origin);
         setAnimating(false);
         api.set({ rotate: 0, scale: 1 });
         onScrollToTheme?.(pick, true);
@@ -54,6 +66,7 @@ export const RandomThemeButton = ({
 
   return (
     <button
+      ref={buttonRef}
       type="button"
       onClick={handleRandomize}
       title="Random theme"

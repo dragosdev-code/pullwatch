@@ -28,10 +28,12 @@ void (async () => {
   await hydratePrQueriesFromStorage(queryClient);
 
   createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </StrictMode>
+    <div id="pw-app-root">
+      <StrictMode>
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </StrictMode>
+    </div>
   );
 })();
