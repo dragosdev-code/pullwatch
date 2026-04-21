@@ -14,6 +14,7 @@ import {
   SETTINGS_TEST_ERROR_CHROME_DENIED,
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
+  STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE,
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
 } from '../../common/constants';
 import { isGitHubWebSessionAuthError } from '../../common/errors';
@@ -192,25 +193,48 @@ export class EventService implements IEventService {
       const alarmService = this.serviceContainer.getService('alarmService');
       const prService = this.serviceContainer.getService('prService');
       const badgeService = this.serviceContainer.getService('badgeService');
+      const storageService = this.serviceContainer.getService('storageService');
 
       await permissionService.checkAllPermissions();
       await alarmService.setupFetchAlarm();
 
       if (details.reason === 'install') {
         this.debugService.log('[EventService] First install detected');
-        await badgeService.setLoadingBadge();
-      } else if (details.reason === 'update') {
-        this.debugService.log('[EventService] Extension updated');
+        // WHY [try/finally wrap]: The popup renders a "checking GitHub session" phase gated on
+        // STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE. It must settle to `true` even if the install
+        // fetch throws — otherwise the popup would hang on the loader until the 12s client-side
+        // safety timeout. The flag-set itself is wrapped in inner try/catch so a storage failure
+        // never masks the original fetch error propagating to the outer handler.
+        try {
+          await storageService.remove(STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE);
+          await badgeService.setLoadingBadge();
+          await this.withPrUiFetchIndicator(async () => {
+            await prService.fetchAndUpdateAssignedPRs(true, true);
+            await prService.updateMergedPRs(true, true);
+            await prService.updateAuthoredPRs(true, true);
+          });
+        } finally {
+          try {
+            await storageService.set(STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE, true);
+          } catch (flagErr) {
+            this.debugService.error(
+              '[EventService] Failed to persist install-check flag:',
+              flagErr
+            );
+          }
+        }
+      } else {
+        if (details.reason === 'update') {
+          this.debugService.log('[EventService] Extension updated');
+        }
+        // WHY [forceRefresh only on install]: `false` here matches the periodic alarm so version
+        // bumps behave as a plain refresh; install-time forceRefresh lives in the branch above.
+        await this.withPrUiFetchIndicator(async () => {
+          await prService.fetchAndUpdateAssignedPRs(false, true);
+          await prService.updateMergedPRs(false, true);
+          await prService.updateAuthoredPRs(false, true);
+        });
       }
-
-      // WHY [forceRefresh only on install]: `true` suppresses “new PR” side effects on first-ever
-      // hydration; `update` uses `false` like the periodic alarm so version bumps behave as a refresh.
-      const forceRefresh = details.reason === 'install';
-      await this.withPrUiFetchIndicator(async () => {
-        await prService.fetchAndUpdateAssignedPRs(forceRefresh, true);
-        await prService.updateMergedPRs(forceRefresh, true);
-        await prService.updateAuthoredPRs(forceRefresh, true);
-      });
     } catch (error) {
       this.logCatchAsWarningIfAuth('Error handling installation', error);
     }

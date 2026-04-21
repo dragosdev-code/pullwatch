@@ -2,11 +2,12 @@ import { useEffect, useId, useRef } from 'react';
 import FocusLock from 'react-focus-lock';
 import { animated, to, useTransition } from '@react-spring/web';
 import type { OnboardingRefreshState } from '../../hooks/use-onboarding';
+import { CheckingView } from './checking-view';
 import { LoggedOutView } from './logged-out-view';
 import { OnboardingReveal } from './onboarding-reveal';
 import { ONBOARDING_IRIDESCENT_ROOT_STYLE } from './onboarding-iridescent-styles';
 
-export type OnboardingPhase = 'loggedOut' | 'reveal';
+export type OnboardingPhase = 'checking' | 'loggedOut' | 'reveal';
 
 export type OnboardingOverlayProps = {
   phase: OnboardingPhase;
@@ -46,8 +47,13 @@ export function OnboardingOverlay({
   const titleId = useId();
   const shellRef = useRef<HTMLDivElement>(null);
   const prevPhaseRef = useRef<OnboardingPhase | null>(null);
+  // WHY [checking counts as prior screen]: a checking → reveal handoff should feel like one
+  // continuous moment (not a second grand entrance), matching the loggedOut → reveal behavior.
   const revealEntranceStyle: 'full' | 'subtle' =
-    prevPhaseRef.current === 'loggedOut' && phase === 'reveal' ? 'subtle' : 'full';
+    (prevPhaseRef.current === 'loggedOut' || prevPhaseRef.current === 'checking') &&
+    phase === 'reveal'
+      ? 'subtle'
+      : 'full';
 
   useEffect(() => {
     prevPhaseRef.current = phase;
@@ -88,7 +94,12 @@ export function OnboardingOverlay({
                 willChange: 'opacity, transform',
               }}
             >
-              {p === 'loggedOut' ? (
+              {p === 'checking' ? (
+                <CheckingView
+                  prefersReducedMotion={prefersReducedMotion}
+                  titleId={isActive ? titleId : undefined}
+                />
+              ) : p === 'loggedOut' ? (
                 <LoggedOutView
                   refreshState={refreshState}
                   refreshErrorMessage={refreshErrorMessage}

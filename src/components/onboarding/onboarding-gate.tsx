@@ -20,6 +20,7 @@ export function OnboardingGate({ children }: OnboardingGateProps) {
   const {
     mainAppInert,
     storageReady,
+    showCheckingLayer,
     showLoggedOutLayer,
     showFirstRunReveal,
     refreshState,
@@ -30,11 +31,13 @@ export function OnboardingGate({ children }: OnboardingGateProps) {
     markRevealComplete,
   } = useOnboarding();
 
-  const phase: OnboardingPhase | null = showLoggedOutLayer
-    ? 'loggedOut'
-    : showFirstRunReveal
-      ? 'reveal'
-      : null;
+  const phase: OnboardingPhase | null = showCheckingLayer
+    ? 'checking'
+    : showLoggedOutLayer
+      ? 'loggedOut'
+      : showFirstRunReveal
+        ? 'reveal'
+        : null;
 
   return (
     <div className="relative h-[400px] w-[380px] overflow-hidden">

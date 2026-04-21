@@ -22,6 +22,13 @@ export const STORAGE_KEY_HAS_SEEN_ONBOARDING = 'has_seen_onboarding';
  * again after the next successful login, even if `has_seen_onboarding` is already true.
  */
 export const STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING = 'onboarding_reauth_gate_pending';
+/**
+ * Set `true` once the install-time GitHub session probe settles (success *or* auth fail).
+ * Distinct from {@link STORAGE_KEY_PR_FETCH_IN_PROGRESS}, which also flips during alarm/manual
+ * fetches; this one exists solely so the popup can distinguish "still checking on first install"
+ * from "checked, genuinely logged out" and render a dedicated checking phase vs LoggedOutView.
+ */
+export const STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE = 'install_session_check_complete';
 
 // Remote Pattern Registry
 // Production config — raw file on the main branch, served directly by GitHub.

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_HAS_SEEN_ONBOARDING,
+  STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE,
   STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
 } from '../../extension/common/constants';
 import type { GitHubViewerIdentity } from '../../extension/common/types';
@@ -21,10 +22,18 @@ function isAuthLikeErrorMessage(message: string): boolean {
 
 /** Shown after refresh when GitHub has no browser session Pullwatch can use (not a transport/parser failure). */
 const REFRESH_NO_GITHUB_SESSION_INFO =
-  'Pullwatch still does not detect a signed-in GitHub session in this browser. Finish signing in on github.com, then tap Refresh status again.';
+  'Pullwatch still does not detect a signed-in GitHub session in this browser. Finish logging in on github.com, then tap Refresh status again.';
 
 /** Keeps the refresh control in a loading state long enough for motion design (skipped when reduced motion). */
 const REFRESH_MIN_UI_MS = 850;
+
+/**
+ * Upper bound on the install-time "checking GitHub session" phase before we fall through to
+ * {@link LoggedOutView}. Covers SW dead / offline / background fetch hung — 12s is a balance
+ * between "long enough that a slow network still resolves here" and "short enough that a truly
+ * dead SW doesn't strand the popup on a loader indefinitely".
+ */
+const INSTALL_CHECK_MAX_MS = 12_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -86,6 +95,15 @@ export function useOnboarding() {
   const [refreshErrorMessage, setRefreshErrorMessage] = useState<string | null>(null);
   const [refreshInfoMessage, setRefreshInfoMessage] = useState<string | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  /** SW writes `true` once the install-time session probe settles (success or auth fail). */
+  const [installCheckComplete, setInstallCheckComplete] = useState(false);
+  /**
+   * WHY [sticky, never reset]: Once the 12s install-check timeout fires and we hand off to
+   * LoggedOutView, a late identity write must not yank the user back into the checking loader
+   * mid-click. `isLoggedIn` flipping to `true` still lets the normal logged-out → reveal
+   * crossfade happen — we only block the loggedOut → checking regression.
+   */
+  const [checkTimedOut, setCheckTimedOut] = useState(false);
 
   const markRevealComplete = useCallback(() => {
     // WHY [optimistic state]: Set React state immediately so the overlay unmounts even if
@@ -138,6 +156,7 @@ export function useOnboarding() {
             STORAGE_KEY_HAS_SEEN_ONBOARDING,
             STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
             STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
+            STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE,
           ])
         );
         if (cancelled) return;
@@ -148,6 +167,7 @@ export function useOnboarding() {
         }
         setHasSeenOnboarding(!!result[STORAGE_KEY_HAS_SEEN_ONBOARDING]);
         setReauthGatePending(!!result[STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING]);
+        setInstallCheckComplete(!!result[STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE]);
         setViewerLogin(readViewerLogin(result));
       } catch {
         if (!cancelled) {
@@ -170,7 +190,8 @@ export function useOnboarding() {
       const onboardingStorageTouched =
         STORAGE_KEY_HAS_SEEN_ONBOARDING in changes ||
         STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING in changes ||
-        STORAGE_KEY_GITHUB_VIEWER_IDENTITY in changes;
+        STORAGE_KEY_GITHUB_VIEWER_IDENTITY in changes ||
+        STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE in changes;
       if (onboardingStorageTouched) {
         storageGeneration += 1;
       }
@@ -180,6 +201,11 @@ export function useOnboarding() {
       }
       if (STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING in changes) {
         setReauthGatePending(!!changes[STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING].newValue);
+      }
+      if (STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE in changes) {
+        setInstallCheckComplete(
+          !!changes[STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE].newValue
+        );
       }
       if (STORAGE_KEY_GITHUB_VIEWER_IDENTITY in changes) {
         const next = changes[STORAGE_KEY_GITHUB_VIEWER_IDENTITY].newValue;
@@ -265,8 +291,28 @@ export function useOnboarding() {
 
   /** Logged-out + first-run overlays require the real extension (storage + background); plain Vite has neither. */
   const onboardingOverlaysActive = isExtensionContext();
+  /**
+   * True only on a truly fresh install while the SW's `handleInstallation` fetch is still running.
+   * Excludes reauth-gate returners (they already know they're out) and post-timeout fallthrough.
+   */
+  const initialCheckInProgress =
+    !checkTimedOut &&
+    storageReady &&
+    !isLoggedIn &&
+    !hasSeenOnboarding &&
+    !reauthGatePending &&
+    !installCheckComplete &&
+    onboardingOverlaysActive;
+
+  useEffect(() => {
+    if (!initialCheckInProgress) return;
+    const id = window.setTimeout(() => setCheckTimedOut(true), INSTALL_CHECK_MAX_MS);
+    return () => window.clearTimeout(id);
+  }, [initialCheckInProgress]);
+
+  const showCheckingLayer = initialCheckInProgress;
   const showLoggedOutLayer =
-    storageReady && !isLoggedIn && onboardingOverlaysActive;
+    storageReady && !isLoggedIn && !initialCheckInProgress && onboardingOverlaysActive;
   const needsOnboardingReveal =
     !hasSeenOnboarding || reauthGatePending || throughLoggedOutGate;
   const showFirstRunReveal =
@@ -274,7 +320,7 @@ export function useOnboarding() {
     isLoggedIn &&
     needsOnboardingReveal &&
     onboardingOverlaysActive;
-  const gateOverlayVisible = showLoggedOutLayer || showFirstRunReveal;
+  const gateOverlayVisible = showCheckingLayer || showLoggedOutLayer || showFirstRunReveal;
   const mainAppInert = !storageReady || gateOverlayVisible;
 
   return {
@@ -289,6 +335,7 @@ export function useOnboarding() {
     markRevealComplete,
     mainAppInert,
     gateOverlayVisible,
+    showCheckingLayer,
     showLoggedOutLayer,
     showFirstRunReveal,
   };

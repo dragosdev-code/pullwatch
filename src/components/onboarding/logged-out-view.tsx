@@ -26,7 +26,7 @@ export type LoggedOutViewProps = {
 
 const LOGIN_URL = `${GITHUB_BASE_URL}/login`;
 
-const HINT_AFTER_SIGN_IN = 'After signing in on github.com, return here and tap Refresh status.';
+const HINT_AFTER_SIGN_IN = 'After logging in on github.com, return here and tap Refresh status.';
 
 type FeedbackSlot = {
   key: string;
@@ -110,7 +110,7 @@ export const LoggedOutView = memo(function LoggedOutView({
             className="text-[1.35rem] font-semibold leading-tight tracking-tight"
             style={{ color: ONBOARDING_TEXT_PRIMARY }}
           >
-            Sign in to GitHub
+            You&apos;re signed out of GitHub
           </h1>
           <p className="text-[13px] leading-relaxed" style={{ color: ONBOARDING_TEXT_MUTED }}>
             Pullwatch reads your PR lists from your logged-in GitHub session in the browser. No
