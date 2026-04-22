@@ -3,7 +3,7 @@
 
   <h1>Pullwatch</h1>
 
-  <p><strong>Your GitHub PR Inbox. Sorted. No Tokens. No Noise.</strong></p>
+  <p><strong>Your GitHub PR inbox. Sorted. No tokens. No noise.</strong></p>
 
   <p>
     <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19" /></a>
@@ -15,81 +15,109 @@
 
 ---
 
-Pullwatch keeps the PRs you care about visible without living on [github.com](https://github.com). It uses your **existing GitHub browser session** (no personal access tokens and no OAuth app). A Manifest **V3** service worker syncs review requests, authored PRs, and recently merged work on a schedule, with backoff when GitHub signals rate limits.
+Pullwatch keeps the pull requests you care about visible without you having to live on [github.com](https://github.com). It uses the GitHub session your browser already has, so there are no personal access tokens, no OAuth app, and no sign-in flow to worry about. A Manifest V3 service worker quietly refreshes review requests, the PRs you authored, and your recently merged work in the background, and it backs off politely when GitHub asks it to.
 
 ## Install
 
-**Chrome Web Store:** coming soon (link will be added when the listing is live).
+**Chrome Web Store:** coming soon (the link will be added when the listing goes live).
 
 **From source:** see [Development](#development) below, then load the unpacked `dist/` folder in `chrome://extensions`.
 
 ## Features
 
-|                          |                                                                                                                                                                                                                                                          |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session-based access** | Reads GitHub HTML you can already see while signed in. No PATs or OAuth flows.                                                                                                                                                                           |
-| **Three-tab inbox**      | **To review** (pending vs already-reviewed sections), **Authored** (ordered by author review state: changes requested, approved, pending, commented, draft), **Merged** (recently shipped).                                                              |
-| **Notifications**        | Desktop notifications and sounds for **assigned**, **merged**, and **authored** work, plus draft-related options for assigned PRs (notify on drafts is off by default).                                                                                  |
-| **Themes**               | **35** built-in [DaisyUI](https://daisyui.com/) themes on **Tailwind CSS 4**.                                                                                                                                                                            |
-| **Background sync**      | Default fetch cadence is **3 minutes** (see `FETCH_INTERVAL_MS` in [`extension/common/constants.ts`](extension/common/constants.ts)). Sync respects rate limits and pauses when you are offline.                                                         |
-| **Resilient parsing**    | HTML list parsing uses a **`/pulls/search` vs legacy `/pulls`** route hint with fallback. Remote pattern updates come from [`dragosdev-code/pr-live-config`](https://github.com/dragosdev-code/pr-live-config), with a refresh interval defined in code. |
-| **Fast popup**           | UI hydrates from **`chrome.storage.local`**. Background fetches can bypass short-lived caches so data stays fresh.                                                                                                                                       |
+|                          |                                                                                                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session based access** | Reads the GitHub HTML you can already see while signed in. No personal access tokens, no OAuth, nothing to authorize.                                                   |
+| **Three tab inbox**      | **To review** (pending vs already reviewed), **Authored** (sorted by review state: changes requested, approved, pending, draft), and **Merged** (recently shipped).     |
+| **Notifications**        | Optional desktop alerts and sounds for assigned, merged, and authored work. Draft alerts for assigned PRs are off by default and can be turned on per category.         |
+| **Themes**               | 35 built-in [DaisyUI](https://daisyui.com/) themes on Tailwind CSS 4.                                                                                                   |
+| **Background sync**      | Default refresh cadence is 3 minutes (see `FETCH_INTERVAL_MINUTES` in [extension/common/constants.ts](extension/common/constants.ts)). It pauses when you go offline.   |
+| **Resilient parsing**    | A three stage parser handles both the new and legacy GitHub list pages. Regex updates can be shipped from a public config repo without releasing a new extension build. |
+| **Fast popup**           | The UI hydrates instantly from `chrome.storage.local` so the panel is filled before any network call.                                                                   |
 
-## Architecture (short)
+## Privacy and safety
 
-- **Popup:** React 19 UI, **TanStack Query** for server-state style refresh flows, **Zustand** for local UI state.
-- **Background:** Service worker (`extension/background/main.ts`) wires alarms → **`EventService`** → **`PRService`** / **`GitHubService`**. **`AlarmService`** owns the periodic alarm, and **`RateLimitService`** applies exponential backoff toward GitHub **429**s.
-- **Concurrency:** Manual refresh paths use **`chrome.storage.session`** plus coordinated “wave” handling in **`EventService`** so overlapping refreshes do not stampede GitHub.
-- **Offscreen document** (`offscreen`): used for capabilities such as audio playback (see manifest `offscreen` permission).
+Pullwatch is built so that you do not have to take its word for it. The whole codebase is open and the rules below are easy to verify.
+
+- **No tokens. No OAuth app.** Pullwatch never asks for a token and never creates an OAuth integration on your account. It reads the same pages your browser would render if you typed `github.com/pulls` in the address bar yourself.
+- **Only two outbound destinations, ever.** The extension talks to `github.com` (your own signed in pages, including avatar URLs) and to `raw.githubusercontent.com/dragosdev-code/pr-live-config/*` (a public regex config file). There is no analytics, no telemetry, no beacon, no third party SDK, and no server owned by the project.
+- **Your data stays on your machine.** PR lists, route hints, rate limit state, and other operational data live in `chrome.storage.local` on this device only. Your appearance and notification preferences live in `chrome.storage.sync` so Chrome can carry them across your own signed in Chrome instances if you have Chrome sync turned on. Nothing is uploaded anywhere by Pullwatch itself.
+- **Non-goals.** Pullwatch does not act on PRs for you, does not write anything back to GitHub, and does not sync your PR data across devices. It is read only by design.
+
+## How it works
+
+Pullwatch has two halves: a background service worker that fetches and parses pages from GitHub, and a popup that renders the result.
+
+The service worker wakes up on a Chrome alarm every 3 minutes, asks GitHub for your pulls list HTML using the cookie your browser already has, runs the HTML through a three stage parser (embedded JSON, then the new dashboard HTML, then the legacy HTML), and writes the result into `chrome.storage.local`. If GitHub returns a 429, an exponential backoff kicks in. The popup itself never calls GitHub. When you open it, it pulls the last persisted lists straight from `chrome.storage.local` before the first paint, then listens for storage updates while it stays open.
 
 ```mermaid
 flowchart LR
   subgraph ui [Popup]
-    React[React_UI]
-    RQ[TanStack_Query]
+    React[React UI]
+    RQ[TanStack Query]
   end
-  subgraph bg [Service_worker]
+  subgraph bg [Service worker]
     Alarm[AlarmService]
     Events[EventService]
     GH[GitHubService]
-    Store[chrome_storage]
+    Store[chrome.storage.local]
   end
   React --> RQ
-  RQ -->|runtime_messages| Events
+  RQ -->|runtime messages| Events
   Alarm -->|onAlarm| Events
   Events --> GH
-  GH -->|fetch_github_html| GitHub[github_com]
+  GH -->|fetch GitHub HTML| GitHub[github.com]
   Events --> Store
   React --> Store
 ```
 
+For the longer tour of the service worker lifecycle, the parser waterfall, the remote pattern config, and the popup hydration flow, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Canary monitor
+
+GitHub changes its DOM from time to time, and a small change can break a regex that the parser relies on. To catch this before users do, Pullwatch ships a canary suite that runs every hour as a GitHub Action.
+
+It has two tiers. Tier 1 is a public baseline that fetches a known repository's pulls page with no credentials and asserts that the parser still produces well formed PRs. Tier 2 uses [Playwright](https://playwright.dev/) to sign two real bot accounts into GitHub and exercise both the legacy and the new dashboard experiences end to end. If either tier fails, the workflow posts a Discord alert with a link to the failing run and an HTML snapshot for triage. The full runbook lives at [canary/DOM_CHANGE_RUNBOOK.md](canary/DOM_CHANGE_RUNBOOK.md).
+
 ## Tech stack
 
-| Area    | Packages / tools                                                                                                                                     |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| UI      | React 19, **TanStack React Query**, **Zustand**, **react-hook-form**, **Valibot**, **@heroicons/react**, **@react-spring/web**, **react-focus-lock** |
-| Styling | **Tailwind CSS 4**, **@tailwindcss/vite**, **DaisyUI** 5                                                                                             |
-| Dates   | **date-fns**                                                                                                                                         |
-| Build   | **Vite** 8, **TypeScript** ~5.8, **@vitejs/plugin-react**, **vite-plugin-static-copy**                                                               |
-| Quality | **Vitest**, **@testing-library/react**, **Playwright**, **oxlint**                                                                                   |
+Each entry below explains what the package actually does inside Pullwatch, not just that it is installed.
 
-## Permissions (why they exist)
+| Area          | Package                           | What it does here                                                                            |
+| ------------- | --------------------------------- | -------------------------------------------------------------------------------------------- |
+| UI            | **React 19**                      | Renders the popup and settings.                                                              |
+| Data          | **@tanstack/react-query**         | Holds PR lists in the popup; hydrated from `chrome.storage.local` before the first paint.    |
+| State         | **zustand**                       | Small UI stores for global error, debug mode, and tab control.                               |
+| Forms         | **react-hook-form**               | Powers the settings forms in the settings overlay.                                           |
+| Validation    | **valibot**                       | Validates the remote `patterns.json` at runtime before any regex is compiled or stored.      |
+| Dates         | **date-fns**                      | Renders relative timestamps on PR rows ("3h ago", etc.).                                     |
+| Icons         | **@heroicons/react**              | Iconography used across the popup.                                                           |
+| Animation     | **@react-spring/web**             | List entrance animations and the theme picker ripple effect.                                 |
+| A11y          | **react-focus-lock**              | Traps focus inside the settings overlay so keyboard users do not escape it by accident.      |
+| Styling       | **tailwindcss 4** + **daisyui 5** | Styling and the 35 ready made themes.                                                        |
+| Build         | **vite 8** + **typescript ~5.8**  | Builds the popup, service worker, and offscreen document. Strict TypeScript across the repo. |
+| Static assets | **vite-plugin-static-copy**       | Copies the manifest, icons, and offscreen HTML into `dist/`.                                 |
+| Unit tests    | **vitest** + **@testing-library** | Test runner and React testing helpers.                                                       |
+| Browser tests | **playwright**                    | Drives the canary's Tier 2 logins and screenshot capture.                                    |
+| Lint          | **oxlint**                        | Fast linter used across the repo.                                                            |
 
-Declared in [`public/manifest.json`](public/manifest.json):
+## Permissions
 
-| Permission                                                          | Role                                                                                     |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `storage`                                                           | Persist PR lists, settings, route hints, and rate-limit state.                           |
-| `notifications`                                                     | Optional desktop alerts for new or updated PRs.                                          |
-| `alarms`                                                            | Periodic background sync.                                                                |
-| `offscreen`                                                         | Offscreen document for audio and related APIs not available in the service worker alone. |
-| `https://github.com/*`                                              | Fetch signed-in HTML for pulls lists and related pages.                                  |
-| `https://avatars.githubusercontent.com/*`                           | Load avatar images for enriched rows.                                                    |
-| `https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*` | Download remote parser / pattern config JSON.                                            |
+All permissions are declared in [public/manifest.json](public/manifest.json). Each one exists for a single, narrow reason.
+
+| Permission                                                          | Why it exists                                                                                                                               |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`                                                           | Saves your PR lists, settings, route hints, and rate limit state inside Chrome's own storage on this device.                                |
+| `notifications`                                                     | Lets Pullwatch show optional desktop alerts when something on your inbox changes. You can turn this off per category.                       |
+| `alarms`                                                            | Lets the background refresh run on a schedule (every 3 minutes by default) without keeping a tab open.                                      |
+| `offscreen`                                                         | Manifest V3 service workers cannot play audio. The offscreen document is used to play notification sounds and nothing else.                 |
+| `https://github.com/*`                                              | Reads the signed in pulls pages your browser would already render. This is where every PR row comes from.                                   |
+| `https://avatars.githubusercontent.com/*`                           | Loads avatar images shown next to each PR.                                                                                                  |
+| `https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*` | Downloads the public regex config file used by the parser. See the [pr-live-config repo](https://github.com/dragosdev-code/pr-live-config). |
 
 ## Development
 
-**Prerequisites:** Node.js **18+** and npm (or pnpm).
+**Prerequisites:** Node.js 18 or later, plus npm (or pnpm).
 
 ```bash
 git clone https://github.com/dragosdev-code/pullwatch.git
@@ -97,26 +125,41 @@ cd pullwatch
 npm install
 ```
 
-Icons for the extension package are generated from `public/logo.png`:
+Generate the extension icons from `public/logo.png`:
 
 ```bash
 npm run icons
 ```
 
-Build the extension (output in **`dist/`**):
+Build the extension (output goes into `dist/`):
 
 ```bash
 npm run build
 ```
 
-Then in Chrome: open `chrome://extensions`, enable **Developer mode**, **Load unpacked**, and choose the **`dist`** directory.
+Then in Chrome: open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and choose the `dist` folder.
 
-**Other scripts**
+**Other useful scripts**
 
-- **`npm run dev`** runs the Vite dev server for UI development.
-- **`npm test`** and **`npm run test:run`** run Vitest.
-- **`npm run lint`** runs Oxlint.
+- `npm run dev` runs the Vite dev server. Useful for fast UI iteration in a browser tab; the service worker is not wired up here.
+- `npm test` and `npm run test:run` run the unit tests with Vitest.
+- `npm run canary:test` runs the canary suite locally.
+- `npm run test:remote-patterns` validates the production `patterns.json` against the schema. There are also `:staging`, `:production`, and `:production:parity` variants.
+- `npm run lint` runs oxlint.
 
-## Contributing
+## Issues and feedback
 
-Issues and pull requests are welcome. For larger changes, open an issue first so direction matches the project goals.
+Pullwatch is a personal project that I build and maintain on my own, so I am not accepting code contributions for the moment. That said, bug reports and feature ideas are very welcome and genuinely useful.
+
+If something is off, please open an issue at [github.com/dragosdev-code/pullwatch/issues](https://github.com/dragosdev-code/pullwatch/issues). What helps most:
+
+- The extension version (visible in `chrome://extensions`).
+- The browser and OS you are on.
+- A short description of what you expected and what you saw.
+- A screenshot if it is a UI issue, and a console log from the service worker if it is a background issue.
+
+Thanks for taking the time. It really does help.
+
+## License
+
+[MIT](LICENSE).
