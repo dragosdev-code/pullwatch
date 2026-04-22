@@ -45,6 +45,8 @@
 
 :root {
   background-color: #5b616b;
+  --pw-ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+  --pw-ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Chrome extension popups often give `html`/`body` an indefinite width; `%` and
@@ -522,5 +524,76 @@ body {
   .pw-sponsor-cta:focus-visible:not(:disabled)::after {
     animation: none;
     opacity: 0;
+  }
+}
+
+/* —— Preview-button bell wiggle ——
+   Applied on hover only when the button is idle (see `data-idle` gate in the component). */
+@keyframes pw-bell-ring {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  15% {
+    transform: rotate(-12deg);
+  }
+  30% {
+    transform: rotate(10deg);
+  }
+  45% {
+    transform: rotate(-6deg);
+  }
+  60% {
+    transform: rotate(4deg);
+  }
+  75% {
+    transform: rotate(-2deg);
+  }
+}
+
+.pw-bell-icon {
+  transform-origin: top center;
+}
+
+.pw-preview-button[data-idle]:hover .pw-bell-icon {
+  animation: pw-bell-ring 700ms ease-in-out;
+}
+
+/* —— Info-tip icon (first-open breathe + hover tilt) —— */
+@keyframes pw-tip-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+.pw-tip-icon {
+  transition:
+    transform 180ms var(--pw-ease-out-back),
+    color 140ms ease;
+}
+
+.pw-tip-icon--breathe {
+  animation: pw-tip-breathe 1400ms ease-in-out 1;
+}
+
+.pw-tip-trigger:hover .pw-tip-icon {
+  transform: scale(1.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-preview-button[data-idle]:hover .pw-bell-icon {
+    animation: none;
+  }
+
+  .pw-tip-icon,
+  .pw-tip-icon--breathe,
+  .pw-tip-trigger:hover .pw-tip-icon {
+    transition: none;
+    animation: none;
+    transform: none;
   }
 }

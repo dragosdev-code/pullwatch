@@ -1,7 +1,16 @@
+import { useState } from 'react';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
 
 const TOOLTIP_ARIA =
   'Visual alerts require OS notifications enabled for your browser. Sounds still play for real alerts and Previews even if banners are hidden.';
+
+/**
+ * Module-level so the breathe plays only the first time this component mounts in a popup
+ * session. Chrome popups recreate the DOM on every open, so the flag resets naturally on
+ * each user-initiated popup open — and does *not* replay when the settings overlay is
+ * closed and reopened within the same popup.
+ */
+let breatheConsumed = false;
 
 /**
  * Hover help beside Preview when notifications are enabled.
@@ -9,6 +18,12 @@ const TOOLTIP_ARIA =
  * Focus Assist, DND, and per-app OS toggles, not chrome:// notification settings.
  */
 export function NotificationPreviewInfoTip() {
+  const [shouldBreathe] = useState(() => {
+    if (breatheConsumed) return false;
+    breatheConsumed = true;
+    return true;
+  });
+
   return (
     <div className="tooltip relative z-100 shrink-0 tooltip-bottom tooltip-neutral mt-[2px]">
       {/* WHY [-translate-x-3]: Default placement centers on the icon; shift left so the bubble sits more in the popup. */}
@@ -30,9 +45,12 @@ export function NotificationPreviewInfoTip() {
       <span
         role="img"
         aria-label={TOOLTIP_ARIA}
-        className="relative top-[2px] inline-flex cursor-default text-base-content/55 hover:text-base-content/80"
+        className="pw-tip-trigger relative top-[2px] inline-flex cursor-default text-base-content/55 hover:text-base-content/80"
       >
-        <InformationCircleIcon className="size-4.5" aria-hidden />
+        <InformationCircleIcon
+          className={`pw-tip-icon size-4.5 ${shouldBreathe ? 'pw-tip-icon--breathe' : ''}`}
+          aria-hidden
+        />
       </span>
     </div>
   );

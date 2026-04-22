@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { animated, useTransition } from '@react-spring/web';
 import type {
   CustomSoundId,
   CustomSoundMeta,
@@ -13,6 +14,8 @@ import { useCustomSounds } from '../../../../hooks/use-custom-sounds';
 import { chromeExtensionService } from '../../../../services/chrome-extension-service';
 import { SoundPreviewButton } from '../../../audio';
 import { CheckIcon, XMarkIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { usePrefersReducedMotion } from '../../../../hooks/use-prefers-reduced-motion';
+import { SETTINGS_SPRING_SOFT } from '../../shared/animation/settings-motion';
 
 interface SoundPickerProps {
   /** Currently selected sound */
@@ -107,9 +110,61 @@ interface CustomSoundOptionRowProps {
   previewPlaybackInterruptKey?: number;
 }
 
+interface ConfirmDeleteRowProps {
+  name: string;
+  onConfirm: (e: React.MouseEvent) => void;
+  onCancel: (e: React.MouseEvent) => void;
+}
+
 /**
- * Custom sound row in the picker: normal mode matches SoundOption size; delete uses a two-step
- * confirm bar so we do not remove storage on a mis-tap (parity with CustomSoundEditor).
+ * Confirm panel — structurally mirrors [SoundOption] (same `p-3`, same two-line text area,
+ * same trailing button column sizing) so the card-flip between the two states has identical
+ * dimensions and the list below does not shift.
+ */
+const ConfirmDeleteRow = ({ name, onConfirm, onCancel }: ConfirmDeleteRowProps) => (
+  <div
+    className="flex items-center gap-3 p-3 rounded-lg border border-base-300 bg-base-200/80"
+    onClick={(e) => e.stopPropagation()}
+    role="group"
+    aria-label={`Confirm deleting ${name}`}
+  >
+    <div className="flex-1 min-w-0">
+      <div className="flex items-center gap-2">
+        <span className="font-medium text-sm text-base-content truncate">
+          Remove &ldquo;{name}&rdquo;?
+        </span>
+      </div>
+      <p className="text-xs text-base-content/60">This cannot be undone.</p>
+    </div>
+    <div className="shrink-0 flex items-center gap-1">
+      <button
+        type="button"
+        onClick={onConfirm}
+        className="btn btn-ghost btn-sm btn-circle min-h-0 h-7 w-7 text-success hover:bg-success/15"
+        aria-label="Confirm delete"
+      >
+        <CheckIcon className="size-4" strokeWidth={2.5} />
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="btn btn-ghost btn-sm btn-circle min-h-0 h-7 w-7 text-base-content/50 hover:text-base-content hover:bg-base-300/50"
+        aria-label="Cancel delete"
+      >
+        <XMarkIcon className="size-3.5" strokeWidth={2} />
+      </button>
+    </div>
+  </div>
+);
+
+/**
+ * Custom sound row with a crossfade between the normal row and the delete-confirm panel.
+ *
+ * Layout: CSS grid with a single named area so the normal row and the confirm row render
+ * into the same cell. Both children exist in the DOM simultaneously during the swap — which
+ * keeps the list's vertical rhythm stable while the outgoing side fades and the incoming side
+ * fades in with a slight vertical settle. The grid auto-sizes to the taller child, but both
+ * children share the exact same markup skeleton so the height stays constant.
  */
 const CustomSoundOptionRow = ({
   meta,
@@ -122,52 +177,53 @@ const CustomSoundOptionRow = ({
   onCancelDelete,
   previewPlaybackInterruptKey,
 }: CustomSoundOptionRowProps) => {
-  if (isConfirming) {
-    return (
-      <div
-        className="flex items-center gap-2 p-3 rounded-lg bg-base-200/80 border border-base-300"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <span className="flex-1 min-w-0 text-sm text-base-content">
-          Remove &ldquo;{meta.name}&rdquo;?
-        </span>
-        <button
-          type="button"
-          onClick={onConfirmDelete}
-          className="btn btn-ghost btn-sm btn-circle text-success hover:bg-success/15 shrink-0"
-          aria-label="Confirm delete"
-        >
-          <CheckIcon className="size-4 text-success" strokeWidth={2.5} />
-        </button>
-        <button
-          type="button"
-          onClick={onCancelDelete}
-          className="btn btn-ghost btn-sm btn-circle text-base-content/50 hover:text-base-content hover:bg-base-300/50 shrink-0"
-          aria-label="Cancel delete"
-        >
-          <XMarkIcon className="size-3.5" strokeWidth={2} />
-        </button>
-      </div>
-    );
-  }
+  const prefersReducedMotion = usePrefersReducedMotion();
+
+  const transitions = useTransition(isConfirming, {
+    from: { opacity: 0, y: 6 },
+    enter: { opacity: 1, y: 0 },
+    leave: { opacity: 0, y: 0 },
+    config: SETTINGS_SPRING_SOFT,
+    immediate: prefersReducedMotion,
+  });
 
   return (
-    <SoundOption
-      definition={definition}
-      isSelected={isSelected}
-      onSelect={onSelect}
-      previewPlaybackInterruptKey={previewPlaybackInterruptKey}
-      trailingActions={
-        <button
-          type="button"
-          onClick={onRequestDelete}
-          className="btn btn-ghost btn-xs btn-circle text-base-content/30 hover:text-error hover:bg-error/10"
-          aria-label={`Delete ${meta.name}`}
+    <div className="grid" style={{ gridTemplateAreas: '"card"' }}>
+      {transitions((style, confirming) => (
+        <animated.div
+          style={{
+            gridArea: 'card',
+            opacity: style.opacity,
+            transform: style.y.to((y) => `translateY(${y}px)`),
+          }}
         >
-          <XMarkIcon className="size-2.5" strokeWidth={2} />
-        </button>
-      }
-    />
+          {confirming ? (
+            <ConfirmDeleteRow
+              name={meta.name}
+              onConfirm={onConfirmDelete}
+              onCancel={onCancelDelete}
+            />
+          ) : (
+            <SoundOption
+              definition={definition}
+              isSelected={isSelected}
+              onSelect={onSelect}
+              previewPlaybackInterruptKey={previewPlaybackInterruptKey}
+              trailingActions={
+                <button
+                  type="button"
+                  onClick={onRequestDelete}
+                  className="btn btn-ghost btn-xs btn-circle text-base-content/30 hover:text-error hover:bg-error/10"
+                  aria-label={`Delete ${meta.name}`}
+                >
+                  <XMarkIcon className="size-2.5" strokeWidth={2} />
+                </button>
+              }
+            />
+          )}
+        </animated.div>
+      ))}
+    </div>
   );
 };
 

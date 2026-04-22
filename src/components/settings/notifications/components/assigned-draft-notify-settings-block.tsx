@@ -1,6 +1,7 @@
 import { Controller, type Control } from 'react-hook-form';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { ToggleFieldLayout } from '../../shared/components/toggle-field';
+import { SettingsToggleInput } from '../../shared/components/settings-toggle-input';
 import type { ExtensionSettings } from '../../types';
 
 interface AssignedDraftNotifySettingsBlockProps {
@@ -32,8 +33,7 @@ export const AssignedDraftNotifySettingsBlock = ({
               showDraftsInList ? 'primary' : draftNotifyPreferred ? 'warning' : 'primary'
             }
             renderInput={(toggleClassName) => (
-              <input
-                type="checkbox"
+              <SettingsToggleInput
                 className={toggleClassName}
                 checked={showDraftsInList ? !!field.value : draftNotifyPreferred}
                 onChange={(e) => {

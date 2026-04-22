@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { BellIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import { animated, useTransition } from '@react-spring/web';
 import { chromeExtensionService } from '../../../../services/chrome-extension-service';
 import {
   SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
@@ -7,6 +8,11 @@ import {
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
 } from '../../../../../extension/common/constants';
+import { usePrefersReducedMotion } from '../../../../hooks/use-prefers-reduced-motion';
+import {
+  SETTINGS_SPRING_SNAPPY,
+  SETTINGS_SPRING_SOFT,
+} from '../../shared/animation/settings-motion';
 import { SettingsTestCooldownRing } from './settings-test-cooldown-ring';
 
 type TestCategory = 'assigned' | 'merged';
@@ -40,6 +46,8 @@ export const SettingsNotificationTestButton = ({
    * affect the other.
    */
   const [chromeDenied, setChromeDenied] = useState(false);
+
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const handleClick = useCallback(async () => {
     if (pending || cooldown || disabled) return;
@@ -83,51 +91,87 @@ export const SettingsNotificationTestButton = ({
     chrome.tabs.create({ url: CHROME_NOTIFICATION_SETTINGS_URL, active: true });
   }, []);
 
+  const iconTransitions = useTransition(cooldown, {
+    from: { opacity: 0, scale: 0.7 },
+    enter: { opacity: 1, scale: 1 },
+    leave: { opacity: 0, scale: 0.7 },
+    config: SETTINGS_SPRING_SNAPPY,
+    immediate: prefersReducedMotion,
+  });
+
+  const banner = useTransition(chromeDenied, {
+    from: { opacity: 0, y: -6, scale: 0.98 },
+    enter: { opacity: 1, y: 0, scale: 1 },
+    leave: { opacity: 0, y: -4, scale: 0.985 },
+    config: SETTINGS_SPRING_SOFT,
+    immediate: prefersReducedMotion,
+  });
+
+  const isBusy = disabled || pending || cooldown;
+
   return (
     <div>
       <button
         type="button"
         onClick={handleClick}
-        disabled={disabled || pending || cooldown}
-        className={`mt-[2px] inline-flex h-4.5 min-h-0 shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-base-100 px-1.5 py-0 text-[10px] font-medium leading-none text-primary ${
-          disabled || pending || cooldown
-            ? 'opacity-55 hover:cursor-default'
-            : 'hover:bg-base-200 hover:cursor-pointer'
+        disabled={isBusy}
+        aria-busy={pending}
+        data-idle={isBusy ? undefined : ''}
+        className={`pw-preview-button mt-[2px] inline-flex h-4.5 min-h-0 shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-base-100 px-1.5 py-0 text-[10px] font-medium leading-none text-primary transition-transform duration-150 aria-busy:scale-[0.97] ${
+          isBusy ? 'opacity-55 hover:cursor-default' : 'hover:bg-base-200 hover:cursor-pointer'
         }`}
       >
-        <span className="inline-flex size-2.5 shrink-0 items-center justify-center">
-          {cooldown ? (
-            <SettingsTestCooldownRing active viewSize={10} />
-          ) : (
-            <BellIcon className="size-2.5" strokeWidth={2} />
-          )}
+        <span className="relative inline-flex size-2.5 shrink-0 items-center justify-center">
+          {iconTransitions((style, showCooldown) => (
+            <animated.span
+              style={{
+                ...style,
+                position: 'absolute',
+                inset: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-hidden
+            >
+              {showCooldown ? (
+                <SettingsTestCooldownRing active viewSize={10} />
+              ) : (
+                <BellIcon className="pw-bell-icon size-2.5" strokeWidth={2} />
+              )}
+            </animated.span>
+          ))}
         </span>
         <span className="mb-[0.5px]">Preview</span>
       </button>
 
       {/* WHY [inline not tooltip]: Actionable steps need to stay visible until the next successful Preview. */}
-      {chromeDenied && (
-        <div
-          role="status"
-          className=" w-[313px] mt-2 flex items-start gap-2.5 rounded-lg border border-base-300 border-l-[3px] border-l-error bg-base-200 px-3 py-2.5"
-        >
-          <ExclamationCircleIcon className="size-5 shrink-0 text-error" />
-          <div className="min-w-0 text-xs font-medium leading-snug text-base-content">
-            <p>Chrome is blocking notifications for this extension. Enable them in:</p>
-            <p className="mt-1.5">
-              <code className="break-all rounded bg-base-300/40 px-1.5 py-0.5 font-mono text-[11px] text-primary select-text">
-                {CHROME_NOTIFICATION_SETTINGS_URL}
-              </code>
-            </p>
-            <button
-              type="button"
-              onClick={handleOpenChromeSettings}
-              className="mt-2 inline-flex cursor-pointer items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+      {banner(
+        (style, show) =>
+          show && (
+            <animated.div
+              style={style}
+              role="status"
+              className="w-[313px] mt-2 flex items-start gap-2.5 rounded-lg border border-base-300 border-l-[3px] border-l-error bg-base-200 px-3 py-2.5"
             >
-              Open notification settings ↗
-            </button>
-          </div>
-        </div>
+              <ExclamationCircleIcon className="size-5 shrink-0 text-error" />
+              <div className="min-w-0 text-xs font-medium leading-snug text-base-content">
+                <p>Chrome is blocking notifications for this extension. Enable them in:</p>
+                <p className="mt-1.5">
+                  <code className="break-all rounded bg-base-300/40 px-1.5 py-0.5 font-mono text-[11px] text-primary select-text">
+                    {CHROME_NOTIFICATION_SETTINGS_URL}
+                  </code>
+                </p>
+                <button
+                  type="button"
+                  onClick={handleOpenChromeSettings}
+                  className="mt-2 inline-flex cursor-pointer items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                >
+                  Open notification settings ↗
+                </button>
+              </div>
+            </animated.div>
+          )
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useId } from 'react';
+import { animated, useTransition } from '@react-spring/web';
 import type { NotificationSound } from '../../../extension/common/types';
 import { isPlayableSound } from '../../../extension/common/sound-config';
 import { chromeExtensionService } from '../../services/chrome-extension-service';
@@ -8,6 +9,8 @@ import {
   releasePreviewSession,
   subscribePreviewSession,
 } from '../../services/sound-preview-session';
+import { usePrefersReducedMotion } from '../../hooks/use-prefers-reduced-motion';
+import { SETTINGS_SPRING_SNAPPY } from '../settings/shared/animation/settings-motion';
 import { PlayIcon, PlayingAnimation } from '../ui/icons';
 
 interface SoundPreviewButtonProps {
@@ -126,6 +129,16 @@ export const SoundPreviewButton = ({
     [sound, isPlaying, disabled, clientId]
   );
 
+  const prefersReducedMotion = usePrefersReducedMotion();
+
+  const iconTransitions = useTransition(isPlaying, {
+    from: { opacity: 0, scale: 0.8 },
+    enter: { opacity: 1, scale: 1 },
+    leave: { opacity: 0, scale: 0.8 },
+    config: SETTINGS_SPRING_SNAPPY,
+    immediate: prefersReducedMotion,
+  });
+
   // Don't render if sound is 'off' or disabled
   if (!isPlayableSound(sound) || disabled) {
     return null;
@@ -144,24 +157,33 @@ export const SoundPreviewButton = ({
     md: 'size-4',
   };
 
-  const previewLabel = `Preview ${sound} sound`;
-  const stopLabel = 'Stop sound preview';
-
   return (
     <button
       type="button"
       onClick={handleClick}
       disabled={disabled}
-      aria-pressed={isPlaying}
-      aria-label={isPlaying ? stopLabel : previewLabel}
-      title={isPlaying ? stopLabel : previewLabel}
-      className={`btn btn-circle btn-ghost btn-primary ${sizeClasses[size]} p-0`}
+      className={`btn btn-circle btn-ghost btn-primary ${sizeClasses[size]} p-0 relative transition-transform duration-90 active:scale-90`}
     >
-      {isPlaying ? (
-        <PlayingAnimation className={iconSizes[size]} />
-      ) : (
-        <PlayIcon className={iconSizes[size]} />
-      )}
+      {iconTransitions((style, playing) => (
+        <animated.span
+          style={{
+            ...style,
+            transform: style.scale.to((s) => `scale(${s})`),
+            position: 'absolute',
+            inset: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          aria-hidden
+        >
+          {playing ? (
+            <PlayingAnimation className={iconSizes[size]} />
+          ) : (
+            <PlayIcon className={iconSizes[size]} />
+          )}
+        </animated.span>
+      ))}
     </button>
   );
 };

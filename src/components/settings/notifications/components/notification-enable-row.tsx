@@ -1,4 +1,5 @@
 import { useFormContext } from 'react-hook-form';
+import { SettingsToggleInput } from '../../shared/components/settings-toggle-input';
 import type { ExtensionSettings } from '../../types';
 import { NotificationPreviewInfoTip } from './notification-preview-info-tip';
 import { SettingsNotificationTestButton } from './settings-notification-test-button';
@@ -45,8 +46,7 @@ export function NotificationEnableRow({
           <span className="text-xs leading-snug text-base-content/50">{description}</span>
         )}
       </div>
-      <input
-        type="checkbox"
+      <SettingsToggleInput
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         {...register(name as any)}
         className="toggle toggle-sm toggle-primary mt-0.5 shrink-0"

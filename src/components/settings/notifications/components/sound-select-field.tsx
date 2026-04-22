@@ -19,6 +19,7 @@ import { useCustomSounds } from '../../../../hooks/use-custom-sounds';
 import { SoundPicker } from './sound-picker';
 import { CustomSoundEditor } from '../../../custom-sound-editor';
 import { SoundPreviewButton } from '../../../audio';
+import { SettingsToggleInput } from '../../shared/components/settings-toggle-input';
 import { MusicalNoteIcon } from '@heroicons/react/24/outline';
 
 interface SoundSelectFieldProps {
@@ -197,8 +198,7 @@ function SoundSelectFieldInner({
         </div>
       </div>
 
-      <input
-        type="checkbox"
+      <SettingsToggleInput
         checked={soundEnabled}
         onChange={handleToggle}
         disabled={disabled}

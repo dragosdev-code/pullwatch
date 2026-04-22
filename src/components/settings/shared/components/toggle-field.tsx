@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useFormContext } from 'react-hook-form';
 import type { ExtensionSettings } from '../../types';
+import { SettingsToggleInput } from './settings-toggle-input';
 
 export type ToggleFieldColor = 'primary' | 'warning';
 
@@ -81,8 +82,7 @@ export const ToggleField = ({
       disabled={disabled}
       toggleColor={toggleColor}
       renderInput={(toggleClassName) => (
-        <input
-          type="checkbox"
+        <SettingsToggleInput
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           {...register(name as any)}
           disabled={disabled}
