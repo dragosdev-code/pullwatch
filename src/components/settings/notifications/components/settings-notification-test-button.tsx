@@ -9,10 +9,8 @@ import {
   SETTINGS_TEST_ERROR_DISABLED,
 } from '../../../../../extension/common/constants';
 import { usePrefersReducedMotion } from '../../../../hooks/use-prefers-reduced-motion';
-import {
-  SETTINGS_SPRING_SNAPPY,
-  SETTINGS_SPRING_SOFT,
-} from '../../shared/animation/settings-motion';
+import { SETTINGS_SPRING_SNAPPY } from '../../shared/animation/settings-motion';
+import { SettingsNoticeTransition } from '../../shared/components/settings-notice-transition';
 import { SettingsTestCooldownRing } from './settings-test-cooldown-ring';
 
 type TestCategory = 'assigned' | 'merged';
@@ -99,14 +97,6 @@ export const SettingsNotificationTestButton = ({
     immediate: prefersReducedMotion,
   });
 
-  const banner = useTransition(chromeDenied, {
-    from: { opacity: 0, y: -6, scale: 0.98 },
-    enter: { opacity: 1, y: 0, scale: 1 },
-    leave: { opacity: 0, y: -4, scale: 0.985 },
-    config: SETTINGS_SPRING_SOFT,
-    immediate: prefersReducedMotion,
-  });
-
   const isBusy = disabled || pending || cooldown;
 
   return (
@@ -146,33 +136,27 @@ export const SettingsNotificationTestButton = ({
       </button>
 
       {/* WHY [inline not tooltip]: Actionable steps need to stay visible until the next successful Preview. */}
-      {banner(
-        (style, show) =>
-          show && (
-            <animated.div
-              style={style}
-              role="status"
-              className="w-[313px] mt-2 flex items-start gap-2.5 rounded-lg border border-base-300 border-l-[3px] border-l-error bg-base-200 px-3 py-2.5"
-            >
-              <ExclamationCircleIcon className="size-5 shrink-0 text-error" />
-              <div className="min-w-0 text-xs font-medium leading-snug text-base-content">
-                <p>Chrome is blocking notifications for this extension. Enable them in:</p>
-                <p className="mt-1.5">
-                  <code className="break-all rounded bg-base-300/40 px-1.5 py-0.5 font-mono text-[11px] text-primary select-text">
-                    {CHROME_NOTIFICATION_SETTINGS_URL}
-                  </code>
-                </p>
-                <button
-                  type="button"
-                  onClick={handleOpenChromeSettings}
-                  className="mt-2 inline-flex cursor-pointer items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
-                >
-                  Open notification settings ↗
-                </button>
-              </div>
-            </animated.div>
-          )
-      )}
+      <SettingsNoticeTransition
+        visible={chromeDenied}
+        className="w-[313px] mt-2 flex items-start gap-2.5 rounded-lg border border-base-300 border-l-[3px] border-l-error bg-base-200 px-3 py-2.5"
+      >
+        <ExclamationCircleIcon className="size-5 shrink-0 text-error" />
+        <div className="min-w-0 text-xs font-medium leading-snug text-base-content">
+          <p>Chrome is blocking notifications for this extension. Enable them in:</p>
+          <p className="mt-1.5">
+            <code className="break-all rounded bg-base-300/40 px-1.5 py-0.5 font-mono text-[11px] text-primary select-text">
+              {CHROME_NOTIFICATION_SETTINGS_URL}
+            </code>
+          </p>
+          <button
+            type="button"
+            onClick={handleOpenChromeSettings}
+            className="mt-2 inline-flex cursor-pointer items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+          >
+            Open notification settings ↗
+          </button>
+        </div>
+      </SettingsNoticeTransition>
     </div>
   );
 };
