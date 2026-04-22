@@ -17,7 +17,7 @@ let breatheConsumed = false;
  * WHY [OS-only copy]: Browser-level permission UX lives on the Chrome-denied callout on Preview; this tip addresses
  * Focus Assist, DND, and per-app OS toggles, not chrome:// notification settings.
  */
-export function NotificationPreviewInfoTip() {
+export const NotificationPreviewInfoTip = () => {
   const [shouldBreathe] = useState(() => {
     if (breatheConsumed) return false;
     breatheConsumed = true;
@@ -54,4 +54,4 @@ export function NotificationPreviewInfoTip() {
       </span>
     </div>
   );
-}
+};

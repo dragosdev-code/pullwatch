@@ -1,23 +1,22 @@
 import { useCallback, useState } from 'react';
 import { BellIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { animated, useTransition } from '@react-spring/web';
-import { chromeExtensionService } from '../../../../services/chrome-extension-service';
+import { chromeExtensionService } from '../../../../../services/chrome-extension-service';
 import {
   SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
   SETTINGS_TEST_ERROR_CHROME_DENIED,
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
-} from '../../../../../extension/common/constants';
-import { usePrefersReducedMotion } from '../../../../hooks/use-prefers-reduced-motion';
-import { SETTINGS_SPRING_SNAPPY } from '../../shared/animation/settings-motion';
-import { SettingsNoticeTransition } from '../../shared/components/settings-notice-transition';
+} from '../../../../../../extension/common/constants';
+import { usePrefersReducedMotion } from '../../../../../hooks/use-prefers-reduced-motion';
+import { SETTINGS_SPRING_SNAPPY } from '../../../shared/animation/settings-motion';
+import { SettingsNoticeTransition } from '../../../shared/components/settings-notice-transition';
 import { SettingsTestCooldownRing } from './settings-test-cooldown-ring';
-
-type TestCategory = 'assigned' | 'merged';
+import type { NotificationTestCategory } from '../../types';
 
 interface SettingsNotificationTestButtonProps {
   /** `assigned` = To Review PRs channel; `merged` = merged PRs. */
-  category: TestCategory;
+  category: NotificationTestCategory;
   /** False when that section's notifications toggle is off. */
   disabled?: boolean;
 }

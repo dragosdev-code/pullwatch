@@ -141,12 +141,20 @@ export const useAssignedDraftNotifyListSync = ({
     }
   }, [showDraftsInList, isLoading, settings, methods]);
 
-  /** While drafts are shown, mirror the stored toggle into preference and keep restore ref aligned. */
+  /**
+   * While drafts are shown, mirror the stored toggle into preference and keep restore ref aligned.
+   *
+   * WHY [getValues not watch]: On the same commit as `showDraftsInList` flips true, `useLayoutEffect`
+   * above restores `assigned.notifyOnDrafts` from `notifyRestoreWhenListVisibleRef`, but
+   * `notifyOnDrafts` from `methods.watch()` is still the **pre-layout** render snapshot (`false`).
+   * Mirroring that stale value would clear preference + restore ref after we just restored them.
+   */
   useEffect(() => {
     if (isLoading || !settings || isResettingRef.current || !showDraftsInList) return;
-    setDraftNotifyPreferredInner(notifyOnDrafts);
-    notifyRestoreWhenListVisibleRef.current = notifyOnDrafts;
-  }, [showDraftsInList, notifyOnDrafts, isLoading, settings]);
+    const storedNotify = methods.getValues('assigned.notifyOnDrafts');
+    setDraftNotifyPreferredInner(storedNotify);
+    notifyRestoreWhenListVisibleRef.current = storedNotify;
+  }, [showDraftsInList, notifyOnDrafts, isLoading, settings, methods]);
 
   return {
     onHydrateFromStorage,

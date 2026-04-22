@@ -1,15 +1,14 @@
 import { useFormContext } from 'react-hook-form';
 import { SettingsToggleInput } from '../../shared/components/settings-toggle-input';
 import type { ExtensionSettings } from '../../types';
-import { NotificationPreviewInfoTip } from './notification-preview-info-tip';
-import { SettingsNotificationTestButton } from './settings-notification-test-button';
-
-type TestCategory = 'assigned' | 'merged';
+import { NotificationPreviewInfoTip } from './test-notification/notification-preview-info-tip';
+import { SettingsNotificationTestButton } from './test-notification/settings-notification-test-button';
+import type { NotificationTestCategory } from '../types';
 
 interface NotificationEnableRowProps {
   name: 'assigned.notificationsEnabled' | 'merged.notificationsEnabled';
   description?: string;
-  testCategory: TestCategory;
+  testCategory: NotificationTestCategory;
   /** When false, the Test control is disabled (toggle off). */
   notificationsEnabled: boolean;
 }
@@ -18,12 +17,12 @@ interface NotificationEnableRowProps {
  * Row for "Enable notifications" plus an inline Test affordance; toggle stays right-aligned like other settings.
  * WHY separate from ToggleField: the test button belongs with the label, not the switch.
  */
-export function NotificationEnableRow({
+export const NotificationEnableRow = ({
   name,
   description,
   testCategory,
   notificationsEnabled,
-}: NotificationEnableRowProps) {
+}: NotificationEnableRowProps) => {
   const { register } = useFormContext<ExtensionSettings>();
 
   return (
@@ -53,4 +52,4 @@ export function NotificationEnableRow({
       />
     </div>
   );
-}
+};

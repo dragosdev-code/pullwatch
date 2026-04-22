@@ -172,6 +172,23 @@ describe('useAssignedDraftNotifyListSync', () => {
       expect(api.sync.draftNotifyPreferred).toBe(true);
     });
 
+    it('list starts hidden: opt-in notify preference then show list — notify + pref stay aligned without stale mirror', () => {
+      const hidden = withAssigned({ showDraftsInList: false, notifyOnDrafts: false });
+      const { api } = renderSync(hidden);
+
+      act(() => {
+        api.sync.setDraftNotifyPreferred(true);
+      });
+      expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(false);
+
+      act(() => {
+        api.methods.setValue('assigned.showDraftsInList', true, { shouldDirty: true });
+      });
+
+      expect(api.methods.getValues('assigned.notifyOnDrafts')).toBe(true);
+      expect(api.sync.draftNotifyPreferred).toBe(true);
+    });
+
     it('showing list again after silent hide keeps notify off', async () => {
       const visible = withAssigned({ showDraftsInList: true, notifyOnDrafts: true });
       const { api } = renderSync(visible);

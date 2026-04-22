@@ -21,7 +21,7 @@ const mergeSettings = (patch: SettingsTestPatch): ExtensionSettings => ({
   merged: { ...DEFAULT_SETTINGS.merged, ...patch.merged },
 });
 
-function BlockHarness({
+const BlockHarness = ({
   settings,
   showDraftsInList,
   draftNotifyPreferred,
@@ -31,7 +31,7 @@ function BlockHarness({
   showDraftsInList: boolean;
   draftNotifyPreferred: boolean;
   setDraftNotifyPreferred: (value: boolean) => void;
-}) {
+}) => {
   const methods = useForm<ExtensionSettings>({ defaultValues: settings, values: settings });
   return (
     <FormProvider {...methods}>
@@ -43,10 +43,10 @@ function BlockHarness({
       />
     </FormProvider>
   );
-}
+};
 
 /** Parent-owned preference state, like settings-page. */
-function StatefulBlockHarness({
+const StatefulBlockHarness = ({
   initialSettings,
   showDraftsInList,
   initialDraftNotifyPreferred,
@@ -54,7 +54,7 @@ function StatefulBlockHarness({
   initialSettings: ExtensionSettings;
   showDraftsInList: boolean;
   initialDraftNotifyPreferred: boolean;
-}) {
+}) => {
   const [draftNotifyPreferred, setDraftNotifyPreferred] = useState(initialDraftNotifyPreferred);
   const methods = useForm<ExtensionSettings>({
     defaultValues: initialSettings,
@@ -70,7 +70,7 @@ function StatefulBlockHarness({
       />
     </FormProvider>
   );
-}
+};
 
 const notifyCheckbox = () => {
   const boxes = screen.getAllByRole('checkbox');
@@ -268,7 +268,7 @@ describe('AssignedDraftNotifySettingsBlock', () => {
       });
       let methodsRef: ReturnType<typeof useForm<ExtensionSettings>> | null = null;
 
-      function CaptureMethods() {
+      const CaptureMethods = () => {
         const methods = useForm<ExtensionSettings>({ defaultValues: settings, values: settings });
         methodsRef = methods;
         return (
@@ -281,7 +281,7 @@ describe('AssignedDraftNotifySettingsBlock', () => {
             />
           </FormProvider>
         );
-      }
+      };
 
       render(<CaptureMethods />);
       fireEvent.click(notifyCheckbox());
@@ -295,7 +295,7 @@ describe('AssignedDraftNotifySettingsBlock', () => {
       });
       let methodsRef: ReturnType<typeof useForm<ExtensionSettings>> | null = null;
 
-      function CaptureMethods() {
+      const CaptureMethods = () => {
         const methods = useForm<ExtensionSettings>({ defaultValues: settings, values: settings });
         methodsRef = methods;
         return (
@@ -308,7 +308,7 @@ describe('AssignedDraftNotifySettingsBlock', () => {
             />
           </FormProvider>
         );
-      }
+      };
 
       render(<CaptureMethods />);
       fireEvent.click(notifyCheckbox());
