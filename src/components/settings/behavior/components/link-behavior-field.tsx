@@ -1,7 +1,9 @@
-import { useCallback, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { LinkOpenBehavior } from '../../../../hooks/use-link-behavior';
 import { TAB_INDICATOR_TRANSITION } from '../../../ui/tabs/tabs-config';
 import { usePrefersReducedMotion } from '../../../../hooks/use-prefers-reduced-motion';
+
+const PILL_TRANSITION = `${TAB_INDICATOR_TRANSITION}, transform 220ms cubic-bezier(0.22, 1.4, 0.36, 1)`;
 
 interface LinkBehaviorFieldProps {
   value: LinkOpenBehavior;
@@ -35,17 +37,39 @@ export const LinkBehaviorField = ({ value, onChange }: LinkBehaviorFieldProps) =
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   /** First measurement must snap the pill into place instead of sliding in from 0. */
   const hasInitialized = useRef(false);
+  const pressTimeoutRef = useRef<number | null>(null);
 
   const handleSelect = useCallback(
     (newValue: LinkOpenBehavior) => {
+      const pill = pillRef.current;
+      if (pill && !prefersReducedMotion) {
+        if (pressTimeoutRef.current !== null) {
+          window.clearTimeout(pressTimeoutRef.current);
+        }
+        pill.style.transform = 'scale(0.86)';
+        pressTimeoutRef.current = window.setTimeout(() => {
+          if (pillRef.current) {
+            pillRef.current.style.transform = 'scale(1)';
+          }
+          pressTimeoutRef.current = null;
+        }, 130);
+      }
       onChange(newValue);
     },
-    [onChange]
+    [onChange, prefersReducedMotion]
   );
 
   useLayoutEffect(() => {
     return () => {
       hasInitialized.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pressTimeoutRef.current !== null) {
+        window.clearTimeout(pressTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -64,7 +88,7 @@ export const LinkBehaviorField = ({ value, onChange }: LinkBehaviorFieldProps) =
       pill.style.left = `${left}px`;
       pill.style.width = `${width}px`;
       void pill.offsetWidth;
-      pill.style.transition = prefersReducedMotion ? 'none' : TAB_INDICATOR_TRANSITION;
+      pill.style.transition = prefersReducedMotion ? 'none' : PILL_TRANSITION;
       hasInitialized.current = true;
     } else {
       pill.style.left = `${left}px`;
@@ -87,7 +111,8 @@ export const LinkBehaviorField = ({ value, onChange }: LinkBehaviorFieldProps) =
           style={{
             left: 0,
             width: 0,
-            transition: TAB_INDICATOR_TRANSITION,
+            transformOrigin: 'center',
+            transition: PILL_TRANSITION,
           }}
         />
         {OPTIONS.map((option, index) => {
