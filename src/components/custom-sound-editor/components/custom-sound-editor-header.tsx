@@ -5,7 +5,7 @@ interface CustomSoundEditorHeaderProps {
 }
 
 export const CustomSoundEditorHeader = ({ onClose }: CustomSoundEditorHeaderProps) => (
-  <div className="px-5 py-4 border-b border-base-200 flex items-center gap-3 shrink-0">
+  <div className="px-5 py-2 border-b border-base-200 flex items-center gap-3 shrink-0">
     <button
       type="button"
       onClick={onClose}
@@ -15,8 +15,10 @@ export const CustomSoundEditorHeader = ({ onClose }: CustomSoundEditorHeaderProp
       <ChevronIcon className="size-4 rotate-90" />
     </button>
     <div>
-      <h3 className="font-semibold text-base-content">Custom Sound</h3>
-      <p className="text-xs text-base-content/60">Upload and trim your own notification sound</p>
+      <h3 className="text-sm font-semibold text-base-content">Custom Sound</h3>
+      <p className="text-[11px] text-base-content/60">
+        Upload and trim your own notification sound
+      </p>
     </div>
   </div>
 );

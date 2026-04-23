@@ -1,10 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import type { WaveformScrollerProps } from '../types';
-import {
-  MIN_WAVEFORM_ZOOM,
-  MAX_WAVEFORM_ZOOM,
-  WAVEFORM_VIEWPORT_FALLBACK_PX,
-} from '../constants';
+import { MIN_WAVEFORM_ZOOM, MAX_WAVEFORM_ZOOM, WAVEFORM_VIEWPORT_FALLBACK_PX } from '../constants';
 import { useWaveformDrag } from '../hooks/use-waveform-drag';
 import { WaveformCanvas } from './waveform-canvas';
 import { MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon } from '../../ui/icons';
@@ -21,7 +17,7 @@ export const WaveformScroller = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const drawFnRef = useRef<() => void>(() => {});
-  
+
   const trimRef = useRef({ startS, endS, duration });
   /**
    * WHY `trimRef.current = { startS, endS, duration }` in the render body
@@ -64,9 +60,7 @@ export const WaveformScroller = ({
   }, [zoomLevel, baseViewportWidth]);
 
   const bumpZoom = useCallback((delta: number) => {
-    setZoomLevel((z) =>
-      Math.min(MAX_WAVEFORM_ZOOM, Math.max(MIN_WAVEFORM_ZOOM, z + delta)),
-    );
+    setZoomLevel((z) => Math.min(MAX_WAVEFORM_ZOOM, Math.max(MIN_WAVEFORM_ZOOM, z + delta)));
   }, []);
 
   const {
@@ -93,26 +87,28 @@ export const WaveformScroller = ({
 
   return (
     <div className="space-y-1.5 min-w-0">
-      <div className="flex items-center justify-end gap-1">
-        <button
-          type="button"
-          className="btn btn-ghost btn-xs btn-square shrink-0"
-          aria-label="Zoom out waveform"
-          disabled={zoomLevel <= MIN_WAVEFORM_ZOOM}
-          onClick={() => bumpZoom(-1)}
-        >
-          <MagnifyingGlassMinusIcon className="size-4" />
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost btn-xs btn-square shrink-0"
-          aria-label="Zoom in waveform"
-          disabled={zoomLevel >= MAX_WAVEFORM_ZOOM}
-          onClick={() => bumpZoom(1)}
-        >
-          <MagnifyingGlassPlusIcon className="size-4" />
-        </button>
-        <span className="text-[10px] text-base-content/45 tabular-nums w-8 text-right">
+      <div className="flex flex-row items-center justify-center gap-1 shrink-0 mx-auto">
+        <div className="flex items-center justify-center shrink-0">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm btn-square shrink-0"
+            aria-label="Zoom out waveform"
+            disabled={zoomLevel <= MIN_WAVEFORM_ZOOM}
+            onClick={() => bumpZoom(-1)}
+          >
+            <MagnifyingGlassMinusIcon className="size-6" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm btn-square shrink-0"
+            aria-label="Zoom in waveform"
+            disabled={zoomLevel >= MAX_WAVEFORM_ZOOM}
+            onClick={() => bumpZoom(1)}
+          >
+            <MagnifyingGlassPlusIcon className="size-6" />
+          </button>
+        </div>
+        <span className="text-[12px] text-base-content/70 tabular-nums text-center">
           {zoomLevel}×
         </span>
       </div>

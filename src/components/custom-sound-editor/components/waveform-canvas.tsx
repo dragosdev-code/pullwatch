@@ -232,7 +232,7 @@ export const WaveformCanvas = ({
     <canvas
       ref={canvasRef}
       className="block h-24 bg-base-200"
-      style={{ width: canvasCssWidth, height: 96 }}
+      style={{ width: canvasCssWidth, height: 90 }}
     />
   );
 };
