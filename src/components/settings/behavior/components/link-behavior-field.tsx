@@ -1,7 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react';
-import { animated, useSpring } from '@react-spring/web';
 import type { LinkOpenBehavior } from '../../../../hooks/use-link-behavior';
-import { TAB_SPRING_CONFIG } from '../../../ui/tabs/tabs-config';
+import { TAB_INDICATOR_TRANSITION } from '../../../ui/tabs/tabs-config';
 import { usePrefersReducedMotion } from '../../../../hooks/use-prefers-reduced-motion';
 
 interface LinkBehaviorFieldProps {
@@ -32,15 +31,10 @@ export const LinkBehaviorField = ({ value, onChange }: LinkBehaviorFieldProps) =
   const prefersReducedMotion = usePrefersReducedMotion();
 
   const trackRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   /** First measurement must snap the pill into place instead of sliding in from 0. */
   const hasInitialized = useRef(false);
-
-  const [pillStyle, pillApi] = useSpring(() => ({
-    x: 0,
-    width: 0,
-    config: TAB_SPRING_CONFIG,
-  }));
 
   const handleSelect = useCallback(
     (newValue: LinkOpenBehavior) => {
@@ -50,22 +44,33 @@ export const LinkBehaviorField = ({ value, onChange }: LinkBehaviorFieldProps) =
   );
 
   useLayoutEffect(() => {
+    return () => {
+      hasInitialized.current = false;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
     const activeIndex = OPTIONS.findIndex((option) => option.value === value);
     const activeButton = buttonRefs.current[activeIndex];
-    if (!activeButton) return;
+    const pill = pillRef.current;
+    if (!activeButton || !pill) return;
 
-    const target = {
-      x: activeButton.offsetLeft,
-      width: activeButton.offsetWidth,
-    };
+    const left = activeButton.offsetLeft;
+    const width = activeButton.offsetWidth;
+    if (width === 0) return;
 
-    pillApi.start({
-      to: target,
-      immediate: !hasInitialized.current || prefersReducedMotion,
-    });
-
-    hasInitialized.current = true;
-  }, [value, pillApi, prefersReducedMotion]);
+    if (!hasInitialized.current || prefersReducedMotion) {
+      pill.style.transition = 'none';
+      pill.style.left = `${left}px`;
+      pill.style.width = `${width}px`;
+      void pill.offsetWidth;
+      pill.style.transition = prefersReducedMotion ? 'none' : TAB_INDICATOR_TRANSITION;
+      hasInitialized.current = true;
+    } else {
+      pill.style.left = `${left}px`;
+      pill.style.width = `${width}px`;
+    }
+  }, [value, prefersReducedMotion]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -75,13 +80,14 @@ export const LinkBehaviorField = ({ value, onChange }: LinkBehaviorFieldProps) =
       </div>
 
       <div ref={trackRef} className="relative flex gap-1 p-1 bg-base-200 rounded-lg">
-        <animated.div
+        <div
+          ref={pillRef}
           aria-hidden
           className="absolute top-1 bottom-1 rounded-md bg-base-100 shadow-sm pointer-events-none"
           style={{
-            transform: pillStyle.x.to((x) => `translateX(${x}px)`),
-            width: pillStyle.width,
             left: 0,
+            width: 0,
+            transition: TAB_INDICATOR_TRANSITION,
           }}
         />
         {OPTIONS.map((option, index) => {
