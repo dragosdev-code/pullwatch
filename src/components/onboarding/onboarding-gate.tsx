@@ -40,7 +40,10 @@ export function OnboardingGate({ children }: OnboardingGateProps) {
         : null;
 
   return (
-    <div className="relative h-[400px] w-[380px] overflow-hidden">
+    <div
+      className="pw-popup-shell relative overflow-hidden"
+      style={{ width: 'var(--pw-popup-width)', height: 'var(--pw-popup-height)' }}
+    >
       <div
         className="flex h-full w-full flex-col bg-base-100"
         aria-hidden={mainAppInert}

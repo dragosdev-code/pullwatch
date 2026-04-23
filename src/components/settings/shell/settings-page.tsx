@@ -9,6 +9,7 @@ import { MergedPrsNotificationSection } from '../notifications/components/merged
 import { useAssignedDraftNotifyListSync } from '../notifications/hooks/use-assigned-draft-notify-list-sync';
 import { LinkBehaviorField } from '../behavior/components/link-behavior-field';
 import { ThemePicker } from '../appearance/components/theme-picker';
+import { PopupSizeField } from '../appearance/components/popup-size-field';
 import { SettingsSponsorLounge } from '../support/components/settings-sponsor-lounge';
 import { DEFAULT_SETTINGS } from '../types';
 import type { ExtensionSettings } from '../types';
@@ -106,6 +107,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
           </SettingsSection>
 
           <SettingsSection title="Appearance">
+            <PopupSizeField />
             <ThemePicker />
           </SettingsSection>
 

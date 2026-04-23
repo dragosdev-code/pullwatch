@@ -47,18 +47,27 @@
   background-color: #5b616b;
   --pw-ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
   --pw-ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --pw-popup-width: 380px;
+  --pw-popup-height: 400px;
+  --pw-popup-resize-duration: 380ms;
+  --pw-popup-resize-easing: var(--pw-ease-out-expo);
 }
 
 /* Chrome extension popups often give `html`/`body` an indefinite width; `%` and
-   `fit-content` on `#root` then collapse. Pin the shell to match `OnboardingGate`
-   (`h-[400px] w-[380px]`). */
+   `fit-content` on `#root` then collapse. Pin the shell to the CSS vars set by
+   public/popup-size-init.js (pre-React) and src/hooks/use-popup-size.ts (runtime);
+   OnboardingGate reads the same vars inline so both sides stay in sync. Transitions
+   let the whole shell (and Chrome's auto-sized popup window) animate between presets. */
 html,
 body {
   margin: 0;
   width: 100%;
-  min-width: 380px;
-  min-height: 400px;
+  min-width: var(--pw-popup-width);
+  min-height: var(--pw-popup-height);
   box-sizing: border-box;
+  transition:
+    min-width var(--pw-popup-resize-duration) var(--pw-popup-resize-easing),
+    min-height var(--pw-popup-resize-duration) var(--pw-popup-resize-easing);
 }
 
 /* Chromium (extension popup): opacity/width animations on one control can retarget subpixel
@@ -69,9 +78,37 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: 400px;
+  min-height: var(--pw-popup-height);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: min-height var(--pw-popup-resize-duration) var(--pw-popup-resize-easing);
+}
+
+/* Applied to OnboardingGate's outer box so its width/height ease alongside html/body/#root. */
+.pw-popup-shell {
+  transition:
+    width var(--pw-popup-resize-duration) var(--pw-popup-resize-easing),
+    height var(--pw-popup-resize-duration) var(--pw-popup-resize-easing);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body,
+  #root,
+  .pw-popup-shell {
+    transition: none;
+  }
+}
+
+/* During the initial boot window the stylesheet applies min-width/min-height for the first time;
+   without this, the transition animates from the pre-CSS size to the preset size, which reads as
+   a pop-in flicker. Main.tsx removes the class after React's first commit so user-driven preset
+   changes still animate smoothly. */
+html.pw-booting,
+html.pw-booting body,
+html.pw-booting #root,
+html.pw-booting .pw-popup-shell {
+  transition: none !important;
 }
 
 #pw-app-root {

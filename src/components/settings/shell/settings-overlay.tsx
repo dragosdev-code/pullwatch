@@ -1,7 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSpring, animated } from '@react-spring/web';
 import { SettingsPage } from './settings-page';
 import { GearIcon } from '../../ui/icons';
+
+/** Buffer past the exact diagonal so sub-pixel rounding never exposes a corner. */
+const RADIUS_BUFFER_PX = 8;
+/** Matches the current popup's default diagonal (~551px for 380×400) + buffer.
+ *  Used until the first layout measurement lands; ResizeObserver then retargets. */
+const FALLBACK_OPEN_RADIUS = 560;
 
 type SettingsPosition = 'left' | 'center' | 'right';
 
@@ -33,6 +39,8 @@ interface SettingsOverlayProps {
 export const SettingsOverlay = ({ position = 'left' }: SettingsOverlayProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [openRadius, setOpenRadius] = useState(FALLBACK_OPEN_RADIUS);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   const config = positionConfig[position];
 
@@ -45,13 +53,48 @@ export const SettingsOverlay = ({ position = 'left' }: SettingsOverlayProps) => 
     setIsOpen(false);
   }, []);
 
-  // Circle radius: controls the clip-path reveal from the chosen position
-  const { radius } = useSpring({
-    radius: isOpen ? 600 : isHovered ? 40 : 30,
-    config: isOpen
-      ? { tension: 100, friction: 20 } // smooth expansion
-      : { tension: 200, friction: 26 }, // snappier hover / close
-  });
+  // Size the reveal circle to the popup's diagonal so the clip-path always covers every corner,
+  // regardless of the active popup-size preset. ResizeObserver keeps it in sync when the preset changes.
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const { width, height } = el.getBoundingClientRect();
+      if (width === 0 || height === 0) return;
+      setOpenRadius(Math.ceil(Math.hypot(width, height)) + RADIUS_BUFFER_PX);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Circle radius: controls the clip-path reveal from the chosen position.
+  // Imperative API so that retargeting the radius *while already open* (container resize) can snap
+  // instantly — otherwise the user sees a visible re-expansion animation in the newly-exposed corner.
+  const [{ radius }, radiusApi] = useSpring(() => ({ radius: 30 }));
+  const wasOpenRef = useRef(false);
+
+  useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = isOpen;
+
+    // Open → open retarget (resize): snap, don't animate.
+    if (wasOpen && isOpen) {
+      radiusApi.set({ radius: openRadius });
+      return;
+    }
+
+    // State transitions (open/close/hover): animate.
+    radiusApi.start({
+      radius: isOpen ? openRadius : isHovered ? 40 : 30,
+      config: isOpen
+        ? { tension: 100, friction: 20 } // smooth expansion
+        : { tension: 200, friction: 26 }, // snappier hover / close
+    });
+  }, [isOpen, isHovered, openRadius, radiusApi]);
 
   // Content fade: delayed on open so circle expands first, immediate on close
   const { contentOpacity } = useSpring({
@@ -62,6 +105,7 @@ export const SettingsOverlay = ({ position = 'left' }: SettingsOverlayProps) => 
 
   return (
     <animated.div
+      ref={overlayRef}
       className="absolute inset-0 z-50 bg-base-200"
       style={{
         clipPath: radius.to((r: number) => `circle(${r}px at ${config.clipPathOrigin})`),

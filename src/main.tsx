@@ -36,4 +36,10 @@ void (async () => {
       </StrictMode>
     </div>
   );
+
+  // Re-enable popup-shell transitions after the first paint so user-driven preset changes animate
+  // but the initial render snaps straight to the stored size instead of growing into it.
+  requestAnimationFrame(() => {
+    document.documentElement.classList.remove('pw-booting');
+  });
 })();
