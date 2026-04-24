@@ -16,6 +16,7 @@ import type { IDebugService } from '../../interfaces/IDebugService';
 import type { MessageResponse, PullRequest, RuntimeRequestMessage } from '../../../common/types';
 import { MIN_REFRESH_INTERVAL_MS, STORAGE_KEY_LAST_MANUAL_REFRESH_AT } from '../../../common/constants';
 import { EVENT_FETCH_PRS, PR_DATA_ACTION } from '../../../common/runtime-actions';
+import type { Alarm } from '@common/chrome-extension-service';
 
 function createDeferred<T>(): {
   promise: Promise<T>;
@@ -71,7 +72,7 @@ describe.sequential('EventService manual refresh throttle', () => {
             set: sessionSet,
           },
         },
-      } as unknown as typeof chrome
+      } as unknown as (typeof globalThis)['chrome']
     );
 
     getStoredAssigned = vi.fn().mockResolvedValue(empty);
@@ -323,7 +324,7 @@ describe.sequential('EventService manual refresh throttle', () => {
     await drainMicrotasks();
     expect((es as unknown as { manualRefreshWaveActive: boolean }).manualRefreshWaveActive).toBe(true);
 
-    await es.handleAlarm({ name: EVENT_FETCH_PRS } as chrome.alarms.Alarm);
+    await es.handleAlarm({ name: EVENT_FETCH_PRS } as Alarm);
     await drainMicrotasks();
 
     expect((es as unknown as { manualRefreshWaveActive: boolean }).manualRefreshWaveActive).toBe(true);

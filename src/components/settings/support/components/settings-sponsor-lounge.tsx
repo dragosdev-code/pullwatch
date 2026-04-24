@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { SPONSOR_URL } from '../../../../constants/sponsor';
 import type { LinkOpenBehavior } from '../../../../hooks/use-link-behavior';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import { isExtensionContext } from '../../../../utils/is-extension-context';
 
 interface SettingsSponsorLoungeProps {
@@ -65,7 +66,7 @@ export const SettingsSponsorLounge = ({ linkBehavior }: SettingsSponsorLoungePro
   const handleSponsorClick = (e: MouseEvent<HTMLAnchorElement>) => {
     if (linkBehavior === 'background' && isExtensionContext()) {
       e.preventDefault();
-      chrome.tabs.create({ url: SPONSOR_URL, active: false });
+      void chromeExtensionService.tabs.create({ url: SPONSOR_URL, active: false });
     }
   };
 

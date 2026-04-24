@@ -79,7 +79,7 @@ describe.sequential('EventService manual PR fetch barrier (withPrUiFetchIndicato
             set: vi.fn().mockResolvedValue(undefined),
           },
         },
-      } as unknown as typeof chrome
+      } as unknown as (typeof globalThis)['chrome']
     );
     prFetchInProgress = undefined;
 

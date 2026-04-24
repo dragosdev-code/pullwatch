@@ -17,10 +17,11 @@ import {
   validateStoredPatternData,
   type StoredPatternData,
 } from '../../common/pattern-registry-schema';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 function getExtensionVersion(): string {
   try {
-    return chrome.runtime.getManifest().version;
+    return chromeExtensionService.runtime.getManifest().version;
   } catch {
     return '0.0.0';
   }
@@ -185,7 +186,7 @@ export class PatternRegistryService implements IPatternRegistryService {
   }
 
   private async loadFromStorage(): Promise<StoredPatternData | null> {
-    const raw = await chrome.storage.local.get(STORAGE_KEY_PATTERN_REGISTRY);
+    const raw = await chromeExtensionService.storage.local.get(STORAGE_KEY_PATTERN_REGISTRY);
     const stored = raw[STORAGE_KEY_PATTERN_REGISTRY];
     if (!stored) return null;
 
@@ -201,7 +202,7 @@ export class PatternRegistryService implements IPatternRegistryService {
 
   private async persistToStorage(patterns: PatternRegistry, version: number): Promise<void> {
     const data: StoredPatternData = { patterns, version, timestamp: Date.now() };
-    await chrome.storage.local.set({ [STORAGE_KEY_PATTERN_REGISTRY]: data });
+    await chromeExtensionService.storage.local.set({ [STORAGE_KEY_PATTERN_REGISTRY]: data });
   }
 
   async dispose(): Promise<void> {

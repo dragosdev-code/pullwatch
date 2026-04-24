@@ -12,7 +12,6 @@ import {
   GITHUB_AUTHORED_APPROVED_URL_TEMPLATE,
   GITHUB_AUTHORED_CHANGES_REQUESTED_URL_TEMPLATE,
   GITHUB_AUTHORED_PENDING_URL_TEMPLATE,
-  GITHUB_AUTHORED_COMMENTED_URL_TEMPLATE,
   GITHUB_AUTHORED_DRAFT_URL_TEMPLATE,
   USER_AGENT,
   REQUEST_DELAY_MS,
@@ -28,6 +27,7 @@ import {
   isGitHubWebSessionAuthError,
 } from '../../common/errors';
 import { isOfflineError } from '../../common/network-utils';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import { parsePullsListHTML } from '../../common/pulls-list-parser';
 import { toPullsSearchUrl } from '../../common/github-url-utils';
 import { delay } from '../../common/utils';
@@ -83,7 +83,6 @@ export class GitHubService implements IGitHubService {
   private authoredApprovedURL: string;
   private authoredChangesRequestedURL: string;
   private authoredPendingURL: string;
-  private authoredCommentedURL: string;
   private authoredDraftURL: string;
   /**
    * Set from each successful {@link fetchGitHubData} HTML body via {@link viewerLogin} patterns.
@@ -106,7 +105,6 @@ export class GitHubService implements IGitHubService {
     this.authoredApprovedURL = GITHUB_AUTHORED_APPROVED_URL_TEMPLATE(this.baseURL);
     this.authoredChangesRequestedURL = GITHUB_AUTHORED_CHANGES_REQUESTED_URL_TEMPLATE(this.baseURL);
     this.authoredPendingURL = GITHUB_AUTHORED_PENDING_URL_TEMPLATE(this.baseURL);
-    this.authoredCommentedURL = GITHUB_AUTHORED_COMMENTED_URL_TEMPLATE(this.baseURL);
     this.authoredDraftURL = GITHUB_AUTHORED_DRAFT_URL_TEMPLATE(this.baseURL);
   }
 
@@ -286,7 +284,7 @@ export class GitHubService implements IGitHubService {
   /** Reads the cached route hint. Returns `null` when absent or expired. */
   private async readRouteHint(): Promise<RouteType | null> {
     try {
-      const data = await chrome.storage.local.get(STORAGE_KEY_ROUTE_HINT);
+      const data = await chromeExtensionService.storage.local.get(STORAGE_KEY_ROUTE_HINT);
       const hint = data[STORAGE_KEY_ROUTE_HINT] as RouteHint | undefined;
       if (!hint) return null;
 
@@ -305,12 +303,12 @@ export class GitHubService implements IGitHubService {
   private writeRouteHint(route: RouteType): void {
     const hint: RouteHint = { route, timestamp: Date.now() };
     // Fire-and-forget: if storage fails, the next cycle re-probes.
-    chrome.storage.local.set({ [STORAGE_KEY_ROUTE_HINT]: hint }).catch(() => {});
+    chromeExtensionService.storage.local.set({ [STORAGE_KEY_ROUTE_HINT]: hint }).catch(() => {});
   }
 
   /** Clears a stale hint when both routes fail, forcing a fresh probe next cycle. */
   private clearRouteHint(): void {
-    chrome.storage.local.remove(STORAGE_KEY_ROUTE_HINT).catch(() => {});
+    chromeExtensionService.storage.local.remove(STORAGE_KEY_ROUTE_HINT).catch(() => {});
   }
 
   // ─── Parse pipeline (URL-agnostic) ───────────────────────────────────────

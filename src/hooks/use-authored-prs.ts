@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { PullRequest } from '../../extension/common/types';
 import { queryKeys } from '../constants/query-keys';
-import { chromeExtensionService } from '../services/chrome-extension-service';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import { isExtensionContext } from '../utils/is-extension-context';
 import authoredPRsMock from '../mocks/authored-prs.json';
 

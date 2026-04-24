@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useSetGlobalError } from '../stores/global-error';
 import { useDebugMode, useDebugStore } from '../stores/debug';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**
  * Hook to synchronize Zustand store with Chrome storage
@@ -14,8 +15,8 @@ export const useStorageSync = () => {
   useEffect(() => {
     const loadDebugState = async () => {
       try {
-        if (typeof chrome !== 'undefined' && chrome.storage) {
-          const result = await chrome.storage.local.get('pr-extension-debug-mode');
+        if (chromeExtensionService.isExtensionContext()) {
+          const result = await chromeExtensionService.storage.local.get('pr-extension-debug-mode');
           const savedDebugMode = result['pr-extension-debug-mode'] || false;
 
           if (savedDebugMode !== debugMode) {
@@ -35,8 +36,8 @@ export const useStorageSync = () => {
   useEffect(() => {
     const saveDebugState = async () => {
       try {
-        if (typeof chrome !== 'undefined' && chrome.storage) {
-          await chrome.storage.local.set({ 'pr-extension-debug-mode': debugMode });
+        if (chromeExtensionService.isExtensionContext()) {
+          await chromeExtensionService.storage.local.set({ 'pr-extension-debug-mode': debugMode });
         }
       } catch (error) {
         console.warn('Failed to save debug state to Chrome storage:', error);

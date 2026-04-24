@@ -9,6 +9,12 @@ import {
 } from '../../common/constants';
 import { isCustomSoundId, resolvePlayableSoundOrFallback } from '../../common/sound-config';
 import { EVENT_PLAY_SOUND, EVENT_STOP_SOUND_PLAYBACK } from '../../common/runtime-actions';
+import {
+  chromeExtensionService,
+  ExtensionContextType,
+  type ExtensionContext,
+  type OffscreenReason,
+} from '@common/chrome-extension-service';
 
 type PlaySoundPayload = {
   soundType: NotificationSound;
@@ -59,16 +65,16 @@ export class SoundService implements ISoundService {
    * Checks if an offscreen document with the specified path already exists.
    */
   private async hasOffscreenDocument(): Promise<boolean> {
-    if (!chrome.offscreen || !chrome.runtime.getContexts) {
+    if (!chromeExtensionService.offscreen.isAvailable() || !chromeExtensionService.runtime.hasGetContexts()) {
       this.debugService.warn(
-        '[SoundService] chrome.offscreen or chrome.runtime.getContexts API is not available. Cannot check for offscreen document.'
+        '[SoundService] offscreen or runtime.getContexts API is not available. Cannot check for offscreen document.'
       );
       return false;
     }
     try {
-      const contexts: chrome.runtime.ExtensionContext[] = await chrome.runtime.getContexts({
-        contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
-        documentUrls: [chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)],
+      const contexts: ExtensionContext[] = await chromeExtensionService.runtime.getContexts({
+        contextTypes: [ExtensionContextType.OFFSCREEN_DOCUMENT],
+        documentUrls: [chromeExtensionService.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)],
       });
       return contexts && contexts.length > 0;
     } catch (error) {
@@ -85,9 +91,9 @@ export class SoundService implements ISoundService {
    * Lock is acquired synchronously before any async work to prevent TOCTOU races.
    */
   async ensureOffscreenDocument(): Promise<void> {
-    if (!chrome.offscreen) {
+    if (!chromeExtensionService.offscreen.isAvailable()) {
       this.debugService.error(
-        '[SoundService] chrome.offscreen API is not available. Cannot create offscreen document.'
+        '[SoundService] offscreen API is not available. Cannot create offscreen document.'
       );
       return Promise.reject(new Error('Offscreen API not available.'));
     }
@@ -113,9 +119,9 @@ export class SoundService implements ISoundService {
 
     this.debugService.log('[SoundService] Creating offscreen document...');
     try {
-      await chrome.offscreen.createDocument({
+      await chromeExtensionService.offscreen.createDocument({
         url: OFFSCREEN_DOCUMENT_PATH,
-        reasons: [OFFSCREEN_REASON_AUDIO_PLAYBACK as chrome.offscreen.Reason],
+        reasons: [OFFSCREEN_REASON_AUDIO_PLAYBACK as OffscreenReason],
         justification: 'Playing notification sounds for new PRs',
       });
       this.debugService.log('[SoundService] Offscreen document created successfully.');
@@ -147,7 +153,7 @@ export class SoundService implements ISoundService {
     }
     const slot = sound.replace(/^custom_/, '');
     const storageKey = `${CUSTOM_SOUND_STORAGE_PREFIX}${slot}`;
-    const result = await chrome.storage.local.get(storageKey);
+    const result = await chromeExtensionService.storage.local.get(storageKey);
     const customSoundBase64 = result[storageKey] as string | undefined;
     // WHY: Meta can still reference a slot after WAV was removed or failed to sync; sending
     // an empty custom payload only makes offscreen warn and fall back to ping—normalize here.
@@ -158,7 +164,7 @@ export class SoundService implements ISoundService {
   }
 
   private async loadCustomSoundsMeta(): Promise<CustomSoundMeta[]> {
-    const result = await chrome.storage.local.get(STORAGE_KEY_CUSTOM_SOUNDS_META);
+    const result = await chromeExtensionService.storage.local.get(STORAGE_KEY_CUSTOM_SOUNDS_META);
     return (result[STORAGE_KEY_CUSTOM_SOUNDS_META] as CustomSoundMeta[] | undefined) ?? [];
   }
 
@@ -214,20 +220,20 @@ export class SoundService implements ISoundService {
 
       const payload = await this.buildPlaySoundPayload(resolved);
 
-      await new Promise<void>((resolve, reject) => {
-        chrome.runtime.sendMessage({ action: EVENT_PLAY_SOUND, payload }, (response) => {
-          if (chrome.runtime.lastError) {
-            this.debugService.error(
-              '[SoundService] Error sending play sound message to offscreen:',
-              chrome.runtime.lastError.message
-            );
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            this.debugService.log('[SoundService] Sound playback completed, response:', response);
-            resolve();
-          }
+      try {
+        const response = await chromeExtensionService.runtime.sendMessage({
+          action: EVENT_PLAY_SOUND,
+          payload,
         });
-      });
+        this.debugService.log('[SoundService] Sound playback completed, response:', response);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.debugService.error(
+          '[SoundService] Error sending play sound message to offscreen:',
+          message
+        );
+        throw new Error(message);
+      }
     } catch (error) {
       this.debugService.error('[SoundService] Error playing notification sound:', error);
       // Don't re-throw: sound failure should not break the notification flow
@@ -244,17 +250,15 @@ export class SoundService implements ISoundService {
       if (!(await this.hasOffscreenDocument())) {
         return;
       }
-      await new Promise<void>((resolve) => {
-        chrome.runtime.sendMessage({ action: EVENT_STOP_SOUND_PLAYBACK, payload: {} }, () => {
-          if (chrome.runtime.lastError) {
-            this.debugService.warn(
-              '[SoundService] stop playback message:',
-              chrome.runtime.lastError.message
-            );
-          }
-          resolve();
+      try {
+        await chromeExtensionService.runtime.sendMessage({
+          action: EVENT_STOP_SOUND_PLAYBACK,
+          payload: {},
         });
-      });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.debugService.warn('[SoundService] stop playback message:', message);
+      }
     } catch (error) {
       this.debugService.error('[SoundService] Error stopping notification playback:', error);
     }
@@ -264,16 +268,16 @@ export class SoundService implements ISoundService {
    * Closes the offscreen document if it exists.
    */
   async closeOffscreenDocument(): Promise<void> {
-    if (!chrome.offscreen || !chrome.offscreen.closeDocument) {
+    if (!chromeExtensionService.offscreen.isAvailable()) {
       this.debugService.warn(
-        '[SoundService] chrome.offscreen.closeDocument API is not available. Cannot close offscreen document.'
+        '[SoundService] offscreen.closeDocument API is not available. Cannot close offscreen document.'
       );
       return;
     }
     if (await this.hasOffscreenDocument()) {
       try {
         this.debugService.log('[SoundService] Closing offscreen document...');
-        await chrome.offscreen.closeDocument();
+        await chromeExtensionService.offscreen.closeDocument();
         this.debugService.log('[SoundService] Offscreen document closed.');
       } catch (error) {
         this.debugService.error('[SoundService] Error closing offscreen document:', error);

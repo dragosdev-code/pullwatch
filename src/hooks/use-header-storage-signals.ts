@@ -4,6 +4,10 @@ import {
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
 } from '../../extension/common/constants';
 import { isExtensionContext } from '../utils/is-extension-context';
+import {
+  chromeExtensionService,
+  type StorageChange,
+} from '@common/chrome-extension-service';
 
 const HEADER_STORAGE_KEYS = [
   STORAGE_KEY_LAST_FETCH,
@@ -26,7 +30,7 @@ export const useHeaderStorageSignals = (): HeaderStorageSignals => {
   const [backgroundFetchInProgress, setBackgroundFetchInProgress] = useState(false);
 
   useEffect(() => {
-    if (!isExtensionContext() || typeof chrome === 'undefined' || !chrome.storage?.local) {
+    if (!isExtensionContext()) {
       return;
     }
 
@@ -40,15 +44,13 @@ export const useHeaderStorageSignals = (): HeaderStorageSignals => {
       setBackgroundFetchInProgress(busy === true);
     };
 
-    chrome.storage.local.get([...HEADER_STORAGE_KEYS], (items) => {
-      if (chrome.runtime?.lastError) {
-        return;
-      }
-      applySnapshot(items as Record<string, unknown>);
-    });
+    chromeExtensionService.storage.local
+      .get([...HEADER_STORAGE_KEYS])
+      .then(applySnapshot)
+      .catch(() => {});
 
     const onStorageChanged = (
-      changes: { [key: string]: chrome.storage.StorageChange },
+      changes: { [key: string]: StorageChange },
       areaName: string,
     ): void => {
       if (areaName !== 'local') return;
@@ -62,10 +64,10 @@ export const useHeaderStorageSignals = (): HeaderStorageSignals => {
       }
     };
 
-    chrome.storage.onChanged.addListener(onStorageChanged);
+    chromeExtensionService.storage.onChanged.addListener(onStorageChanged);
     return () => {
       cancelled = true;
-      chrome.storage.onChanged.removeListener(onStorageChanged);
+      chromeExtensionService.storage.onChanged.removeListener(onStorageChanged);
     };
   }, []);
 

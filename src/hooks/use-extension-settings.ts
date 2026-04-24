@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ExtensionSettings } from '../../extension/common/types';
-import { chromeExtensionService } from '../services/chrome-extension-service';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**
  * Hook for managing extension settings with automatic sync to Chrome storage.

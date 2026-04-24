@@ -2,6 +2,7 @@ import { memo, useCallback, useId, useMemo } from 'react';
 import { animated, useTransition } from '@react-spring/web';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { GITHUB_BASE_URL } from '../../../extension/common/constants';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import { isExtensionContext } from '../../utils/is-extension-context';
 import type { OnboardingRefreshState } from '../../hooks/use-onboarding';
 import {
@@ -50,8 +51,8 @@ export const LoggedOutView = memo(function LoggedOutView({
   const liveId = useId();
 
   const openGitHubLogin = useCallback(() => {
-    if (isExtensionContext() && chrome.tabs?.create) {
-      chrome.tabs.create({ url: LOGIN_URL, active: true });
+    if (isExtensionContext()) {
+      void chromeExtensionService.tabs.create({ url: LOGIN_URL, active: true });
       return;
     }
     window.open(LOGIN_URL, '_blank', 'noopener,noreferrer');

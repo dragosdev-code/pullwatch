@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { chromeExtensionService } from '../services/chrome-extension-service';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import { queryKeys } from '../constants/query-keys';
 
 /**

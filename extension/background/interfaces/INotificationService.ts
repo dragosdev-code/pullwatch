@@ -1,5 +1,6 @@
 import type { PullRequest } from '../../common/types';
 import type { IService } from './IService';
+import type { NotificationCreateOptions } from '@common/chrome-extension-service';
 
 /**
  * Interface for the notification service that handles Chrome extension notifications.
@@ -42,7 +43,7 @@ export interface INotificationService extends IService {
    * @param notificationId - Optional explicit ID (recommended for dedup and macOS compatibility)
    */
   createNotification(
-    options: chrome.notifications.NotificationCreateOptions,
+    options: NotificationCreateOptions,
     notificationId?: string
   ): Promise<void>;
 

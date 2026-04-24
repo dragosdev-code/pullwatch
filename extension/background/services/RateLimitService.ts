@@ -5,6 +5,7 @@ import {
   RATE_LIMIT_MAX_BACKOFF_MS,
   STORAGE_KEY_RATE_LIMIT,
 } from '../../common/constants';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**
  * Tracks GitHub rate limit (429) state and enforces exponential backoff.
@@ -26,7 +27,7 @@ export class RateLimitService implements IRateLimitService {
 
   async initialize(): Promise<void> {
     try {
-      const result = await chrome.storage.local.get(STORAGE_KEY_RATE_LIMIT);
+      const result = await chromeExtensionService.storage.local.get(STORAGE_KEY_RATE_LIMIT);
       const persisted = result[STORAGE_KEY_RATE_LIMIT] as RateLimitState | undefined;
       if (persisted) {
         this.state = persisted;
@@ -114,7 +115,7 @@ export class RateLimitService implements IRateLimitService {
 
   private async persist(): Promise<void> {
     try {
-      await chrome.storage.local.set({ [STORAGE_KEY_RATE_LIMIT]: this.state });
+      await chromeExtensionService.storage.local.set({ [STORAGE_KEY_RATE_LIMIT]: this.state });
     } catch (error) {
       this.debugService.error('[RateLimitService] Failed to persist state:', error);
     }

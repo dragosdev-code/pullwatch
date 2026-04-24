@@ -7,6 +7,7 @@ import {
   BADGE_TEXT_COLOR_INACTIVE,
   BADGE_TEXT_LOADING,
 } from '../../common/constants';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**
  * BadgeService handles Chrome extension badge management and visual feedback.
@@ -39,9 +40,9 @@ export class BadgeService implements IBadgeService {
       const badgeTextColor = textColor || BADGE_TEXT_COLOR_ACTIVE;
       const badgeText = String(countOrText);
 
-      await chrome.action.setBadgeBackgroundColor({ color: badgeColor });
-      await chrome.action.setBadgeTextColor({ color: badgeTextColor });
-      await chrome.action.setBadgeText({ text: badgeText });
+      await chromeExtensionService.action.setBadgeBackgroundColor({ color: badgeColor });
+      await chromeExtensionService.action.setBadgeTextColor({ color: badgeTextColor });
+      await chromeExtensionService.action.setBadgeText({ text: badgeText });
 
       this.debugService.log(`[BadgeService] Badge updated: "${badgeText}", Color: ${badgeColor}`);
     } catch (error) {
@@ -104,7 +105,7 @@ export class BadgeService implements IBadgeService {
 
   private async getBadgeText(): Promise<string> {
     try {
-      const result = await chrome.action.getBadgeText({});
+      const result = await chromeExtensionService.action.getBadgeText({});
       return result;
     } catch (error) {
       this.debugService.error('[BadgeService] Error getting badge text:', error);

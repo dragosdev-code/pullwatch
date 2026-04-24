@@ -11,6 +11,7 @@ import type { IRateLimitService } from '../../interfaces/IRateLimitService';
 import type { MessageResponse, RuntimeRequestMessage } from '../../../common/types';
 import { GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE } from '../../../common/errors';
 import { EVENT_FETCH_PRS, PR_DATA_ACTION } from '../../../common/runtime-actions';
+import type { Alarm } from '@common/chrome-extension-service';
 
 const debugService: IDebugService = {
   initialize: vi.fn(),
@@ -36,7 +37,7 @@ describe('EventService GitHub web-session invalidation', () => {
             set: vi.fn().mockResolvedValue(undefined),
           },
         },
-      } as unknown as typeof chrome
+      } as unknown as (typeof globalThis)['chrome']
     );
     clearGitHubWebSessionCaches = vi.fn().mockResolvedValue(undefined);
     setDefaultBadge = vi.fn().mockResolvedValue(undefined);
@@ -102,7 +103,7 @@ describe('EventService GitHub web-session invalidation', () => {
   });
 
   it('handleAlarm clears GitHub-derived storage when the fetch proves logged out', async () => {
-    await eventService.handleAlarm({ name: EVENT_FETCH_PRS } as chrome.alarms.Alarm);
+    await eventService.handleAlarm({ name: EVENT_FETCH_PRS } as Alarm);
     expect(clearGitHubWebSessionCaches).toHaveBeenCalledTimes(1);
     expect(setDefaultBadge).toHaveBeenCalledTimes(1);
   });

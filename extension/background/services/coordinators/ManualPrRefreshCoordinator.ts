@@ -10,6 +10,7 @@ import {
   GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE,
   isGitHubWebSessionAuthError,
 } from '../../../common/errors';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 export type ManualPrRefreshKind = 'assigned' | 'merged' | 'authored';
 
@@ -170,7 +171,7 @@ export class ManualPrRefreshCoordinator {
       return false;
     }
 
-    const result = await chrome.storage.session.get(STORAGE_KEY_LAST_MANUAL_REFRESH_AT);
+    const result = await chromeExtensionService.storage.session.get(STORAGE_KEY_LAST_MANUAL_REFRESH_AT);
     const lastAt = (result[STORAGE_KEY_LAST_MANUAL_REFRESH_AT] as number | undefined) ?? 0;
 
     // WHY [double-check-after-await]: Parallel handlers all await `get` together; the leader sets
@@ -186,7 +187,7 @@ export class ManualPrRefreshCoordinator {
 
     this.waveActive = true;
 
-    chrome.storage.session.set({ [STORAGE_KEY_LAST_MANUAL_REFRESH_AT]: Date.now() }).catch((err) => {
+    chromeExtensionService.storage.session.set({ [STORAGE_KEY_LAST_MANUAL_REFRESH_AT]: Date.now() }).catch((err) => {
       this.debugService.error('[EventService] Failed to persist manual refresh timestamp:', err);
     });
 

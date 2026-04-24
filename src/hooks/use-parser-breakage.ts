@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { BROADCAST_ACTION } from '../../extension/common/runtime-actions';
 import { STORAGE_KEY_PARSER_BREAKAGE } from '../../extension/common/constants';
-import { chromeExtensionService } from '../services/chrome-extension-service';
+import {
+  chromeExtensionService,
+  type StorageChange,
+} from '@common/chrome-extension-service';
 
 /**
  * Reads the parser-breakage flag from chrome.storage.local on mount and
@@ -13,9 +16,9 @@ export function useParserBreakage(): boolean {
   const [broken, setBroken] = useState(false);
 
   useEffect(() => {
-    if (typeof chrome === 'undefined' || !chrome.storage) return;
+    if (!chromeExtensionService.isExtensionContext()) return;
 
-    chrome.storage.local.get(STORAGE_KEY_PARSER_BREAKAGE).then((result) => {
+    chromeExtensionService.storage.local.get(STORAGE_KEY_PARSER_BREAKAGE).then((result) => {
       setBroken(!!result[STORAGE_KEY_PARSER_BREAKAGE]);
     });
 
@@ -28,17 +31,17 @@ export function useParserBreakage(): boolean {
     });
 
     const onStorageChanged = (
-      changes: { [key: string]: chrome.storage.StorageChange },
+      changes: { [key: string]: StorageChange },
       area: string,
     ) => {
       if (area !== 'local' || !(STORAGE_KEY_PARSER_BREAKAGE in changes)) return;
       setBroken(!!changes[STORAGE_KEY_PARSER_BREAKAGE].newValue);
     };
 
-    chrome.storage.onChanged.addListener(onStorageChanged);
+    chromeExtensionService.storage.onChanged.addListener(onStorageChanged);
     return () => {
       cleanupMessage();
-      chrome.storage.onChanged.removeListener(onStorageChanged);
+      chromeExtensionService.storage.onChanged.removeListener(onStorageChanged);
     };
   }, []);
 

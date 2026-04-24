@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { BellIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { animated, useTransition } from '@react-spring/web';
-import { chromeExtensionService } from '../../../../../services/chrome-extension-service';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import {
   SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
   SETTINGS_TEST_ERROR_CHROME_DENIED,
@@ -85,7 +85,7 @@ export const SettingsNotificationTestButton = ({
    * WHY [list URL]: No stable deep link to one extension row in Chrome settings — open the notifications page.
    */
   const handleOpenChromeSettings = useCallback(() => {
-    chrome.tabs.create({ url: CHROME_NOTIFICATION_SETTINGS_URL, active: true });
+    void chromeExtensionService.tabs.create({ url: CHROME_NOTIFICATION_SETTINGS_URL, active: true });
   }, []);
 
   const iconTransitions = useTransition(cooldown, {

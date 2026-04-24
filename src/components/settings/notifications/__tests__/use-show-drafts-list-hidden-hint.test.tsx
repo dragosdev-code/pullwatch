@@ -13,7 +13,7 @@ const { readAssignedPrsFromLocalStorage } = vi.hoisted(() => ({
   readAssignedPrsFromLocalStorage: vi.fn(),
 }));
 
-vi.mock('../../../../services/chrome-extension-service', () => ({
+vi.mock('@common/chrome-extension-service', () => ({
   chromeExtensionService: {
     readAssignedPrsFromLocalStorage,
   },

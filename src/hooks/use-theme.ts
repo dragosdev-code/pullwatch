@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isExtensionContext } from '../utils/is-extension-context';
 import { runThemeRipple } from '../lib/theme-ripple';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 const STORAGE_KEY = 'pr-extension-theme';
 const DEFAULT_THEME = 'light';
@@ -16,10 +17,11 @@ export const useTheme = () => {
   useEffect(() => {
     const loadTheme = async () => {
       try {
-        const saved = isExtensionContext()
-          ? (await chrome.storage.sync.get(STORAGE_KEY))[STORAGE_KEY]
+        const savedRecord = isExtensionContext()
+          ? await chromeExtensionService.storage.sync.get(STORAGE_KEY)
           : null;
-        const resolved = saved || DEFAULT_THEME;
+        const saved = savedRecord?.[STORAGE_KEY];
+        const resolved = typeof saved === 'string' && saved ? saved : DEFAULT_THEME;
         themeRef.current = resolved;
         setThemeState(resolved);
         document.documentElement.setAttribute('data-theme', resolved);
@@ -56,7 +58,7 @@ export const useTheme = () => {
 
       try {
         if (isExtensionContext()) {
-          await chrome.storage.sync.set({ [STORAGE_KEY]: newTheme });
+          await chromeExtensionService.storage.sync.set({ [STORAGE_KEY]: newTheme });
         }
       } catch {
         console.warn('Failed to persist theme to Chrome storage');

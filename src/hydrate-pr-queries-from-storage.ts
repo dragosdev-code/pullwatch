@@ -7,6 +7,7 @@ import {
 import type { StoredPRs } from '../extension/common/types';
 import { runWithTransientStorageRetry } from '../extension/common/transient-storage-retry';
 import { queryKeys } from './constants/query-keys';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import { isExtensionContext } from './utils/is-extension-context';
 
 /**
@@ -17,7 +18,7 @@ import { isExtensionContext } from './utils/is-extension-context';
 export const hydratePrQueriesFromStorage = async (
   queryClient: QueryClient
 ): Promise<void> => {
-  if (!isExtensionContext() || typeof chrome === 'undefined' || !chrome.storage?.local) {
+  if (!isExtensionContext()) {
     return;
   }
 
@@ -26,7 +27,9 @@ export const hydratePrQueriesFromStorage = async (
   let result: Record<string, unknown>;
   try {
     // Same retry policy as StorageService — see extension/common/transient-storage-retry.ts
-    result = await runWithTransientStorageRetry(() => chrome.storage.local.get([...keys] as string[]));
+    result = await runWithTransientStorageRetry(() =>
+      chromeExtensionService.storage.local.get([...keys] as string[])
+    );
   } catch {
     return;
   }

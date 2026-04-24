@@ -26,6 +26,7 @@ import {
   DEFAULT_EXTENSION_SETTINGS,
   ensureCompleteSettings,
 } from '../../common/extension-settings-defaults';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**
  * StorageService handles Chrome extension storage operations with validation and error handling.
@@ -33,14 +34,14 @@ import {
  *
  * WHY [sync vs local]: `chrome.storage.sync` holds user settings (cross-device); `chrome.storage.local`
  * holds PR lists, alarm overrides, rate-limit blobs, and other device-local data. The popup reads PR
- * lists from **local** without messaging the service worker (`src/services/chrome-extension-service.ts`);
+ * lists from **local** without messaging the service worker (`@common/chrome-extension-service`);
  * the background is the primary writer for those keys through this service.
  */
 export class StorageService implements IStorageService {
   private debugService: IDebugService;
   private initialized = false;
-  private localStorage = chrome.storage.local;
-  private syncStorage = chrome.storage.sync;
+  private localStorage = chromeExtensionService.storage.local;
+  private syncStorage = chromeExtensionService.storage.sync;
 
   constructor(debugService: IDebugService) {
     this.debugService = debugService;

@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect, useId } from 'react';
 import { animated, useTransition } from '@react-spring/web';
 import type { NotificationSound } from '../../../extension/common/types';
 import { isPlayableSound } from '../../../extension/common/sound-config';
-import { chromeExtensionService } from '../../services/chrome-extension-service';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import {
   claimPreviewSession,
   getActivePreviewSessionId,

@@ -1,5 +1,10 @@
 import type { RuntimeMessage, MessageResponse } from '../../common/types';
 import type { IService } from './IService';
+import type {
+  Alarm,
+  InstalledDetails,
+  MessageSender,
+} from '@common/chrome-extension-service';
 
 /**
  * Event service interface for managing Chrome extension events and messages.
@@ -8,9 +13,9 @@ import type { IService } from './IService';
  * the class for testability but are not part of the interface contract.
  */
 export interface IEventService extends IService {
-  handleInstallation(details: chrome.runtime.InstalledDetails): Promise<void>;
+  handleInstallation(details: InstalledDetails): Promise<void>;
   handleStartup(): Promise<void>;
-  handleAlarm(alarm: chrome.alarms.Alarm): Promise<void>;
+  handleAlarm(alarm: Alarm): Promise<void>;
   handleNotificationClick(notificationId: string): Promise<void>;
 
   /**
@@ -19,7 +24,7 @@ export interface IEventService extends IService {
    */
   handleMessage(
     message: RuntimeMessage,
-    sender: chrome.runtime.MessageSender,
+    sender: MessageSender,
     sendResponse: (response: MessageResponse) => void
   ): void;
 }

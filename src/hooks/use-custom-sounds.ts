@@ -7,6 +7,10 @@ import {
   MAX_CUSTOM_SOUNDS,
 } from '../../extension/common/constants';
 import { validateCustomSoundName } from '../../extension/common/custom-sound-name';
+import {
+  chromeExtensionService,
+  type StorageChange,
+} from '@common/chrome-extension-service';
 
 /**
  * Custom sounds: metadata list in `custom_sounds_meta`, WAV bytes per slot in `custom_sound_{n}`.
@@ -16,13 +20,13 @@ import { validateCustomSoundName } from '../../extension/common/custom-sound-nam
 
 /** WHY guard: hook runs in unit tests / Storybook without extension APIs—return empty instead of throwing. */
 async function loadMeta(): Promise<CustomSoundMeta[]> {
-  if (typeof chrome === 'undefined' || !chrome.storage) return [];
-  const result = await chrome.storage.local.get(STORAGE_KEY_CUSTOM_SOUNDS_META);
+  if (!chromeExtensionService.isExtensionContext()) return [];
+  const result = await chromeExtensionService.storage.local.get(STORAGE_KEY_CUSTOM_SOUNDS_META);
   return (result[STORAGE_KEY_CUSTOM_SOUNDS_META] as CustomSoundMeta[] | undefined) ?? [];
 }
 
 async function persistMeta(meta: CustomSoundMeta[]): Promise<void> {
-  await chrome.storage.local.set({ [STORAGE_KEY_CUSTOM_SOUNDS_META]: meta });
+  await chromeExtensionService.storage.local.set({ [STORAGE_KEY_CUSTOM_SOUNDS_META]: meta });
 }
 
 /**
@@ -55,10 +59,10 @@ export function useCustomSounds() {
    * can write `custom_sounds_meta`; without this, React state would stay stale until remount.
    */
   useEffect(() => {
-    if (typeof chrome === 'undefined' || !chrome.storage) return;
+    if (!chromeExtensionService.isExtensionContext()) return;
 
     const listener = (
-      changes: { [key: string]: chrome.storage.StorageChange },
+      changes: { [key: string]: StorageChange },
       area: string,
     ) => {
       if (area !== 'local' || !(STORAGE_KEY_CUSTOM_SOUNDS_META in changes)) return;
@@ -68,8 +72,8 @@ export function useCustomSounds() {
       setCustomSounds(newVal ?? []);
     };
 
-    chrome.storage.onChanged.addListener(listener);
-    return () => chrome.storage.onChanged.removeListener(listener);
+    chromeExtensionService.storage.onChanged.addListener(listener);
+    return () => chromeExtensionService.storage.onChanged.removeListener(listener);
   }, []);
 
   /** WHY length-based: slot reuse means “free slot” ≠ “under max count”; cap is total clips, not highest id. */
@@ -109,7 +113,7 @@ export function useCustomSounds() {
       const updated = [...current, meta];
 
       // WHY WAV before meta: background/offscreen read meta then load by `storageKey`; meta pointing at missing WAV causes orphan/fallback noise.
-      await chrome.storage.local.set({ [storageKey]: base64Wav });
+      await chromeExtensionService.storage.local.set({ [storageKey]: base64Wav });
       await persistMeta(updated);
       setCustomSounds(updated);
 
@@ -126,7 +130,7 @@ export function useCustomSounds() {
     const updated = current.filter((m) => m.id !== id);
 
     // WHY remove WAV key: free disk; slot becomes eligible again via `nextAvailableSlot`.
-    await chrome.storage.local.remove(target.storageKey);
+    await chromeExtensionService.storage.local.remove(target.storageKey);
     await persistMeta(updated);
     setCustomSounds(updated);
   }, []);

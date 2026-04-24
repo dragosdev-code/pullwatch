@@ -10,7 +10,7 @@
  * @module sound-preview-session
  */
 
-import { chromeExtensionService } from './chrome-extension-service';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /** The `useId()` of the button currently allowed to show “playing” after a successful claim. */
 let activeClientId: string | null = null;

@@ -20,10 +20,11 @@ export type ChromeNotificationPermissionLevel = 'granted' | 'denied';
  * WHY [not cached]: The user can toggle this in Chrome settings at any time between Preview clicks.
  * Always re-query so the notice reflects the *current* state when the user clicks Preview.
  */
+import { chromeExtensionService } from '@common/chrome-extension-service';
+
 export const getChromeNotificationPermissionLevel =
   async (): Promise<ChromeNotificationPermissionLevel> => {
     // WHY [Promise API]: Chrome 116+ supports the Promise return; callback form is still available
     // but unnecessary for our minimum Chrome target. The cast narrows the Chrome-typed union.
-    const level = await chrome.notifications.getPermissionLevel();
-    return level as ChromeNotificationPermissionLevel;
+    return chromeExtensionService.notifications.getPermissionLevel();
   };

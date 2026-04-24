@@ -44,7 +44,7 @@ The left half is how the popup **sees** state. The right half is how the popup *
 
 ## The single popup side entry point
 
-Every runtime message from the popup goes through one file: [src/services/chrome-extension-service.ts](../src/services/chrome-extension-service.ts). Having one entry point means every message is typed, every call site can be found with one search, and the "popup talking to worker" surface cannot quietly grow sideways.
+Every runtime message from the popup goes through one file: [extension/common/chrome-extension-service.ts](../extension/common/chrome-extension-service.ts) (import as `@common/chrome-extension-service`). Having one entry point means every message is typed, every call site can be found with one search, and the "popup talking to worker" surface cannot quietly grow sideways.
 
 The core is a tiny wrapper:
 

@@ -7,14 +7,10 @@
   "env": {
     "builtin": true
   },
-  "ignorePatterns": [
-    "dist"
-  ],
+  "ignorePatterns": ["dist"],
   "overrides": [
     {
-      "files": [
-        "**/*.{ts,tsx}"
-      ],
+      "files": ["**/*.{ts,tsx}"],
       "rules": {
         "constructor-super": "off",
         "for-direction": "error",
@@ -102,12 +98,16 @@
           {
             "allowConstantExport": true
           }
+        ],
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "chrome",
+            "message": "Use chromeExtensionService (and its exported types) from @common/chrome-extension-service — do not reference the chrome global elsewhere."
+          }
         ]
       },
-      "plugins": [
-        "typescript",
-        "react"
-      ],
+      "plugins": ["typescript", "react"],
       "env": {
         "es2020": true,
         "browser": true
@@ -120,6 +120,12 @@
         "registerProcessor": "readonly",
         "sampleRate": "readonly",
         "WorkletGlobalScope": "readonly"
+      }
+    },
+    {
+      "files": ["extension/common/chrome-extension-service.ts"],
+      "rules": {
+        "no-restricted-globals": "off"
       }
     }
   ]

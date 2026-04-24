@@ -5,6 +5,10 @@ import {
   STORAGE_KEY_LAST_MANUAL_REFRESH_AT,
 } from '../../extension/common/constants';
 import type { PullRequest } from '../../extension/common/types';
+import {
+  chromeExtensionService,
+  type StorageChange,
+} from '@common/chrome-extension-service';
 
 /** Upper bound for indeterminate fetch ring progress (ms) — actual completion snaps to 100%. */
 const FETCH_RING_ESTIMATED_MAX_MS = 7000;
@@ -70,8 +74,7 @@ export const useRateLimitedRefresh = ({
   clearGlobalError,
   setGlobalError,
 }: UseRateLimitedRefreshOptions): UseRateLimitedRefreshResult => {
-  const hasSessionStorage =
-    typeof chrome !== 'undefined' && chrome.storage?.session !== undefined;
+  const hasSessionStorage = chromeExtensionService.isExtensionContext();
 
   const [sessionHydrated, setSessionHydrated] = useState(!hasSessionStorage);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -97,7 +100,7 @@ export const useRateLimitedRefresh = ({
     if (!hasSessionStorage) return;
 
     let cancelled = false;
-    void chrome.storage.session
+    void chromeExtensionService.storage.session
       .get(STORAGE_KEY_LAST_MANUAL_REFRESH_AT)
       .then((sessionRecord) => {
         if (cancelled) return;
@@ -119,10 +122,10 @@ export const useRateLimitedRefresh = ({
   }, [hasSessionStorage]);
 
   useEffect(() => {
-    if (!hasSessionStorage || typeof chrome.storage?.onChanged === 'undefined') return;
+    if (!hasSessionStorage) return;
 
     const listener = (
-      changes: Record<string, chrome.storage.StorageChange>,
+      changes: Record<string, StorageChange>,
       areaName: string
     ) => {
       if (areaName !== 'session') return;
@@ -134,8 +137,8 @@ export const useRateLimitedRefresh = ({
       }
     };
 
-    chrome.storage.onChanged.addListener(listener);
-    return () => chrome.storage.onChanged.removeListener(listener);
+    chromeExtensionService.storage.onChanged.addListener(listener);
+    return () => chromeExtensionService.storage.onChanged.removeListener(listener);
   }, [hasSessionStorage]);
 
   // Only tick while a cooldown countdown or fetch-progress animation is active.

@@ -2,6 +2,10 @@ import { BackgroundManager } from './services/BackgroundManager';
 import { ServiceContainer } from './core/ServiceContainer';
 import type { IEventService } from './interfaces/IEventService';
 import type { RuntimeMessage, MessageResponse } from '../common/types';
+import {
+  chromeExtensionService,
+  type MessageSender,
+} from '@common/chrome-extension-service';
 
 /**
  * Main entry point for the background service worker.
@@ -68,7 +72,7 @@ function getEventService(): IEventService {
  * Runs extension install/update setup (permissions, alarm, initial fetch) after shared init.
  * @param details - Chrome install/update reason and previous version when applicable.
  */
-chrome.runtime.onInstalled.addListener(async (details) => {
+chromeExtensionService.runtime.onInstalled.addListener(async (details) => {
   try {
     await initPromise;
     await getEventService().handleInstallation(details);
@@ -78,7 +82,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 /** Restores permissions and the fetch alarm when the browser profile starts. */
-chrome.runtime.onStartup.addListener(async () => {
+chromeExtensionService.runtime.onStartup.addListener(async () => {
   try {
     await initPromise;
     await getEventService().handleStartup();
@@ -91,7 +95,7 @@ chrome.runtime.onStartup.addListener(async () => {
  * Periodic wake: refreshes assigned, merged, and authored PRs (respecting rate-limit backoff).
  * @param alarm - Fired alarm; name is matched to the fetch PRs alarm in EventService.
  */
-chrome.alarms.onAlarm.addListener(async (alarm) => {
+chromeExtensionService.alarms.onAlarm.addListener(async (alarm) => {
   try {
     await initPromise;
     await getEventService().handleAlarm(alarm);
@@ -101,7 +105,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 /** Routes notification clicks to the notification service (e.g. clear + future deep-link). */
-chrome.notifications.onClicked.addListener(async (notificationId) => {
+chromeExtensionService.notifications.onClicked.addListener(async (notificationId) => {
   try {
     await initPromise;
     await getEventService().handleNotificationClick(notificationId);
@@ -110,16 +114,20 @@ chrome.notifications.onClicked.addListener(async (notificationId) => {
   }
 });
 
-chrome.runtime.onMessage.addListener(
+chromeExtensionService.runtime.onMessage.addListener(
   (
-    message: RuntimeMessage,
-    sender: chrome.runtime.MessageSender,
-    sendResponse: (response: MessageResponse) => void
+    message: unknown,
+    sender: MessageSender,
+    sendResponse: (response?: unknown) => void
   ): boolean => {
     initPromise
       .then(() => {
         const eventService = getEventService();
-        eventService.handleMessage(message, sender, sendResponse);
+        eventService.handleMessage(
+          message as RuntimeMessage,
+          sender,
+          sendResponse as (response: MessageResponse) => void
+        );
       })
       .catch((error) => {
         console.error('[Main] Error in onMessage:', error);

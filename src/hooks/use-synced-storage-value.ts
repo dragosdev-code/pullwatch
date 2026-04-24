@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isExtensionContext } from '../utils/is-extension-context';
+import {
+  chromeExtensionService,
+  type StorageChange,
+} from '@common/chrome-extension-service';
 
 interface UseSyncedStorageValueOptions<T extends string> {
   key: string;
@@ -35,7 +39,7 @@ export const useSyncedStorageValue = <T extends string>({
         let raw: unknown;
 
         if (isExtensionContext()) {
-          const result = await chrome.storage.sync.get(key);
+          const result = await chromeExtensionService.storage.sync.get(key);
           raw = result[key];
         }
 
@@ -57,7 +61,7 @@ export const useSyncedStorageValue = <T extends string>({
     if (!isExtensionContext()) return;
 
     const onStorageChanged = (
-      changes: { [k: string]: chrome.storage.StorageChange },
+      changes: { [k: string]: StorageChange },
       area: string
     ) => {
       if (area !== 'sync' || !changes[key]) return;
@@ -66,8 +70,8 @@ export const useSyncedStorageValue = <T extends string>({
       onApplyRef.current?.(validated);
     };
 
-    chrome.storage.onChanged.addListener(onStorageChanged);
-    return () => chrome.storage.onChanged.removeListener(onStorageChanged);
+    chromeExtensionService.storage.onChanged.addListener(onStorageChanged);
+    return () => chromeExtensionService.storage.onChanged.removeListener(onStorageChanged);
   }, [key, defaultValue]);
 
   const setValue = useCallback(
@@ -81,7 +85,7 @@ export const useSyncedStorageValue = <T extends string>({
       }
       try {
         if (isExtensionContext()) {
-          await chrome.storage.sync.set({ [key]: next });
+          await chromeExtensionService.storage.sync.set({ [key]: next });
         }
       } catch {
         console.warn(`Failed to persist ${key} to Chrome storage`);

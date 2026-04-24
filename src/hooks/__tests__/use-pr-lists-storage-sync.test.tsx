@@ -10,6 +10,26 @@ import {
 import type { PullRequest, StoredPRs } from '../../../extension/common/types';
 import { queryKeys } from '../../constants/query-keys';
 import { usePrListsStorageSync } from '../use-pr-lists-storage-sync';
+import type { StorageChange } from '@common/chrome-extension-service';
+
+const addListenerMock = vi.fn();
+const removeListenerMock = vi.fn();
+
+vi.mock('@common/chrome-extension-service', () => ({
+  chromeExtensionService: {
+    isExtensionContext: vi.fn(() => true),
+    storage: {
+      onChanged: {
+        addListener: (cb: unknown) => addListenerMock(cb),
+        removeListener: (cb: unknown) => removeListenerMock(cb),
+      },
+    },
+  },
+}));
+
+vi.mock('../../utils/is-extension-context', () => ({
+  isExtensionContext: () => true,
+}));
 
 /** Minimal `PullRequest` for cache shape assertions — only fields the hook touches are required. */
 const samplePr: PullRequest = {
@@ -30,7 +50,9 @@ const storedEnvelope = (prs: PullRequest[]): StoredPRs => ({
 
 describe('usePrListsStorageSync', () => {
   let queryClient: QueryClient;
-  let capturedListener: Parameters<typeof chrome.storage.onChanged.addListener>[0] | undefined;
+  let capturedListener:
+    | ((changes: Record<string, StorageChange>, area: string) => void)
+    | undefined;
 
   const createWrapper = (client: QueryClient) => {
     const Wrapper = ({ children }: { children: ReactNode }) => (
@@ -45,46 +67,28 @@ describe('usePrListsStorageSync', () => {
     });
     capturedListener = undefined;
 
-    const addListener = vi.fn((cb: Parameters<typeof chrome.storage.onChanged.addListener>[0]) => {
-      capturedListener = cb;
-    });
-    const removeListener = vi.fn();
-
-    (
-      globalThis as {
-        chrome: typeof chrome;
-      }
-    ).chrome = {
-      runtime: { sendMessage: vi.fn() },
-      storage: {
-        onChanged: {
-          addListener,
-          removeListener,
-        },
+    addListenerMock.mockReset().mockImplementation(
+      (cb: (changes: Record<string, StorageChange>, area: string) => void) => {
+        capturedListener = cb;
       },
-    } as unknown as typeof chrome;
+    );
+    removeListenerMock.mockReset();
   });
 
   afterEach(() => {
-    // Unmount hooks first so effect cleanups still see `chrome`; Vitest runs this file's
-    // afterEach before RTL's automatic cleanup would, otherwise `removeListener` throws.
     cleanup();
-    delete (globalThis as { chrome?: typeof chrome }).chrome;
     vi.clearAllMocks();
   });
 
-  it('registers chrome.storage.onChanged on mount and removes on unmount', () => {
-    const addListener = chrome.storage.onChanged.addListener as ReturnType<typeof vi.fn>;
-    const removeListener = chrome.storage.onChanged.removeListener as ReturnType<typeof vi.fn>;
-
+  it('registers storage.onChanged on mount and removes on unmount', () => {
     const { unmount } = renderHook(() => usePrListsStorageSync(), {
       wrapper: createWrapper(queryClient),
     });
 
-    expect(addListener).toHaveBeenCalledTimes(1);
-    const listenerFn = addListener.mock.calls[0][0];
+    expect(addListenerMock).toHaveBeenCalledTimes(1);
+    const listenerFn = addListenerMock.mock.calls[0][0];
     unmount();
-    expect(removeListener).toHaveBeenCalledWith(listenerFn);
+    expect(removeListenerMock).toHaveBeenCalledWith(listenerFn);
   });
 
   it('updates assigned PRs query cache when local storage key changes', () => {

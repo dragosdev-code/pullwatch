@@ -6,6 +6,7 @@ import {
 } from '../common/runtime-actions';
 import type { RuntimeMessage, MessageResponse, NotificationSound, BuiltInSound } from '../common/types';
 import { SOUND_PRESETS, isCustomSoundId, isBuiltInSound, type SoundPreset } from '../common/sound-config';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 // Initialize debug tools for this context
 initializeDebugTools();
@@ -290,7 +291,8 @@ async function handlePlayNotificationSound(
 }
 
 // Listen for messages from other parts of the extension (e.g., background script)
-chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {
+chromeExtensionService.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
+  const message = rawMessage as RuntimeMessage;
   debugLog('Offscreen document received message:', message, 'from sender:', sender);
 
   if (message.action === EVENT_PLAY_SOUND) {
@@ -334,7 +336,7 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
 // Notify the background script that the offscreen document is ready and loaded.
 // This is useful for the background script to know it can start sending messages.
 function notifyBackgroundReady(): void {
-  chrome.runtime
+  chromeExtensionService.runtime
     .sendMessage({ action: EVENT_OFFSCREEN_READY } as RuntimeMessage)
     .then((response) => {
       debugLog('Successfully sent offscreenReady message to background. Response:', response);

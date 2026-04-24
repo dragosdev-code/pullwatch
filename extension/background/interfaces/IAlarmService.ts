@@ -1,4 +1,5 @@
 import type { IService } from './IService';
+import type { Alarm, AlarmCreateInfo } from '@common/chrome-extension-service';
 
 /**
  * Interface for the alarm service that handles Chrome extension alarms.
@@ -12,12 +13,12 @@ export interface IAlarmService extends IService {
   /**
    * Creates a new alarm with the given name and configuration.
    */
-  createAlarm(name: string, alarmInfo: chrome.alarms.AlarmCreateInfo): Promise<void>;
+  createAlarm(name: string, alarmInfo: AlarmCreateInfo): Promise<void>;
 
   /**
    * Gets an existing alarm by name.
    */
-  getAlarm(name: string): Promise<chrome.alarms.Alarm | undefined>;
+  getAlarm(name: string): Promise<Alarm | undefined>;
 
   /**
    * Clears a single alarm by name.

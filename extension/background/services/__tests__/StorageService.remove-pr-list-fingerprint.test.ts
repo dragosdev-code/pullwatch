@@ -35,7 +35,7 @@ describe('StorageService.remove + PR list fingerprints', () => {
             set: vi.fn().mockResolvedValue(undefined),
           },
         },
-      } as unknown as typeof chrome
+      } as unknown as (typeof globalThis)['chrome']
     );
   });
 

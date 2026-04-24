@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import type { CustomSoundId, NotificationSound } from '../../../../../../extension/common/types';
 import { SOUND_DEFINITIONS } from '../../../../../../extension/common/sound-config';
 import { useCustomSounds } from '../../../../../hooks/use-custom-sounds';
-import { chromeExtensionService } from '../../../../../services/chrome-extension-service';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import { ChevronRightIcon } from '@heroicons/react/24/outline';
 import { SoundOption } from './sound-option';
 import { CustomSoundOptionRow } from './custom-sound-option-row';

@@ -31,7 +31,7 @@ describe.sequential('RateLimitService getState', () => {
             set: vi.fn().mockResolvedValue(undefined),
           },
         },
-      } as unknown as typeof chrome
+      } as unknown as (typeof globalThis)['chrome']
     );
   });
 

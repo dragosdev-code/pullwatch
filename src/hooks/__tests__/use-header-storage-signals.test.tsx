@@ -5,51 +5,59 @@ import {
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
 } from '../../../extension/common/constants';
 import { useHeaderStorageSignals } from '../use-header-storage-signals';
+import type { StorageChange } from '@common/chrome-extension-service';
+
+const getMock = vi.fn();
+const addListenerMock = vi.fn();
+const removeListenerMock = vi.fn();
+
+vi.mock('@common/chrome-extension-service', () => ({
+  chromeExtensionService: {
+    isExtensionContext: vi.fn(() => true),
+    storage: {
+      local: {
+        get: (...args: unknown[]) => getMock(...args),
+      },
+      onChanged: {
+        addListener: (cb: unknown) => addListenerMock(cb),
+        removeListener: (cb: unknown) => removeListenerMock(cb),
+      },
+    },
+  },
+}));
+
+vi.mock('../../utils/is-extension-context', () => ({
+  isExtensionContext: () => true,
+}));
 
 describe('useHeaderStorageSignals', () => {
-  let capturedListener: Parameters<typeof chrome.storage.onChanged.addListener>[0] | undefined;
-  let getCallbackResult: Record<string, unknown> = {};
+  let capturedListener:
+    | ((changes: Record<string, StorageChange>, area: string) => void)
+    | undefined;
+  let getResult: Record<string, unknown> = {};
 
   beforeEach(() => {
     capturedListener = undefined;
-    getCallbackResult = {
+    getResult = {
       [STORAGE_KEY_LAST_FETCH]: 5_000,
       [STORAGE_KEY_PR_FETCH_IN_PROGRESS]: false,
     };
 
-    const addListener = vi.fn((cb: Parameters<typeof chrome.storage.onChanged.addListener>[0]) => {
-      capturedListener = cb;
-    });
-    const removeListener = vi.fn();
-    const get = vi.fn(
-      (_keys: string[], cb: (items: Record<string, unknown>) => void) => {
-        cb({ ...getCallbackResult });
+    getMock.mockReset().mockImplementation(async () => ({ ...getResult }));
+    addListenerMock.mockReset().mockImplementation(
+      (cb: (changes: Record<string, StorageChange>, area: string) => void) => {
+        capturedListener = cb;
       },
     );
-
-    (
-      globalThis as {
-        chrome: typeof chrome;
-      }
-    ).chrome = {
-      runtime: { sendMessage: vi.fn(), lastError: undefined },
-      storage: {
-        local: { get },
-        onChanged: {
-          addListener,
-          removeListener,
-        },
-      },
-    } as unknown as typeof chrome;
+    removeListenerMock.mockReset();
   });
 
   afterEach(() => {
     cleanup();
-    delete (globalThis as { chrome?: typeof chrome }).chrome;
     vi.clearAllMocks();
   });
 
-  it('hydrates from chrome.storage.local.get and listens for changes', async () => {
+  it('hydrates from storage and listens for changes', async () => {
     const { result, unmount } = renderHook(() => useHeaderStorageSignals());
 
     await waitFor(() => {
@@ -60,7 +68,7 @@ describe('useHeaderStorageSignals', () => {
     expect(capturedListener).toBeDefined();
     capturedListener!(
       {
-        [STORAGE_KEY_PR_FETCH_IN_PROGRESS]: { oldValue: false, newValue: true },
+        [STORAGE_KEY_PR_FETCH_IN_PROGRESS]: { oldValue: false, newValue: true } as StorageChange,
       },
       'local',
     );
@@ -69,13 +77,12 @@ describe('useHeaderStorageSignals', () => {
       expect(result.current.backgroundFetchInProgress).toBe(true);
     });
 
-    const removeListener = chrome.storage.onChanged.removeListener as ReturnType<typeof vi.fn>;
     unmount();
-    expect(removeListener).toHaveBeenCalled();
+    expect(removeListenerMock).toHaveBeenCalled();
   });
 
   it('treats missing last_fetch as null', async () => {
-    getCallbackResult = { [STORAGE_KEY_PR_FETCH_IN_PROGRESS]: false };
+    getResult = { [STORAGE_KEY_PR_FETCH_IN_PROGRESS]: false };
     const { result } = renderHook(() => useHeaderStorageSignals());
 
     await waitFor(() => {

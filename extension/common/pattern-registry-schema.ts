@@ -135,8 +135,13 @@ export type StoredPatternData = v.InferOutput<typeof StoredPatternDataSchema>;
 // that pass validated data to compilePatterns(registry: PatternRegistry)
 // would get a type error — this guard surfaces it at the definition site.
 type _SchemaOutput = v.InferOutput<typeof PatternRegistrySchema>;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _assertSchemaCoversInterface: (_: _SchemaOutput) => PatternRegistry = (x) => x;
+/** Compile-time guard: schema output must stay assignable to {@link PatternRegistry}. */
+type _AssertExtendsTrue<T extends true> = T;
+type _RegistrySchemaCoversInterface = _AssertExtendsTrue<
+  _SchemaOutput extends PatternRegistry ? true : false
+>;
+/** Compile-time witness only — schema output must stay assignable to {@link PatternRegistry}. */
+export type CompileTimePatternRegistrySchemaMatchesInterface = _RegistrySchemaCoversInterface;
 
 // ── Validation result ───────────────────────────────────────────────
 

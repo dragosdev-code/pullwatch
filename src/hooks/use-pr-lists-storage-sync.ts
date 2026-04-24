@@ -8,6 +8,10 @@ import {
 import type { PullRequest, StoredPRs } from '../../extension/common/types';
 import { queryKeys } from '../constants/query-keys';
 import { isExtensionContext } from '../utils/is-extension-context';
+import {
+  chromeExtensionService,
+  type StorageChange,
+} from '@common/chrome-extension-service';
 
 /**
  * Each row ties a `chrome.storage.local` key (where the background `StorageService` persists PR lists)
@@ -43,7 +47,7 @@ export const usePrListsStorageSync = (): void => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!isExtensionContext() || typeof chrome === 'undefined' || !chrome.storage?.onChanged) {
+    if (!isExtensionContext()) {
       return;
     }
 
@@ -56,7 +60,7 @@ export const usePrListsStorageSync = (): void => {
      * @param areaName - `"local"` | `"sync"` | `"session"` — PR lists live in **local** only.
      */
     const onStorageChanged = (
-      changes: { [key: string]: chrome.storage.StorageChange },
+      changes: { [key: string]: StorageChange },
       areaName: string,
     ): void => {
       if (areaName !== 'local') {
@@ -73,9 +77,9 @@ export const usePrListsStorageSync = (): void => {
       }
     };
 
-    chrome.storage.onChanged.addListener(onStorageChanged);
+    chromeExtensionService.storage.onChanged.addListener(onStorageChanged);
     return () => {
-      chrome.storage.onChanged.removeListener(onStorageChanged);
+      chromeExtensionService.storage.onChanged.removeListener(onStorageChanged);
     };
   }, [queryClient]);
 };

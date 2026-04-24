@@ -31,6 +31,12 @@ import {
   SETTINGS_ACTION,
   type RequestRuntimeAction,
 } from '../../common/runtime-actions';
+import {
+  chromeExtensionService,
+  type Alarm,
+  type InstalledDetails,
+  type MessageSender,
+} from '@common/chrome-extension-service';
 
 type MessageHandler = (
   message: RuntimeMessage,
@@ -185,7 +191,7 @@ export class EventService implements IEventService {
    * alarm/manual-refresh contract so `PRService.persistResolvedViewerIdentity` runs once after the whole
    * wave (same depth → `finally` rule as manual refresh).
    */
-  async handleInstallation(details: chrome.runtime.InstalledDetails): Promise<void> {
+  async handleInstallation(details: InstalledDetails): Promise<void> {
     try {
       this.debugService.log('[EventService] Handling installation:', details);
 
@@ -272,7 +278,7 @@ export class EventService implements IEventService {
   /**
    * Handles alarm events.
    */
-  async handleAlarm(alarm: chrome.alarms.Alarm): Promise<void> {
+  async handleAlarm(alarm: Alarm): Promise<void> {
     try {
       this.debugService.log('[EventService] Handling alarm:', alarm.name);
 
@@ -335,7 +341,7 @@ export class EventService implements IEventService {
    */
   handleMessage(
     message: RuntimeMessage,
-    _sender: chrome.runtime.MessageSender,
+    _sender: MessageSender,
     sendResponse: (response: MessageResponse) => void
   ): void {
     const action = message.action;
@@ -508,7 +514,7 @@ export class EventService implements IEventService {
    */
   private async broadcastSettingsUpdate(settings: ExtensionSettings): Promise<void> {
     try {
-      await chrome.runtime.sendMessage({
+      await chromeExtensionService.runtime.sendMessage({
         action: EVENT_SETTINGS_UPDATED,
         data: settings,
       });

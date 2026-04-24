@@ -53,7 +53,7 @@ describe('NotificationService.showAssignedPRNotifications (draft filtering)', ()
         clear: vi.fn().mockResolvedValue(true),
         create: notificationsCreate,
       },
-    } as unknown as typeof chrome;
+    } as unknown as (typeof globalThis)['chrome'];
 
     vi.clearAllMocks();
   });

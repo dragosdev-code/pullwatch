@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { CodeBracketSquareIcon } from '@heroicons/react/24/outline';
 import { EXTENSION_SOURCE_REPOSITORY_URL } from '../../../constants/extension-repository';
 import type { LinkOpenBehavior } from '../../../hooks/use-link-behavior';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import { isExtensionContext } from '../../../utils/is-extension-context';
 
 const SOURCE_TOOLTIP = "View Pullwatch's source code on GitHub";
@@ -15,7 +16,7 @@ export const SettingsSourceCodeLink = ({ linkBehavior }: SettingsSourceCodeLinkP
   const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
     if (linkBehavior === 'background' && isExtensionContext()) {
       e.preventDefault();
-      chrome.tabs.create({ url: EXTENSION_SOURCE_REPOSITORY_URL, active: false });
+      void chromeExtensionService.tabs.create({ url: EXTENSION_SOURCE_REPOSITORY_URL, active: false });
     }
   };
 

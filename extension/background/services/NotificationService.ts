@@ -15,6 +15,10 @@ import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../common/settings-test-noti
 import { isPlayableSound } from '../../common/sound-config';
 import { effectiveAssignedNotifyOnDrafts } from '../../common/effective-assigned-draft-notify';
 import { getNotificationIconUrl } from '../../common/extension-assets';
+import {
+  chromeExtensionService,
+  type NotificationCreateOptions,
+} from '@common/chrome-extension-service';
 
 /**
  * NotificationService handles Chrome extension notifications with sound integration.
@@ -263,7 +267,7 @@ export class NotificationService implements INotificationService {
   ): Promise<number> {
     const prefix = `extension-settings-test|${category}|`;
     try {
-      const all = await chrome.notifications.getAll();
+      const all = await chromeExtensionService.notifications.getAll();
       const ids = Object.keys(all).filter((id) => id.startsWith(prefix));
       for (const id of ids) {
         await this.clearNotification(id);
@@ -378,7 +382,7 @@ export class NotificationService implements INotificationService {
         // notification from being cleared -- otherwise it stays in the
         // OS tray with no way to dismiss it programmatically.
         try {
-          await chrome.tabs.create({ url: parsed.url, active: true });
+          await chromeExtensionService.tabs.create({ url: parsed.url, active: true });
         } catch (tabError) {
           this.debugService.error('[NotificationService] Failed to open tab:', tabError);
         }
@@ -399,23 +403,23 @@ export class NotificationService implements INotificationService {
   }
 
   async createNotification(
-    options: chrome.notifications.NotificationCreateOptions,
+    options: NotificationCreateOptions,
     notificationId?: string
   ): Promise<void> {
     try {
       // Clear first to work around a Chrome bug where dismissed notification IDs
       // fail to re-display on macOS (crbug #324115501)
       if (notificationId) {
-        try { await chrome.notifications.clear(notificationId); } catch { /* ignore */ }
+        try { await chromeExtensionService.notifications.clear(notificationId); } catch { /* ignore */ }
       }
 
       const id = notificationId
-        ? await chrome.notifications.create(notificationId, options)
-        : await chrome.notifications.create(options);
+        ? await chromeExtensionService.notifications.create(notificationId, options)
+        : await chromeExtensionService.notifications.create(options);
 
       if (!id) {
         this.debugService.warn(
-          '[NotificationService] chrome.notifications.create returned empty ID — notification may have been silently dropped'
+          '[NotificationService] notifications.create returned empty ID — notification may have been silently dropped'
         );
       }
 
@@ -430,7 +434,7 @@ export class NotificationService implements INotificationService {
 
   async clearNotification(notificationId: string): Promise<void> {
     try {
-      await chrome.notifications.clear(notificationId);
+      await chromeExtensionService.notifications.clear(notificationId);
       this.debugService.log(`[NotificationService] Cleared notification: ${notificationId}`);
     } catch (error) {
       this.debugService.error('[NotificationService] Error clearing notification:', error);
@@ -451,7 +455,7 @@ export class NotificationService implements INotificationService {
 
   async getAllNotifications(): Promise<string[]> {
     try {
-      const notifications = await chrome.notifications.getAll();
+      const notifications = await chromeExtensionService.notifications.getAll();
       return Object.keys(notifications);
     } catch (error) {
       this.debugService.error('[NotificationService] Error getting notifications:', error);

@@ -4,6 +4,7 @@ import {
   STORAGE_KEY_GITHUB_OUTAGE,
 } from '../../common/constants';
 import { BROADCAST_ACTION } from '../../common/runtime-actions';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**
  * Persists and broadcasts health status flags (parser breakage, GitHub outage)
@@ -24,7 +25,7 @@ export class HealthStatusService implements IHealthStatusService {
   private githubOutage = false;
 
   async initialize(): Promise<void> {
-    const stored = await chrome.storage.local.get([
+    const stored = await chromeExtensionService.storage.local.get([
       STORAGE_KEY_PARSER_BREAKAGE,
       STORAGE_KEY_GITHUB_OUTAGE,
     ]);
@@ -36,8 +37,8 @@ export class HealthStatusService implements IHealthStatusService {
     if (this.parserBroken) return;
     this.parserBroken = true;
     const payload = { detected: true, timestamp: Date.now(), context };
-    await chrome.storage.local.set({ [STORAGE_KEY_PARSER_BREAKAGE]: payload });
-    chrome.runtime.sendMessage({
+    await chromeExtensionService.storage.local.set({ [STORAGE_KEY_PARSER_BREAKAGE]: payload });
+    chromeExtensionService.runtime.sendMessage({
       action: BROADCAST_ACTION.parserBreakageDetected,
       data: payload,
     }).catch(() => {});
@@ -46,8 +47,8 @@ export class HealthStatusService implements IHealthStatusService {
   async clearParserBreakage(): Promise<void> {
     if (!this.parserBroken) return;
     this.parserBroken = false;
-    await chrome.storage.local.remove(STORAGE_KEY_PARSER_BREAKAGE);
-    chrome.runtime.sendMessage({
+    await chromeExtensionService.storage.local.remove(STORAGE_KEY_PARSER_BREAKAGE);
+    chromeExtensionService.runtime.sendMessage({
       action: BROADCAST_ACTION.parserBreakageCleared,
       data: null,
     }).catch(() => {});
@@ -57,8 +58,8 @@ export class HealthStatusService implements IHealthStatusService {
     if (this.githubOutage) return;
     this.githubOutage = true;
     const payload = { detected: true, timestamp: Date.now(), context };
-    await chrome.storage.local.set({ [STORAGE_KEY_GITHUB_OUTAGE]: payload });
-    chrome.runtime.sendMessage({
+    await chromeExtensionService.storage.local.set({ [STORAGE_KEY_GITHUB_OUTAGE]: payload });
+    chromeExtensionService.runtime.sendMessage({
       action: BROADCAST_ACTION.githubOutageDetected,
       data: payload,
     }).catch(() => {});
@@ -67,8 +68,8 @@ export class HealthStatusService implements IHealthStatusService {
   async clearGitHubOutage(): Promise<void> {
     if (!this.githubOutage) return;
     this.githubOutage = false;
-    await chrome.storage.local.remove(STORAGE_KEY_GITHUB_OUTAGE);
-    chrome.runtime.sendMessage({
+    await chromeExtensionService.storage.local.remove(STORAGE_KEY_GITHUB_OUTAGE);
+    chromeExtensionService.runtime.sendMessage({
       action: BROADCAST_ACTION.githubOutageCleared,
       data: null,
     }).catch(() => {});

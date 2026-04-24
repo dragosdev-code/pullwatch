@@ -8,6 +8,7 @@ import {
   SETTINGS_TEST_ERROR_CHROME_DENIED,
 } from '../../../common/constants';
 import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../../common/settings-test-notification-copy';
+import type { NotificationCreateOptions } from '@common/chrome-extension-service';
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -62,7 +63,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
         getAll: notificationsGetAll,
         getPermissionLevel,
       },
-    } as unknown as typeof chrome;
+    } as unknown as (typeof globalThis)['chrome'];
 
     vi.clearAllMocks();
   });
@@ -98,7 +99,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     expect(id).toMatch(/^extension-settings-test\|assigned\|\d+$/);
     expect(id.endsWith('|10000')).toBe(true);
 
-    const options = notificationsCreate.mock.calls[0][1] as chrome.notifications.NotificationCreateOptions;
+    const options = notificationsCreate.mock.calls[0][1] as NotificationCreateOptions;
     expect(options.title).toBe(SETTINGS_TEST_NOTIFICATION_COPY.assigned.title);
     expect(options.message).toMatch(
       new RegExp(
@@ -115,7 +116,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     const svc = makeService(settingsWithPreviewEnabled());
     await svc.fireSettingsTestNotification('merged');
 
-    const options = notificationsCreate.mock.calls[0][1] as chrome.notifications.NotificationCreateOptions;
+    const options = notificationsCreate.mock.calls[0][1] as NotificationCreateOptions;
     expect(options.message).toMatch(
       new RegExp(
         `^${escapeRegExp(SETTINGS_TEST_NOTIFICATION_COPY.merged.message)}\n\nPreview · .+`

@@ -2,6 +2,11 @@ import type { IAlarmService } from '../interfaces/IAlarmService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import { FETCH_INTERVAL_MS, DEV_TEST_MIN_ALARM_OVERRIDE_MS, STORAGE_KEY_ALARM_OVERRIDE } from '../../common/constants';
 import { EVENT_FETCH_PRS } from '../../common/runtime-actions';
+import {
+  chromeExtensionService,
+  type Alarm,
+  type AlarmCreateInfo,
+} from '@common/chrome-extension-service';
 
 interface AlarmOverrideState {
   overridden: boolean;
@@ -33,15 +38,18 @@ export class AlarmService implements IAlarmService {
 
   private async getOverrideState(): Promise<AlarmOverrideState> {
     try {
-      const result = await chrome.storage.local.get(STORAGE_KEY_ALARM_OVERRIDE);
-      return result[STORAGE_KEY_ALARM_OVERRIDE] || { overridden: false, intervalMs: null };
+      const result = await chromeExtensionService.storage.local.get(STORAGE_KEY_ALARM_OVERRIDE);
+      return (result[STORAGE_KEY_ALARM_OVERRIDE] as AlarmOverrideState | undefined) ?? {
+        overridden: false,
+        intervalMs: null,
+      };
     } catch {
       return { overridden: false, intervalMs: null };
     }
   }
 
   private async setOverrideState(state: AlarmOverrideState): Promise<void> {
-    await chrome.storage.local.set({ [STORAGE_KEY_ALARM_OVERRIDE]: state });
+    await chromeExtensionService.storage.local.set({ [STORAGE_KEY_ALARM_OVERRIDE]: state });
   }
 
   private intervalMsToAlarmMinutes(intervalMs: number): number {
@@ -76,7 +84,7 @@ export class AlarmService implements IAlarmService {
    * else recreates the alarm.
    */
   private alarmRepeatCadenceMatchesInterval(
-    alarm: chrome.alarms.Alarm,
+    alarm: Alarm,
     effectiveIntervalMs: number
   ): boolean {
     if (alarm.periodInMinutes == null || alarm.periodInMinutes <= 0) {
@@ -127,9 +135,9 @@ export class AlarmService implements IAlarmService {
   /**
    * Creates a new alarm with the given name and configuration.
    */
-  async createAlarm(name: string, alarmInfo: chrome.alarms.AlarmCreateInfo): Promise<void> {
+  async createAlarm(name: string, alarmInfo: AlarmCreateInfo): Promise<void> {
     try {
-      await chrome.alarms.create(name, alarmInfo);
+      await chromeExtensionService.alarms.create(name, alarmInfo);
       this.debugService.log(`[AlarmService] Alarm '${name}' created:`, alarmInfo);
     } catch (error) {
       this.debugService.error(`[AlarmService] Error creating alarm '${name}':`, error);
@@ -140,21 +148,9 @@ export class AlarmService implements IAlarmService {
   /**
    * Gets an existing alarm by name.
    */
-  async getAlarm(name: string): Promise<chrome.alarms.Alarm | undefined> {
+  async getAlarm(name: string): Promise<Alarm | undefined> {
     try {
-      return new Promise((resolve) => {
-        chrome.alarms.get(name, (alarm) => {
-          if (chrome.runtime.lastError) {
-            this.debugService.error(
-              `[AlarmService] Error getting alarm '${name}':`,
-              chrome.runtime.lastError
-            );
-            resolve(undefined);
-            return;
-          }
-          resolve(alarm);
-        });
-      });
+      return await chromeExtensionService.alarms.get(name);
     } catch (error) {
       this.debugService.error(`[AlarmService] Error getting alarm '${name}':`, error);
       return undefined;
@@ -164,23 +160,11 @@ export class AlarmService implements IAlarmService {
   /**
    * Gets all active alarms.
    */
-  private async getAllAlarms(): Promise<chrome.alarms.Alarm[]> {
+  private async getAllAlarms(): Promise<Alarm[]> {
     try {
-      return new Promise((resolve) => {
-        chrome.alarms.getAll((alarms) => {
-          if (chrome.runtime.lastError) {
-            this.debugService.error(
-              '[AlarmService] Error getting all alarms:',
-              chrome.runtime.lastError
-            );
-            resolve([]);
-            return;
-          }
-
-          this.debugService.log(`[AlarmService] Found ${alarms?.length || 0} active alarms`);
-          resolve(alarms || []);
-        });
-      });
+      const alarms = await chromeExtensionService.alarms.getAll();
+      this.debugService.log(`[AlarmService] Found ${alarms?.length || 0} active alarms`);
+      return alarms ?? [];
     } catch (error) {
       this.debugService.error('[AlarmService] Error getting all alarms:', error);
       return [];
@@ -192,21 +176,9 @@ export class AlarmService implements IAlarmService {
    */
   async clearAllAlarms(): Promise<boolean> {
     try {
-      return new Promise((resolve) => {
-        chrome.alarms.clearAll((wasCleared) => {
-          if (chrome.runtime.lastError) {
-            this.debugService.error(
-              '[AlarmService] Error clearing all alarms:',
-              chrome.runtime.lastError
-            );
-            resolve(false);
-            return;
-          }
-
-          this.debugService.log('[AlarmService] All alarms cleared');
-          resolve(wasCleared || false);
-        });
-      });
+      const wasCleared = await chromeExtensionService.alarms.clearAll();
+      this.debugService.log('[AlarmService] All alarms cleared');
+      return wasCleared;
     } catch (error) {
       this.debugService.error('[AlarmService] Error clearing all alarms:', error);
       return false;
@@ -218,20 +190,9 @@ export class AlarmService implements IAlarmService {
    */
   async clearAlarm(name: string): Promise<boolean> {
     try {
-      return new Promise((resolve) => {
-        chrome.alarms.clear(name, (wasCleared) => {
-          if (chrome.runtime.lastError) {
-            this.debugService.error(
-              `[AlarmService] Error clearing alarm '${name}':`,
-              chrome.runtime.lastError
-            );
-            resolve(false);
-            return;
-          }
-          this.debugService.log(`[AlarmService] Alarm '${name}' cleared: ${wasCleared}`);
-          resolve(wasCleared || false);
-        });
-      });
+      const wasCleared = await chromeExtensionService.alarms.clear(name);
+      this.debugService.log(`[AlarmService] Alarm '${name}' cleared: ${wasCleared}`);
+      return wasCleared;
     } catch (error) {
       this.debugService.error(`[AlarmService] Error clearing alarm '${name}':`, error);
       return false;

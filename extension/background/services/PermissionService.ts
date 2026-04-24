@@ -6,6 +6,7 @@ import {
   PERMISSION_STORAGE,
   PERMISSION_OFFSCREEN,
 } from '../../common/constants';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**
  * PermissionService handles Chrome extension permission validation and requests.
@@ -65,7 +66,7 @@ export class PermissionService implements IPermissionService {
    */
   async checkPermission(permission: (typeof this.requiredPermissions)[number]): Promise<boolean> {
     try {
-      const result = await chrome.permissions.contains({ permissions: [permission] });
+      const result = await chromeExtensionService.permissions.contains({ permissions: [permission] });
       this.debugService.log(`[PermissionService] Permission '${permission}' status:`, result);
       return result;
     } catch (error) {
@@ -86,7 +87,7 @@ export class PermissionService implements IPermissionService {
     try {
       this.debugService.log('[PermissionService] Requesting permissions:', permissions);
 
-      const granted = await chrome.permissions.request({ permissions });
+      const granted = await chromeExtensionService.permissions.request({ permissions });
 
       if (granted) {
         this.debugService.log('[PermissionService] Permissions granted:', permissions);

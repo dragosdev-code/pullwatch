@@ -6,60 +6,59 @@ import {
   STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
 } from '../../../extension/common/constants';
 import { useOnboarding } from '../use-onboarding';
-import { chromeExtensionService } from '../../services/chrome-extension-service';
+import {
+  chromeExtensionService,
+  type StorageChange,
+} from '@common/chrome-extension-service';
 
-vi.mock('../../services/chrome-extension-service', () => ({
+const getMock = vi.fn();
+const setMock = vi.fn().mockResolvedValue(undefined);
+const removeMock = vi.fn().mockResolvedValue(undefined);
+const addListenerMock = vi.fn();
+const removeListenerMock = vi.fn();
+
+vi.mock('@common/chrome-extension-service', () => ({
   chromeExtensionService: {
+    isExtensionContext: vi.fn(() => true),
     fetchFreshAssignedPRs: vi.fn().mockResolvedValue([]),
     fetchFreshMergedPRs: vi.fn().mockResolvedValue([]),
     fetchFreshAuthoredPRs: vi.fn().mockResolvedValue([]),
+    storage: {
+      local: {
+        get: (...args: unknown[]) => getMock(...args),
+        set: (...args: unknown[]) => setMock(...args),
+        remove: (...args: unknown[]) => removeMock(...args),
+      },
+      onChanged: {
+        addListener: (cb: unknown) => addListenerMock(cb),
+        removeListener: (cb: unknown) => removeListenerMock(cb),
+      },
+    },
   },
 }));
 
 describe('useOnboarding', () => {
-  let getMock: ReturnType<typeof vi.fn>;
-  let setMock: ReturnType<typeof vi.fn>;
-  let removeMock: ReturnType<typeof vi.fn>;
   let storageListener:
-    | ((changes: Record<string, chrome.storage.StorageChange>, area: string) => void)
+    | ((changes: Record<string, StorageChange>, area: string) => void)
     | undefined;
 
   beforeEach(() => {
-    getMock = vi.fn();
-    setMock = vi.fn().mockResolvedValue(undefined);
-    removeMock = vi.fn().mockResolvedValue(undefined);
+    getMock.mockReset();
+    setMock.mockReset().mockResolvedValue(undefined);
+    removeMock.mockReset().mockResolvedValue(undefined);
+    addListenerMock.mockReset();
+    removeListenerMock.mockReset();
     storageListener = undefined;
 
-    const addListener = vi.fn(
-      (cb: (changes: Record<string, chrome.storage.StorageChange>, area: string) => void) => {
+    addListenerMock.mockImplementation(
+      (cb: (changes: Record<string, StorageChange>, area: string) => void) => {
         storageListener = cb;
       }
     );
-    const removeListener = vi.fn();
-
-    (
-      globalThis as {
-        chrome: typeof chrome;
-      }
-    ).chrome = {
-      runtime: { sendMessage: vi.fn(), lastError: undefined },
-      storage: {
-        local: {
-          get: getMock,
-          set: setMock,
-          remove: removeMock,
-        },
-        onChanged: {
-          addListener,
-          removeListener,
-        },
-      },
-    } as unknown as typeof chrome;
   });
 
   afterEach(() => {
     vi.clearAllMocks();
-    delete (globalThis as { chrome?: typeof chrome }).chrome;
   });
 
   it('hydrates storage and shows first-run reveal when logged in and flag unset', async () => {

@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useLinkBehavior } from '../../../hooks/use-link-behavior';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 export const usePrLinkClick = ({
   url,
@@ -17,7 +18,7 @@ export const usePrLinkClick = ({
       onPrLinkActivated?.(prId);
       if (linkBehavior === 'background') {
         event.preventDefault();
-        chrome.tabs.create({ url, active: false });
+        void chromeExtensionService.tabs.create({ url, active: false });
       }
     },
     [linkBehavior, onPrLinkActivated, prId, url]

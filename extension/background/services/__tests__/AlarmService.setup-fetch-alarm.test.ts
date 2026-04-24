@@ -10,9 +10,10 @@ import { AlarmService } from '../AlarmService';
 import type { IDebugService } from '../../interfaces/IDebugService';
 import { FETCH_INTERVAL_MS, STORAGE_KEY_ALARM_OVERRIDE } from '../../../common/constants';
 import { EVENT_FETCH_PRS } from '../../../common/runtime-actions';
+import type { Alarm, AlarmCreateInfo } from '@common/chrome-extension-service';
 
 describe.sequential('AlarmService.setupFetchAlarm', () => {
-  let alarmByName: Record<string, chrome.alarms.Alarm | undefined>;
+  let alarmByName: Record<string, Alarm | undefined>;
   let alarmsCreate: Mock;
   let alarmsClear: Mock;
   let alarmsGetAll: Mock;
@@ -30,7 +31,7 @@ describe.sequential('AlarmService.setupFetchAlarm', () => {
     vi.clearAllMocks();
     alarmByName = {};
 
-    alarmsCreate = vi.fn((name: string, info: chrome.alarms.AlarmCreateInfo) => {
+    alarmsCreate = vi.fn(async (name: string, info: AlarmCreateInfo) => {
       alarmByName[name] = {
         name,
         scheduledTime: Date.now(),
@@ -38,14 +39,15 @@ describe.sequential('AlarmService.setupFetchAlarm', () => {
       };
     });
 
-    alarmsClear = vi.fn((name: string, cb: (w: boolean) => void) => {
+    alarmsClear = vi.fn(async (name: string) => {
+      const existed = name in alarmByName;
       delete alarmByName[name];
-      cb(true);
+      return existed;
     });
 
-    alarmsGetAll = vi.fn((cb: (a: chrome.alarms.Alarm[]) => void) => {
-      cb(Object.values(alarmByName).filter(Boolean) as chrome.alarms.Alarm[]);
-    });
+    alarmsGetAll = vi.fn(async () =>
+      Object.values(alarmByName).filter(Boolean) as Alarm[]
+    );
 
     storageLocalGet = vi.fn().mockResolvedValue({});
 
@@ -59,14 +61,12 @@ describe.sequential('AlarmService.setupFetchAlarm', () => {
         },
         alarms: {
           create: alarmsCreate,
-          get: (name: string, cb: (a: chrome.alarms.Alarm | undefined) => void) => {
-            cb(alarmByName[name]);
-          },
+          get: async (name: string) => alarmByName[name],
           getAll: alarmsGetAll,
           clear: alarmsClear,
         },
         runtime: { lastError: undefined },
-      } as unknown as typeof chrome
+      } as unknown as (typeof globalThis)['chrome']
     );
   });
 
@@ -109,7 +109,7 @@ describe.sequential('AlarmService.setupFetchAlarm', () => {
     const svc = new AlarmService(debugService);
     await svc.setupFetchAlarm();
 
-    expect(alarmsClear).toHaveBeenCalledWith(EVENT_FETCH_PRS, expect.any(Function));
+    expect(alarmsClear).toHaveBeenCalledWith(EVENT_FETCH_PRS);
     expect(alarmsCreate).toHaveBeenCalledTimes(1);
     expect(alarmsCreate).toHaveBeenCalledWith(EVENT_FETCH_PRS, {
       periodInMinutes: FETCH_INTERVAL_MS / (60 * 1000),

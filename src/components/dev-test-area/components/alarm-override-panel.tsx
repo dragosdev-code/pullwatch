@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { chromeExtensionService } from '../../../services/chrome-extension-service';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import { DEV_TEST_MIN_ALARM_OVERRIDE_MS } from '../../../../extension/common/constants';
 import { useDevTestSettingsStore, useDevTestAlarmOverride } from '../store/dev-test-settings-store';
 

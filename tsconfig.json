@@ -24,7 +24,17 @@
     "resolveJsonModule": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /*
+     * WHY [Vite parity]: `paths` only affects TypeScript resolution (editor + `tsc`); it does not
+     * rewrite emitted imports. Vite already resolves `@common/*` in vite.config — duplicate the same
+     * mapping here so extension + src agree without "works in bundle, red in IDE" drift.
+     */
+    "baseUrl": ".",
+    "paths": {
+      "@common/*": ["extension/common/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "extension"]
 }

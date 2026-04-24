@@ -7,7 +7,10 @@ import {
 } from '../../extension/common/constants';
 import type { GitHubViewerIdentity } from '../../extension/common/types';
 import { runWithTransientStorageRetry } from '../../extension/common/transient-storage-retry';
-import { chromeExtensionService } from '../services/chrome-extension-service';
+import {
+  chromeExtensionService,
+  type StorageChange,
+} from '@common/chrome-extension-service';
 import { isExtensionContext } from '../utils/is-extension-context';
 
 export type OnboardingRefreshState = 'idle' | 'loading' | 'error';
@@ -51,15 +54,15 @@ function readViewerLogin(items: Record<string, unknown>): string | null {
  * (e.g. `has_seen_onboarding = true` but `reauth_gate_pending` still `true`).
  */
 async function persistOnboardingDismissal(): Promise<void> {
-  if (!isExtensionContext() || typeof chrome === 'undefined' || !chrome.storage?.local) {
+  if (!isExtensionContext()) {
     return;
   }
   await Promise.all([
     runWithTransientStorageRetry(() =>
-      chrome.storage.local.set({ [STORAGE_KEY_HAS_SEEN_ONBOARDING]: true })
+      chromeExtensionService.storage.local.set({ [STORAGE_KEY_HAS_SEEN_ONBOARDING]: true })
     ),
     runWithTransientStorageRetry(() =>
-      chrome.storage.local.remove(STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING)
+      chromeExtensionService.storage.local.remove(STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING)
     ),
   ]);
 }
@@ -130,7 +133,7 @@ export function useOnboarding() {
   }, []);
 
   useEffect(() => {
-    if (!isExtensionContext() || typeof chrome === 'undefined' || !chrome.storage?.local) {
+    if (!isExtensionContext()) {
       setHasSeenOnboarding(true);
       setStorageReady(true);
       return;
@@ -152,7 +155,7 @@ export function useOnboarding() {
       const readGeneration = storageGeneration;
       try {
         const result = await runWithTransientStorageRetry(() =>
-          chrome.storage.local.get([
+          chromeExtensionService.storage.local.get([
             STORAGE_KEY_HAS_SEEN_ONBOARDING,
             STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
             STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
@@ -182,7 +185,7 @@ export function useOnboarding() {
     void hydrate();
 
     const onStorageChanged = (
-      changes: { [key: string]: chrome.storage.StorageChange },
+      changes: { [key: string]: StorageChange },
       area: string
     ) => {
       if (area !== 'local') return;
@@ -219,12 +222,10 @@ export function useOnboarding() {
       }
     };
 
-    chrome.storage.onChanged.addListener(onStorageChanged);
+    chromeExtensionService.storage.onChanged.addListener(onStorageChanged);
     return () => {
       cancelled = true;
-      if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
-        chrome.storage.onChanged.removeListener(onStorageChanged);
-      }
+      chromeExtensionService.storage.onChanged.removeListener(onStorageChanged);
     };
   }, []);
 
@@ -259,7 +260,7 @@ export function useOnboarding() {
         chromeExtensionService.fetchFreshAuthoredPRs(),
       ]);
       const result = await runWithTransientStorageRetry(() =>
-        chrome.storage.local.get(STORAGE_KEY_GITHUB_VIEWER_IDENTITY)
+        chromeExtensionService.storage.local.get(STORAGE_KEY_GITHUB_VIEWER_IDENTITY)
       );
       const login = readViewerLogin(result);
       setAuthWall(false);

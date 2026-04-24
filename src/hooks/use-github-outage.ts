@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { BROADCAST_ACTION } from '../../extension/common/runtime-actions';
 import { STORAGE_KEY_GITHUB_OUTAGE } from '../../extension/common/constants';
-import { chromeExtensionService } from '../services/chrome-extension-service';
+import {
+  chromeExtensionService,
+  type StorageChange,
+} from '@common/chrome-extension-service';
 
 /**
  * Reads the GitHub-outage flag from chrome.storage.local on mount and
@@ -14,9 +17,9 @@ export function useGitHubOutage(): boolean {
   const [outage, setOutage] = useState(false);
 
   useEffect(() => {
-    if (typeof chrome === 'undefined' || !chrome.storage) return;
+    if (!chromeExtensionService.isExtensionContext()) return;
 
-    chrome.storage.local.get(STORAGE_KEY_GITHUB_OUTAGE).then((result) => {
+    chromeExtensionService.storage.local.get(STORAGE_KEY_GITHUB_OUTAGE).then((result) => {
       setOutage(!!result[STORAGE_KEY_GITHUB_OUTAGE]);
     });
 
@@ -29,17 +32,17 @@ export function useGitHubOutage(): boolean {
     });
 
     const onStorageChanged = (
-      changes: { [key: string]: chrome.storage.StorageChange },
+      changes: { [key: string]: StorageChange },
       area: string,
     ) => {
       if (area !== 'local' || !(STORAGE_KEY_GITHUB_OUTAGE in changes)) return;
       setOutage(!!changes[STORAGE_KEY_GITHUB_OUTAGE].newValue);
     };
 
-    chrome.storage.onChanged.addListener(onStorageChanged);
+    chromeExtensionService.storage.onChanged.addListener(onStorageChanged);
     return () => {
       cleanupMessage();
-      chrome.storage.onChanged.removeListener(onStorageChanged);
+      chromeExtensionService.storage.onChanged.removeListener(onStorageChanged);
     };
   }, []);
 
