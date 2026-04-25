@@ -4,6 +4,7 @@ import type {
   STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE,
   STORAGE_KEY_LAST_FETCH,
+  STORAGE_KEY_MINIGAME_STATS,
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
@@ -102,6 +103,7 @@ export interface StorageItems {
   [STORAGE_KEY_SETTINGS]?: ExtensionSettings;
   [STORAGE_KEY_USER_DATA]?: UserData;
   [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]?: GitHubViewerIdentity;
+  [STORAGE_KEY_MINIGAME_STATS]?: MinigameStats;
   // Allow any string as a key for flexibility
   [key: string]: unknown;
 }
@@ -118,6 +120,7 @@ export interface StorageKeyMap {
   [STORAGE_KEY_LAST_FETCH]: number;
   [STORAGE_KEY_SETTINGS]: ExtensionSettings;
   [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: GitHubViewerIdentity;
+  [STORAGE_KEY_MINIGAME_STATS]: MinigameStats;
 }
 
 /**
@@ -148,6 +151,37 @@ export interface UserData {
 export interface GitHubViewerIdentity {
   login: string;
   updatedAt?: string;
+}
+
+/** Squash the Bugs minigame: gameplay variant selected from the launcher. */
+export type GameMode = 'standard' | 'legacy' | 'scopeCreep' | 'fridayDeploy';
+
+/** Per-mode persistent stats accumulated across all rounds of that variant. */
+export interface MinigameModeStats {
+  playCount: number;
+  highScore: number;
+  highestCombo: number;
+}
+
+/**
+ * Squash the Bugs minigame storage blob.
+ *
+ * WHY [popupOpenCount lives here]: keeps the entire feature behind one storage key for atomic
+ * reads/writes; flipping `hasDiscovered` happens in the same `set` call as the increment.
+ *
+ * WHY [lastPlayedMode optional]: undefined until the first round finishes; pre-seeding a mode
+ * before any play would misrepresent state for the launcher UI added in Phase 5.
+ */
+export interface MinigameStats {
+  hasDiscovered: boolean;
+  popupOpenCount: number;
+  lastPlayedMode?: GameMode;
+  overall: {
+    totalBugsSquashed: number;
+    totalFeaturesBroken: number;
+    totalTimePlayedSeconds: number;
+  };
+  modes: Record<GameMode, MinigameModeStats>;
 }
 
 /** Request-style runtime message (`payload`; used by popup, background, offscreen). */

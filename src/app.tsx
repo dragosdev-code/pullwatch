@@ -20,6 +20,7 @@ import { DiagnosticsSurface } from '@src/diagnostics-surface';
 import { SettingsOverlay } from '@src/components/settings';
 import { ParserBreakageBanner } from '@src/components/parser-breakage-banner';
 import { GitHubOutageBanner } from '@src/components/github-outage-banner';
+import { MinigameDiscoveryProbe } from '@src/components/squash-minigame/minigame-discovery-probe';
 import { TAB_IDS } from '@src/constants/tabs';
 
 const AppShell = () => {
@@ -106,6 +107,7 @@ const AppShell = () => {
       </Tabs>
 
       <SettingsOverlay position="right" />
+      <MinigameDiscoveryProbe />
     </div>
   );
 };
