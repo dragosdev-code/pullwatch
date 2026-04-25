@@ -6,7 +6,7 @@ import {
   BADGE_TEXT_COLOR_ACTIVE,
   BADGE_TEXT_COLOR_INACTIVE,
   BADGE_TEXT_LOADING,
-} from '../../common/constants';
+} from '@common/constants';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**

@@ -1,4 +1,4 @@
-import { SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS } from '../../../../../../extension/common/constants';
+import { SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS } from '@common/constants';
 import { DurationRadialRing } from '../../../../ui/duration-radial-ring';
 
 interface SettingsTestCooldownRingProps {

@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import { SOUND_DEFINITIONS } from '../../../../extension/common/sound-config';
-import { DEV_TEST_NOTIFICATION_DEBOUNCE_MS } from '../../../../extension/common/constants';
-import type { NotificationSound } from '../../../../extension/common/types';
+import { SOUND_DEFINITIONS } from '@common/sound-config';
+import { DEV_TEST_NOTIFICATION_DEBOUNCE_MS } from '@common/constants';
+import type { NotificationSound } from '@common/types';
 import { useDevTestSettingsStore, useDevTestNotification } from '../store/dev-test-settings-store';
 
 export const InstantNotificationPanel = () => {

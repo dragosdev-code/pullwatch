@@ -7,8 +7,8 @@
  * CI log, making it obvious which tier will execute before any test starts.
  */
 
-import { GITHUB_BASE_URL } from '../../extension/common/constants';
-import { toPullsSearchUrl } from '../../extension/common/github-url-utils';
+import { GITHUB_BASE_URL } from '@common/constants';
+import { toPullsSearchUrl } from '@common/github-url-utils';
 
 // Re-export for call sites that only import canary config (same string as production).
 export { GITHUB_BASE_URL };

@@ -4,7 +4,7 @@ import {
   FETCH_INTERVAL_MS,
   RATE_LIMIT_MAX_BACKOFF_MS,
   STORAGE_KEY_RATE_LIMIT,
-} from '../../common/constants';
+} from '@common/constants';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**

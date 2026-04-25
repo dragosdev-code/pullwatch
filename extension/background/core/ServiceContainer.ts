@@ -13,7 +13,7 @@ import { DevTestService } from '../services/DevTestService';
 import { PatternRegistryService } from '../services/PatternRegistryService';
 import { RateLimitService } from '../services/RateLimitService';
 import { HealthStatusService } from '../services/HealthStatusService';
-import { GITHUB_BASE_URL } from '../../common/constants';
+import { GITHUB_BASE_URL } from '@common/constants';
 import type { IService } from '../interfaces/IService';
 import type { ServiceMap } from './ServiceMap';
 

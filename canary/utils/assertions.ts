@@ -8,7 +8,7 @@
  */
 
 import { expect } from 'vitest';
-import type { PullRequest } from '../../extension/common/types';
+import type { PullRequest } from '@common/types';
 
 /**
  * Validates that a single PR has all the fields the extension UI relies on.

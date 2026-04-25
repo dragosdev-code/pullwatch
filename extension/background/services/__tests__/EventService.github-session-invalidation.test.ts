@@ -8,9 +8,9 @@ import type { IStorageService } from '../../interfaces/IStorageService';
 import type { IAlarmService } from '../../interfaces/IAlarmService';
 import type { IBadgeService } from '../../interfaces/IBadgeService';
 import type { IRateLimitService } from '../../interfaces/IRateLimitService';
-import type { MessageResponse, RuntimeRequestMessage } from '../../../common/types';
-import { GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE } from '../../../common/errors';
-import { EVENT_FETCH_PRS, PR_DATA_ACTION } from '../../../common/runtime-actions';
+import type { MessageResponse, RuntimeRequestMessage } from '@common/types';
+import { GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE } from '@common/errors';
+import { EVENT_FETCH_PRS, PR_DATA_ACTION } from '@common/runtime-actions';
 import type { Alarm } from '@common/chrome-extension-service';
 
 const debugService: IDebugService = {

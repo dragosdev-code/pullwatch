@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DEV_TEST_AREA_ENABLE_DELAY_MS } from '../../extension/common/constants';
-import { DurationRadialRing } from '../components/ui/duration-radial-ring';
-import { useDebugStore } from '../stores/debug';
+import { DEV_TEST_AREA_ENABLE_DELAY_MS } from '@common/constants';
+import { DurationRadialRing } from '@src/components/ui/duration-radial-ring';
+import { useDebugStore } from '@src/stores/debug';
 import { DIAGNOSTICS_SURFACE_DISCLAIMER, DIAGNOSTICS_SURFACE_TITLE } from './copy';
 
 type Phase = 'prompt' | 'arming';

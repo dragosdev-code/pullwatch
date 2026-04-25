@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { BROADCAST_ACTION } from '../../extension/common/runtime-actions';
-import { STORAGE_KEY_PARSER_BREAKAGE } from '../../extension/common/constants';
+import { BROADCAST_ACTION } from '@common/runtime-actions';
+import { STORAGE_KEY_PARSER_BREAKAGE } from '@common/constants';
 import {
   chromeExtensionService,
   type StorageChange,

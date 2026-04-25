@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useOnboarding } from '../../hooks/use-onboarding';
+import { useOnboarding } from '@src/hooks/use-onboarding';
 import { OnboardingOverlay, type OnboardingPhase } from './onboarding-overlay';
 
 type OnboardingGateProps = {

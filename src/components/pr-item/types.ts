@@ -1,4 +1,4 @@
-import type { PullRequest } from '../../../extension/common/types';
+import type { PullRequest } from '@common/types';
 
 export interface PRItemProps {
   pr: PullRequest;

@@ -5,7 +5,7 @@ import {
   PERMISSION_NOTIFICATIONS,
   PERMISSION_STORAGE,
   PERMISSION_OFFSCREEN,
-} from '../../common/constants';
+} from '@common/constants';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**

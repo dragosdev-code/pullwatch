@@ -1,11 +1,11 @@
-import { debugLog, debugError, debugWarn, initializeDebugTools } from '../debug/debugLogger';
+import { debugLog, debugError, debugWarn, initializeDebugTools } from '@debug/debugLogger';
 import {
   EVENT_OFFSCREEN_READY,
   EVENT_PLAY_SOUND,
   EVENT_STOP_SOUND_PLAYBACK,
-} from '../common/runtime-actions';
-import type { RuntimeMessage, MessageResponse, NotificationSound, BuiltInSound } from '../common/types';
-import { SOUND_PRESETS, isCustomSoundId, isBuiltInSound, type SoundPreset } from '../common/sound-config';
+} from '@common/runtime-actions';
+import type { RuntimeMessage, MessageResponse, NotificationSound, BuiltInSound } from '@common/types';
+import { SOUND_PRESETS, isCustomSoundId, isBuiltInSound, type SoundPreset } from '@common/sound-config';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 // Initialize debug tools for this context

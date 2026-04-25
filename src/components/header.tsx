@@ -1,18 +1,18 @@
 import { RefreshButton } from './refresh-button';
-import { useSetGlobalError, useClearGlobalError } from '../stores/global-error';
-import { useMergedPRs } from '../hooks/use-merged-prs';
-import { useAssignedPRs } from '../hooks/use-assigned-prs';
-import { useAuthoredPRs } from '../hooks/use-authored-prs';
-import { useRefreshMergedPRs } from '../hooks/use-refresh-merged-prs';
-import { useRefreshAssignedPRs } from '../hooks/use-refresh-assigned-prs';
-import { useRefreshAuthoredPRs } from '../hooks/use-refresh-authored-prs';
-import { useRateLimitedRefresh } from '../hooks/use-rate-limited-refresh';
+import { useSetGlobalError, useClearGlobalError } from '@src/stores/global-error';
+import { useMergedPRs } from '@src/hooks/use-merged-prs';
+import { useAssignedPRs } from '@src/hooks/use-assigned-prs';
+import { useAuthoredPRs } from '@src/hooks/use-authored-prs';
+import { useRefreshMergedPRs } from '@src/hooks/use-refresh-merged-prs';
+import { useRefreshAssignedPRs } from '@src/hooks/use-refresh-assigned-prs';
+import { useRefreshAuthoredPRs } from '@src/hooks/use-refresh-authored-prs';
+import { useRateLimitedRefresh } from '@src/hooks/use-rate-limited-refresh';
 import { useEffect } from 'react';
 import { NamedLogo } from './ui/named-logo';
-import { useDebugMode, useResetDebugMode } from '../stores/debug';
-import { useHeaderStorageSignals } from '../hooks/use-header-storage-signals';
+import { useDebugMode, useResetDebugMode } from '@src/stores/debug';
+import { useHeaderStorageSignals } from '@src/hooks/use-header-storage-signals';
 import { HeaderLastUpdatedLabel } from './header-last-updated-label';
-import { useNamedLogoCelebrateOnNewPr } from '../hooks/use-named-logo-celebrate-on-new-pr';
+import { useNamedLogoCelebrateOnNewPr } from '@src/hooks/use-named-logo-celebrate-on-new-pr';
 
 export const Header = () => {
   const isDebugMode = useDebugMode();

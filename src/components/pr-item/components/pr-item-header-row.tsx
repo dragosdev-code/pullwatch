@@ -1,4 +1,4 @@
-import type { PullRequest } from '../../../../extension/common/types';
+import type { PullRequest } from '@common/types';
 import { CheckIcon } from '../../ui/icons';
 import { PRStatusIcon } from '../../ui/pr-status-icon';
 import { StatusBadge } from '../../ui/status-badge';

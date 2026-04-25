@@ -1,13 +1,13 @@
 import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { NotificationService } from '../NotificationService';
-import type { ExtensionSettings, PullRequest } from '../../../common/types';
-import { DEFAULT_EXTENSION_SETTINGS } from '../../../common/extension-settings-defaults';
+import type { ExtensionSettings, PullRequest } from '@common/types';
+import { DEFAULT_EXTENSION_SETTINGS } from '@common/extension-settings-defaults';
 import {
   SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
   SETTINGS_PREVIEW_AFTER_CLEAR_MS,
   SETTINGS_TEST_ERROR_CHROME_DENIED,
-} from '../../../common/constants';
-import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../../common/settings-test-notification-copy';
+} from '@common/constants';
+import { SETTINGS_TEST_NOTIFICATION_COPY } from '@common/settings-test-notification-copy';
 import type { NotificationCreateOptions } from '@common/chrome-extension-service';
 
 function escapeRegExp(s: string): string {

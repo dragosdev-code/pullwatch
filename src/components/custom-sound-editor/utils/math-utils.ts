@@ -1,4 +1,4 @@
-import { MAX_CUSTOM_SOUND_DURATION_S } from '../../../../extension/common/constants';
+import { MAX_CUSTOM_SOUND_DURATION_S } from '@common/constants';
 
 /**
  * Clamps a new trim-start time so the selection stays valid.

@@ -4,7 +4,7 @@ import type {
   PullRequest,
   StorageKeyMap,
   StorageKeyPRs,
-} from '../../common/types';
+} from '@common/types';
 import type { IService } from './IService';
 
 /**

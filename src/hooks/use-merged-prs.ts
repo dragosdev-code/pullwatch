@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import type { PullRequest } from '../../extension/common/types';
-import { queryKeys } from '../constants/query-keys';
+import type { PullRequest } from '@common/types';
+import { queryKeys } from '@src/constants/query-keys';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import { isExtensionContext } from '../utils/is-extension-context';
-import mergedPRsMock from '../mocks/merged-prs.json';
+import { isExtensionContext } from '@src/utils/is-extension-context';
+import mergedPRsMock from '@src/mocks/merged-prs.json';
 
 /**
  * Merged PR list — same data flow as useAssignedPRs: hydrate, storage read, then storage.onChanged.

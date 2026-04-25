@@ -1,4 +1,4 @@
-import type { RuntimeMessage, MessageResponse } from '../../common/types';
+import type { RuntimeMessage, MessageResponse } from '@common/types';
 import type { IService } from './IService';
 import type {
   Alarm,

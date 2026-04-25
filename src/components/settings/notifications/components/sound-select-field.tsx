@@ -8,14 +8,14 @@ import {
 } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
 import type { ExtensionSettings } from '../../types';
-import type { NotificationSound, CustomSoundId } from '../../../../../extension/common/types';
+import type { NotificationSound, CustomSoundId } from '@common/types';
 import {
   getSoundDefinition,
   isPlayableSound,
   isCustomSoundId,
   resolvePlayableSoundOrFallback,
-} from '../../../../../extension/common/sound-config';
-import { useCustomSounds } from '../../../../hooks/use-custom-sounds';
+} from '@common/sound-config';
+import { useCustomSounds } from '@src/hooks/use-custom-sounds';
 import { SoundPicker } from './sound/sound-picker';
 import { SoundPickerTriggerButton } from './sound/sound-picker-trigger-button';
 import { CustomSoundEditor } from '../../../custom-sound-editor';

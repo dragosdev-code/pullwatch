@@ -2,8 +2,8 @@ import type { IHealthStatusService } from '../interfaces/IHealthStatusService';
 import {
   STORAGE_KEY_PARSER_BREAKAGE,
   STORAGE_KEY_GITHUB_OUTAGE,
-} from '../../common/constants';
-import { BROADCAST_ACTION } from '../../common/runtime-actions';
+} from '@common/constants';
+import { BROADCAST_ACTION } from '@common/runtime-actions';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**

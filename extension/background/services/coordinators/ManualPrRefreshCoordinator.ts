@@ -1,15 +1,15 @@
 import type { ServiceContainer } from '../../core/ServiceContainer';
 import type { IDebugService } from '../../interfaces/IDebugService';
 import type { IPRService } from '../../interfaces/IPRService';
-import type { MessageResponse, PullRequest } from '../../../common/types';
+import type { MessageResponse, PullRequest } from '@common/types';
 import {
   MIN_REFRESH_INTERVAL_MS,
   STORAGE_KEY_LAST_MANUAL_REFRESH_AT,
-} from '../../../common/constants';
+} from '@common/constants';
 import {
   GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE,
   isGitHubWebSessionAuthError,
-} from '../../../common/errors';
+} from '@common/errors';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 export type ManualPrRefreshKind = 'assigned' | 'merged' | 'authored';

@@ -3,7 +3,7 @@ import type {
   DevTestLooperState,
   DevTestAlarmOverrideState,
   ScraperUrl,
-} from '../../common/types';
+} from '@common/types';
 import type { IService } from './IService';
 
 export interface IDevTestService extends IService {

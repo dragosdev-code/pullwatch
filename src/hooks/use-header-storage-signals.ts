@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import {
   STORAGE_KEY_LAST_FETCH,
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
-} from '../../extension/common/constants';
-import { isExtensionContext } from '../utils/is-extension-context';
+} from '@common/constants';
+import { isExtensionContext } from '@src/utils/is-extension-context';
 import {
   chromeExtensionService,
   type StorageChange,

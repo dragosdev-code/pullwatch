@@ -1,15 +1,15 @@
 import { useState, useCallback, useRef, useEffect, useId } from 'react';
 import { animated, useTransition } from '@react-spring/web';
-import type { NotificationSound } from '../../../extension/common/types';
-import { isPlayableSound } from '../../../extension/common/sound-config';
+import type { NotificationSound } from '@common/types';
+import { isPlayableSound } from '@common/sound-config';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 import {
   claimPreviewSession,
   getActivePreviewSessionId,
   releasePreviewSession,
   subscribePreviewSession,
-} from '../../services/sound-preview-session';
-import { usePrefersReducedMotion } from '../../hooks/use-prefers-reduced-motion';
+} from '@src/services/sound-preview-session';
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
 import { SETTINGS_SPRING_SNAPPY } from '../settings/shared/animation/settings-motion';
 import { PlayIcon, PlayingAnimation } from '../ui/icons';
 

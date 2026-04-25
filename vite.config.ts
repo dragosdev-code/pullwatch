@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { visualizer } from 'rollup-plugin-visualizer';
-import path from 'path';
+import { viteResolveAliases } from './vite.aliases';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -33,24 +33,16 @@ export default defineConfig(({ mode }) => {
           // }
         ],
       }),
-      mode === 'analyze' && visualizer({
-        filename: 'dist/stats.html',
-        gzipSize: true,
-        brotliSize: true,
-        template: 'treemap',
-      }),
+      mode === 'analyze' &&
+        visualizer({
+          filename: 'dist/stats.html',
+          gzipSize: true,
+          brotliSize: true,
+          template: 'treemap',
+        }),
     ],
     resolve: {
-      alias: {
-        // Allows for cleaner imports if you have deep structures, e.g., '@common/types'
-        // Adjust as needed for your project structure.
-        '@extension': path.resolve(__dirname, 'extension'),
-        '@common': path.resolve(__dirname, 'extension/common'),
-        '@background': path.resolve(__dirname, 'extension/background'),
-        '@offscreen': path.resolve(__dirname, 'extension/offscreen'),
-        '@debug': path.resolve(__dirname, 'extension/debug'),
-        '@src': path.resolve(__dirname, 'src'),
-      },
+      alias: viteResolveAliases,
     },
     build: {
       outDir: 'dist',

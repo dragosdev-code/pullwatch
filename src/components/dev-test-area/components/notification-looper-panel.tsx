@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import { DEV_TEST_MIN_LOOP_INTERVAL_MS } from '../../../../extension/common/constants';
+import { DEV_TEST_MIN_LOOP_INTERVAL_MS } from '@common/constants';
 import { useDevTestSettingsStore, useDevTestLooper } from '../store/dev-test-settings-store';
 
 export const NotificationLooperPanel = () => {

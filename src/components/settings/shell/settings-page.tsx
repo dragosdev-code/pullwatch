@@ -13,8 +13,8 @@ import { PopupSizeField } from '../appearance/components/popup-size-field';
 import { SettingsSponsorLounge } from '../support/components/settings-sponsor-lounge';
 import { DEFAULT_SETTINGS } from '../types';
 import type { ExtensionSettings } from '../types';
-import { useExtensionSettings } from '../../../hooks/use-extension-settings';
-import { useLinkBehavior } from '../../../hooks/use-link-behavior';
+import { useExtensionSettings } from '@src/hooks/use-extension-settings';
+import { useLinkBehavior } from '@src/hooks/use-link-behavior';
 
 interface SettingsPageProps {
   onClose: () => void;

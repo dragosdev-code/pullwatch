@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import type { PullRequest } from '../../extension/common/types';
-import { queryKeys } from '../constants/query-keys';
+import type { PullRequest } from '@common/types';
+import { queryKeys } from '@src/constants/query-keys';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import { isExtensionContext } from '../utils/is-extension-context';
-import authoredPRsMock from '../mocks/authored-prs.json';
+import { isExtensionContext } from '@src/utils/is-extension-context';
+import authoredPRsMock from '@src/mocks/authored-prs.json';
 
 /**
  * Authored PR list — same data flow as useAssignedPRs: hydrate, storage read, then storage.onChanged.

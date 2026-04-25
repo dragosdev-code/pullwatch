@@ -8,7 +8,7 @@ import type {
   StorageKeyPRs,
   StoredPRs,
   UserData,
-} from '../../common/types';
+} from '@common/types';
 import {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
@@ -19,13 +19,13 @@ import {
   STORAGE_KEY_ROUTE_HINT,
   STORAGE_KEY_SETTINGS,
   STORAGE_KEY_USER_DATA,
-} from '../../common/constants';
-import { isTransientExtensionStorageError } from '../../common/errors';
-import { runWithTransientStorageRetry } from '../../common/transient-storage-retry';
+} from '@common/constants';
+import { isTransientExtensionStorageError } from '@common/errors';
+import { runWithTransientStorageRetry } from '@common/transient-storage-retry';
 import {
   DEFAULT_EXTENSION_SETTINGS,
   ensureCompleteSettings,
-} from '../../common/extension-settings-defaults';
+} from '@common/extension-settings-defaults';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**

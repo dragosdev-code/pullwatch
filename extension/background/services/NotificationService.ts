@@ -2,19 +2,19 @@ import type { INotificationService } from '../interfaces/INotificationService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type { IStorageService } from '../interfaces/IStorageService';
 import type { ISoundService } from '../interfaces/ISoundService';
-import type { PullRequest, NotificationSound } from '../../common/types';
+import type { PullRequest, NotificationSound } from '@common/types';
 import {
   SETTINGS_NOTIFICATION_TEST_COOLDOWN_MS,
   SETTINGS_PREVIEW_AFTER_CLEAR_MS,
   SETTINGS_TEST_ERROR_CHROME_DENIED,
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
-} from '../../common/constants';
-import { getChromeNotificationPermissionLevel } from '../../common/notification-permission';
-import { SETTINGS_TEST_NOTIFICATION_COPY } from '../../common/settings-test-notification-copy';
-import { isPlayableSound } from '../../common/sound-config';
-import { effectiveAssignedNotifyOnDrafts } from '../../common/effective-assigned-draft-notify';
-import { getNotificationIconUrl } from '../../common/extension-assets';
+} from '@common/constants';
+import { getChromeNotificationPermissionLevel } from '@common/notification-permission';
+import { SETTINGS_TEST_NOTIFICATION_COPY } from '@common/settings-test-notification-copy';
+import { isPlayableSound } from '@common/sound-config';
+import { effectiveAssignedNotifyOnDrafts } from '@common/effective-assigned-draft-notify';
+import { getNotificationIconUrl } from '@common/extension-assets';
 import {
   chromeExtensionService,
   type NotificationCreateOptions,

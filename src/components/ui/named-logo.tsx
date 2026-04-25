@@ -1,7 +1,7 @@
 import { animated, config, to, useSprings } from '@react-spring/web';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
-import { usePrefersReducedMotion } from '../../hooks/use-prefers-reduced-motion';
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
 
 const LETTERS = Array.from('Pullwatch');
 

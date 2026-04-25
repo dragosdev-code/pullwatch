@@ -1,4 +1,4 @@
-import { MIN_REFRESH_INTERVAL_MS } from '../../../../extension/common/constants';
+import { MIN_REFRESH_INTERVAL_MS } from '@common/constants';
 import type { DerivedRefreshDisplay, RefreshButtonProps, RefreshRingPhase } from '../types';
 
 export const resolvePhase = (

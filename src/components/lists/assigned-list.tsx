@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { PullRequest } from '../../../extension/common/types';
+import type { PullRequest } from '@common/types';
 import { PRItem } from '../pr-item';
 import { PRListEmptyState } from './pr-list-empty-state';
 

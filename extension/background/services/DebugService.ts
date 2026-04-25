@@ -1,5 +1,5 @@
 import type { IDebugService } from '../interfaces/IDebugService';
-import { initializeDebugTools } from '../../debug/debugLogger';
+import { initializeDebugTools } from '@debug/debugLogger';
 
 /**
  * DebugService handles all debug logging operations.

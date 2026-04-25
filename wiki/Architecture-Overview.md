@@ -2,6 +2,8 @@
 
 > **What this page is.** A one page map of every moving part in Pullwatch. Think of it as the index to the rest of the wiki: every service you see here links straight to the deep dive that explains how it works. If you only read one technical page, read this one.
 
+Imports use shared path aliases (`@common/*`, `@src/*`, `@background/*`, and others) so TypeScript, Vite, and Vitest agree; prefer them over long `../` paths into `extension/` or across top-level `src/` folders (see `tsconfig.json` and `vite.aliases.ts`). **Full conventions:** [Import paths and aliases](Import-paths-and-aliases).
+
 ---
 
 ## The shape of the system

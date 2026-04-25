@@ -1,4 +1,4 @@
-import { MAX_CUSTOM_SOUND_DURATION_S } from '../../../../extension/common/constants';
+import { MAX_CUSTOM_SOUND_DURATION_S } from '@common/constants';
 import { PlayIcon, PauseIcon } from '../../ui/icons';
 import { TruncatedOneLineWithTooltip } from '../../ui/truncated-one-line-with-tooltip';
 import { WaveformScroller } from './waveform-scroller';

@@ -4,14 +4,14 @@ import {
   STORAGE_KEY_HAS_SEEN_ONBOARDING,
   STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE,
   STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
-} from '../../extension/common/constants';
-import type { GitHubViewerIdentity } from '../../extension/common/types';
-import { runWithTransientStorageRetry } from '../../extension/common/transient-storage-retry';
+} from '@common/constants';
+import type { GitHubViewerIdentity } from '@common/types';
+import { runWithTransientStorageRetry } from '@common/transient-storage-retry';
 import {
   chromeExtensionService,
   type StorageChange,
 } from '@common/chrome-extension-service';
-import { isExtensionContext } from '../utils/is-extension-context';
+import { isExtensionContext } from '@src/utils/is-extension-context';
 
 export type OnboardingRefreshState = 'idle' | 'loading' | 'error';
 

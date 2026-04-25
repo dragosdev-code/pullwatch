@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { LinkOpenBehavior } from '../../../hooks/use-link-behavior';
+import type { LinkOpenBehavior } from '@src/hooks/use-link-behavior';
 import { SettingsCloseButton } from './settings-close-button';
 import { SettingsSourceCodeLink } from './settings-source-code-link';
 

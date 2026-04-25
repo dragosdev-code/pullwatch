@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isExtensionContext } from '../utils/is-extension-context';
-import { runThemeRipple } from '../lib/theme-ripple';
+import { isExtensionContext } from '@src/utils/is-extension-context';
+import { runThemeRipple } from '@src/lib/theme-ripple';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 const STORAGE_KEY = 'pr-extension-theme';

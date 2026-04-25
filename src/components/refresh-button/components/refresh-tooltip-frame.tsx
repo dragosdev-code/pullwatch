@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
-import { MIN_REFRESH_INTERVAL_MS } from '../../../../extension/common/constants';
+import { MIN_REFRESH_INTERVAL_MS } from '@common/constants';
 import { TOOLTIP_DELAY_GUARD_CLASSES } from '../constants';
 
 interface RefreshTooltipFrameProps {

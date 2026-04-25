@@ -6,7 +6,7 @@ import type { INotificationService } from '../interfaces/INotificationService';
 import type { IBadgeService } from '../interfaces/IBadgeService';
 import type { IRateLimitService } from '../interfaces/IRateLimitService';
 import type { IHealthStatusService } from '../interfaces/IHealthStatusService';
-import type { PullRequest } from '../../common/types';
+import type { PullRequest } from '@common/types';
 import {
   CACHE_TTL_MS,
   REQUEST_DELAY_MS,
@@ -16,15 +16,15 @@ import {
   STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_PARSER_BREAKAGE,
   STORAGE_KEY_ROUTE_HINT,
-} from '../../common/constants';
+} from '@common/constants';
 import {
   RateLimitError,
   ParserBreakageError,
   GitHubOutageError,
   isGitHubWebSessionAuthError,
-} from '../../common/errors';
-import { isOfflineError } from '../../common/network-utils';
-import { delay } from '../../common/utils';
+} from '@common/errors';
+import { isOfflineError } from '@common/network-utils';
+import { delay } from '@common/utils';
 
 /**
  * WHY [invariant]: One place for “which pending assigned PRs count toward the badge” —

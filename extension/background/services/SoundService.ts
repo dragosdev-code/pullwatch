@@ -1,14 +1,14 @@
 import type { ISoundService } from '../interfaces/ISoundService';
 import type { IDebugService } from '../interfaces/IDebugService';
-import type { NotificationSound, CustomSoundMeta } from '../../common/types';
+import type { NotificationSound, CustomSoundMeta } from '@common/types';
 import {
   OFFSCREEN_DOCUMENT_PATH,
   OFFSCREEN_REASON_AUDIO_PLAYBACK,
   CUSTOM_SOUND_STORAGE_PREFIX,
   STORAGE_KEY_CUSTOM_SOUNDS_META,
-} from '../../common/constants';
-import { isCustomSoundId, resolvePlayableSoundOrFallback } from '../../common/sound-config';
-import { EVENT_PLAY_SOUND, EVENT_STOP_SOUND_PLAYBACK } from '../../common/runtime-actions';
+} from '@common/constants';
+import { isCustomSoundId, resolvePlayableSoundOrFallback } from '@common/sound-config';
+import { EVENT_PLAY_SOUND, EVENT_STOP_SOUND_PLAYBACK } from '@common/runtime-actions';
 import {
   chromeExtensionService,
   ExtensionContextType,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PullRequest } from '../../extension/common/types';
+import type { PullRequest } from '@common/types';
 
 /**
  * Stable sorted key for the set of PR ids that the background marked `isNew` after a compare.

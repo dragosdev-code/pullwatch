@@ -105,6 +105,29 @@
             "name": "chrome",
             "message": "Use chromeExtensionService (and its exported types) from @common/chrome-extension-service — do not reference the chrome global elsewhere."
           }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(?:\\.\\./)+extension/common/",
+                "message": "Use @common/... instead of a relative path into extension/common/."
+              },
+              {
+                "regex": "(?:\\.\\./)+extension/background/",
+                "message": "Use @background/... instead of a relative path into extension/background/."
+              },
+              {
+                "regex": "(?:\\.\\./)+extension/offscreen/",
+                "message": "Use @offscreen/... instead of a relative path into extension/offscreen/."
+              },
+              {
+                "regex": "(?:\\.\\./)+extension/debug/",
+                "message": "Use @debug/... instead of a relative path into extension/debug/."
+              }
+            ]
+          }
         ]
       },
       "plugins": ["typescript", "react"],
@@ -120,6 +143,38 @@
         "registerProcessor": "readonly",
         "sampleRate": "readonly",
         "WorkletGlobalScope": "readonly"
+      }
+    },
+    {
+      "files": ["src/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(?:\\.\\./)+extension/common/",
+                "message": "Use @common/... instead of a relative path into extension/common/."
+              },
+              {
+                "regex": "(?:\\.\\./)+extension/background/",
+                "message": "Use @background/... instead of a relative path into extension/background/."
+              },
+              {
+                "regex": "(?:\\.\\./)+extension/offscreen/",
+                "message": "Use @offscreen/... instead of a relative path into extension/offscreen/."
+              },
+              {
+                "regex": "(?:\\.\\./)+extension/debug/",
+                "message": "Use @debug/... instead of a relative path into extension/debug/."
+              },
+              {
+                "regex": "^@background/",
+                "message": "Popup code must not import the service worker bundle; use chromeExtensionService from @common/chrome-extension-service instead."
+              }
+            ]
+          }
+        ]
       }
     },
     {

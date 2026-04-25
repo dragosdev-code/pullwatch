@@ -7,7 +7,7 @@ import {
   POPUP_WIDTH_CSS_VAR,
   getPopupSizePreset,
   type PopupSizePresetId,
-} from '../constants/popup-sizes';
+} from '@src/constants/popup-sizes';
 
 const applyPresetToDocument = (id: PopupSizePresetId) => {
   if (typeof document === 'undefined') return;

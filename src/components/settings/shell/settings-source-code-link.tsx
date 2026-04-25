@@ -1,10 +1,10 @@
 import type { MouseEvent } from 'react';
 import clsx from 'clsx';
 import { CodeBracketSquareIcon } from '@heroicons/react/24/outline';
-import { EXTENSION_SOURCE_REPOSITORY_URL } from '../../../constants/extension-repository';
-import type { LinkOpenBehavior } from '../../../hooks/use-link-behavior';
+import { EXTENSION_SOURCE_REPOSITORY_URL } from '@src/constants/extension-repository';
+import type { LinkOpenBehavior } from '@src/hooks/use-link-behavior';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import { isExtensionContext } from '../../../utils/is-extension-context';
+import { isExtensionContext } from '@src/utils/is-extension-context';
 
 const SOURCE_TOOLTIP = "View Pullwatch's source code on GitHub";
 

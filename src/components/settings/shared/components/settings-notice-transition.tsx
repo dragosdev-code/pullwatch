@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import clsx from 'clsx';
-import { usePrefersReducedMotion } from '../../../../hooks/use-prefers-reduced-motion';
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
 import { SETTINGS_EASE_OUT_EXPO } from '../animation/settings-motion';
 
 type SettingsNoticeTransitionProps = {

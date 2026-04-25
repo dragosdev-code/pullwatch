@@ -1,8 +1,8 @@
 /// <reference types="vitest/globals" />
-import { compilePatterns, DEFAULT_PATTERNS } from '../../../common/default-patterns';
-import type { CompiledPatterns, PatternRegistry } from '../../../common/pattern-types';
-import { ParserBreakageError } from '../../../common/errors';
-import { clone } from '../../../common/__tests__/schema-test-helpers';
+import { compilePatterns, DEFAULT_PATTERNS } from '@common/default-patterns';
+import type { CompiledPatterns, PatternRegistry } from '@common/pattern-types';
+import { ParserBreakageError } from '@common/errors';
+import { clone } from '@common/__tests__/schema-test-helpers';
 import { NewExperienceGitHubHTMLParser } from '../NewExperienceGitHubHTMLParser';
 
 function compiledWithNePatch(

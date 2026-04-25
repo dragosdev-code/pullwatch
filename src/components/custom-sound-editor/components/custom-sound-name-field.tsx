@@ -1,6 +1,6 @@
 import { useFormContext } from 'react-hook-form';
-import { MAX_CUSTOM_SOUND_NAME_LENGTH } from '../../../../extension/common/constants';
-import { validateCustomSoundName } from '../../../../extension/common/custom-sound-name';
+import { MAX_CUSTOM_SOUND_NAME_LENGTH } from '@common/constants';
+import { validateCustomSoundName } from '@common/custom-sound-name';
 import type { SoundNameForm } from '../types';
 
 interface CustomSoundNameFieldProps {

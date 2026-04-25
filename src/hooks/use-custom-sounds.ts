@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { CustomSoundMeta, CustomSoundId } from '../../extension/common/types';
-import type { SoundDefinition } from '../../extension/common/sound-config';
+import type { CustomSoundMeta, CustomSoundId } from '@common/types';
+import type { SoundDefinition } from '@common/sound-config';
 import {
   STORAGE_KEY_CUSTOM_SOUNDS_META,
   CUSTOM_SOUND_STORAGE_PREFIX,
   MAX_CUSTOM_SOUNDS,
-} from '../../extension/common/constants';
-import { validateCustomSoundName } from '../../extension/common/custom-sound-name';
+} from '@common/constants';
+import { validateCustomSoundName } from '@common/custom-sound-name';
 import {
   chromeExtensionService,
   type StorageChange,

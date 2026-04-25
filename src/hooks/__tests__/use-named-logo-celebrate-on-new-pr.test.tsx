@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import type { PullRequest } from '../../../extension/common/types';
+import type { PullRequest } from '@common/types';
 import { useNamedLogoCelebrateOnNewPr } from '../use-named-logo-celebrate-on-new-pr';
 
 const pr = (id: string, isNew: boolean): PullRequest => ({

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useLinkBehavior } from '../../../hooks/use-link-behavior';
+import { useLinkBehavior } from '@src/hooks/use-link-behavior';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 export const usePrLinkClick = ({

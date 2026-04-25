@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isExtensionContext } from '../utils/is-extension-context';
+import { isExtensionContext } from '@src/utils/is-extension-context';
 import {
   chromeExtensionService,
   type StorageChange,

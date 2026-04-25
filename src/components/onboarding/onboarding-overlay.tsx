@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import FocusLock from 'react-focus-lock';
 import { animated, to, useTransition } from '@react-spring/web';
-import type { OnboardingRefreshState } from '../../hooks/use-onboarding';
+import type { OnboardingRefreshState } from '@src/hooks/use-onboarding';
 import { CheckingView } from './checking-view';
 import { LoggedOutView } from './logged-out-view';
 import { OnboardingReveal } from './onboarding-reveal';

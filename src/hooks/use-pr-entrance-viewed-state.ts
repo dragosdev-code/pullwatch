@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { PullRequest } from '../../extension/common/types';
+import type { PullRequest } from '@common/types';
 
 /**
  * Tracks PR ids that should no longer use the entrance animation for this popup open.

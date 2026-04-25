@@ -1,7 +1,7 @@
 import { forwardRef, useCallback } from 'react';
 import { animated, useSpring } from '@react-spring/web';
 import type { ChangeEvent, ComponentProps } from 'react';
-import { usePrefersReducedMotion } from '../../../../hooks/use-prefers-reduced-motion';
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
 import { SETTINGS_SPRING_SNAPPY, SETTINGS_SPRING_SOFT } from '../animation/settings-motion';
 
 type ToggleInputProps = Omit<ComponentProps<'input'>, 'type'>;

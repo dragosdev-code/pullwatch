@@ -1,9 +1,9 @@
 import { defineConfig } from 'vitest/config';
-import path from 'path';
 import {
   REMOTE_PATTERNS_URL,
   REMOTE_PATTERNS_STAGING_URL,
 } from './extension/common/constants';
+import { viteResolveAliases } from './vite.aliases';
 
 /**
  * Isolated Vitest config for the remote patterns.json smoke test.
@@ -33,10 +33,7 @@ function resolveRemotePatternsUrlForSmoke(mode: string): string {
 
 export default defineConfig(({ mode }) => ({
   resolve: {
-    alias: {
-      '@extension': path.resolve(__dirname, 'extension'),
-      '@common': path.resolve(__dirname, 'extension/common'),
-    },
+    alias: viteResolveAliases,
   },
   test: {
     globals: true,

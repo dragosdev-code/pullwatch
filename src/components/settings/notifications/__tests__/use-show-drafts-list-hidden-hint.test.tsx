@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { PullRequest } from '../../../../../extension/common/types';
-import { queryKeys } from '../../../../constants/query-keys';
+import type { PullRequest } from '@common/types';
+import { queryKeys } from '@src/constants/query-keys';
 import {
   hasDraftPRsInAssignedCache,
   useShowDraftsListHiddenHint,
@@ -19,7 +19,7 @@ vi.mock('@common/chrome-extension-service', () => ({
   },
 }));
 
-vi.mock('../../../../utils/is-extension-context', () => ({
+vi.mock('@src/utils/is-extension-context', () => ({
   isExtensionContext: () => true,
 }));
 

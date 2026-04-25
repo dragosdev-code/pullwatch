@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { NotificationService } from '../NotificationService';
-import type { ExtensionSettings, PullRequest } from '../../../common/types';
-import { DEFAULT_EXTENSION_SETTINGS } from '../../../common/extension-settings-defaults';
+import type { ExtensionSettings, PullRequest } from '@common/types';
+import { DEFAULT_EXTENSION_SETTINGS } from '@common/extension-settings-defaults';
 
 function baseSettings(assignedPatch: Partial<ExtensionSettings['assigned']>): ExtensionSettings {
   return {

@@ -1,4 +1,4 @@
-import type { CustomSoundId, CustomSoundMeta } from '../../../../extension/common/types';
+import type { CustomSoundId, CustomSoundMeta } from '@common/types';
 import { SavedSoundRow } from './saved-sound-row';
 
 interface SavedSoundsSectionProps {

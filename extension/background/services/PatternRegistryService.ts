@@ -1,22 +1,22 @@
 import type { IPatternRegistryService } from '../interfaces/IPatternRegistryService';
 import type { IDebugService } from '../interfaces/IDebugService';
-import type { PatternRegistry, CompiledPatterns } from '../../common/pattern-types';
+import type { PatternRegistry, CompiledPatterns } from '@common/pattern-types';
 import {
   compilePatterns,
   DEFAULT_PATTERNS,
   DEFAULT_COMPILED_PATTERNS,
-} from '../../common/default-patterns';
+} from '@common/default-patterns';
 import {
   STORAGE_KEY_PATTERN_REGISTRY,
   REMOTE_PATTERNS_URL,
   PATTERN_REFRESH_TTL_MS,
   REMOTE_FETCH_TIMEOUT_MS,
-} from '../../common/constants';
+} from '@common/constants';
 import {
   validateRemoteConfig,
   validateStoredPatternData,
   type StoredPatternData,
-} from '../../common/pattern-registry-schema';
+} from '@common/pattern-registry-schema';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 function getExtensionVersion(): string {

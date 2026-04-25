@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import type { PullRequest } from '../../../../../extension/common/types';
-import { assignedPrsQueryOptions } from '../../../../hooks/use-assigned-prs';
+import type { PullRequest } from '@common/types';
+import { assignedPrsQueryOptions } from '@src/hooks/use-assigned-prs';
 
 /** Mirrors background list filtering: a row is a draft when `type === 'draft'`. */
 export const hasDraftPRsInAssignedCache = (prs: PullRequest[]): boolean =>

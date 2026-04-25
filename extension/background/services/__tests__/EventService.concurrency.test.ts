@@ -21,9 +21,9 @@ import type { IPRService } from '../../interfaces/IPRService';
 import type { IStorageService } from '../../interfaces/IStorageService';
 import type { IAlarmService } from '../../interfaces/IAlarmService';
 import type { IDebugService } from '../../interfaces/IDebugService';
-import type { MessageResponse, PullRequest, RuntimeRequestMessage } from '../../../common/types';
-import { STORAGE_KEY_PR_FETCH_IN_PROGRESS } from '../../../common/constants';
-import { PR_DATA_ACTION } from '../../../common/runtime-actions';
+import type { MessageResponse, PullRequest, RuntimeRequestMessage } from '@common/types';
+import { STORAGE_KEY_PR_FETCH_IN_PROGRESS } from '@common/constants';
+import { PR_DATA_ACTION } from '@common/runtime-actions';
 
 /** Same contract as `Promise.withResolvers` without raising TS `lib` past ES2020. */
 function createDeferred<T>(): {

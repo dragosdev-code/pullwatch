@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { CheckIcon } from '@heroicons/react/24/outline';
-import { isPlayableSound, type SoundDefinition } from '../../../../../../extension/common/sound-config';
+import { isPlayableSound, type SoundDefinition } from '@common/sound-config';
 import { SoundPreviewButton } from '../../../../audio';
 
 export interface SoundOptionProps {

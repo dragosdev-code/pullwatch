@@ -1,4 +1,4 @@
-import type { NotificationSound } from '../../common/types';
+import type { NotificationSound } from '@common/types';
 import type { IService } from './IService';
 
 /**

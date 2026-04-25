@@ -1,4 +1,4 @@
-import type { PullRequest } from '../../common/types';
+import type { PullRequest } from '@common/types';
 
 /**
  * Shape of a single PR entry inside GitHub's embedded dashboard JSON.

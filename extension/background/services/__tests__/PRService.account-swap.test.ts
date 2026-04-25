@@ -1,13 +1,13 @@
 import { describe, expect, it, vi, beforeEach, type Mock } from 'vitest';
 import { PRService } from '../PRService';
-import type { PullRequest } from '../../../common/types';
+import type { PullRequest } from '@common/types';
 import {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_ROUTE_HINT,
-} from '../../../common/constants';
-import { DEFAULT_EXTENSION_SETTINGS } from '../../../common/extension-settings-defaults';
+} from '@common/constants';
+import { DEFAULT_EXTENSION_SETTINGS } from '@common/extension-settings-defaults';
 
 type StoredPRData = { prs: PullRequest[]; timestamp: number } | null;
 

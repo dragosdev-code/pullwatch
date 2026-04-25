@@ -1,4 +1,4 @@
-import type { NotificationSound, CustomSoundMeta } from '../../../extension/common/types';
+import type { NotificationSound, CustomSoundMeta } from '@common/types';
 
 export type { NotificationSound, CustomSoundMeta };
 

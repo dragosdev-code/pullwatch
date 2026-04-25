@@ -9,7 +9,7 @@ import {
   STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
   STORAGE_KEY_ROUTE_HINT,
-} from '../../../common/constants';
+} from '@common/constants';
 
 describe('StorageService.clearGitHubWebSessionCaches', () => {
   let localRemove: ReturnType<typeof vi.fn>;

@@ -9,6 +9,7 @@
 
 ### Deep Dives
 
+- [Import paths and aliases](Import-paths-and-aliases)
 - [The Service Worker Lifecycle](The-Service-Worker-Lifecycle)
 - [The Parser Waterfall](The-Parser-Waterfall)
 - [Remote Configuration](Remote-Configuration)

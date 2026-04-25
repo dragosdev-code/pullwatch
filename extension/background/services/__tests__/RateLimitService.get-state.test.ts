@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RateLimitService } from '../RateLimitService';
 import type { IDebugService } from '../../interfaces/IDebugService';
-import { FETCH_INTERVAL_MS } from '../../../common/constants';
+import { FETCH_INTERVAL_MS } from '@common/constants';
 
 describe.sequential('RateLimitService getState', () => {
   const debugService: IDebugService = {

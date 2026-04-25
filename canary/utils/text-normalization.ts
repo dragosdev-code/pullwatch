@@ -5,7 +5,7 @@
  * both sides keeps alignment checks signal over noise.
  */
 
-import type { PullRequest } from '../../extension/common/types';
+import type { PullRequest } from '@common/types';
 
 /** Canonical key for matching the same PR row across JSON harvest vs HTML scrape. */
 export function normalizePullUrl(url: string): string {

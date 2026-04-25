@@ -1,7 +1,7 @@
 import { BackgroundManager } from './services/BackgroundManager';
 import { ServiceContainer } from './core/ServiceContainer';
 import type { IEventService } from './interfaces/IEventService';
-import type { RuntimeMessage, MessageResponse } from '../common/types';
+import type { RuntimeMessage, MessageResponse } from '@common/types';
 import {
   chromeExtensionService,
   type MessageSender,

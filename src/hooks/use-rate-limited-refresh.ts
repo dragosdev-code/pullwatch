@@ -3,8 +3,8 @@ import type { UseMutationResult } from '@tanstack/react-query';
 import {
   MIN_REFRESH_INTERVAL_MS,
   STORAGE_KEY_LAST_MANUAL_REFRESH_AT,
-} from '../../extension/common/constants';
-import type { PullRequest } from '../../extension/common/types';
+} from '@common/constants';
+import type { PullRequest } from '@common/types';
 import {
   chromeExtensionService,
   type StorageChange,

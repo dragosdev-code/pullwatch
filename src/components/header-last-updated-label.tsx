@@ -1,8 +1,8 @@
 import { animated, config, useSprings } from '@react-spring/web';
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
-import { usePrefersReducedMotion } from '../hooks/use-prefers-reduced-motion';
-import { formatLastFetchDetail, formatLastFetchMainLine } from '../utils/format-last-fetch-label';
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
+import { formatLastFetchDetail, formatLastFetchMainLine } from '@src/utils/format-last-fetch-label';
 
 const TICK_MS = 1000;
 

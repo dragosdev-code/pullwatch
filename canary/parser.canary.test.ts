@@ -33,7 +33,7 @@ import {
   STATE_FILE_NEW,
   BROWSER_HEADERS,
 } from './utils/config';
-import { GitHubOutageError, RateLimitError } from '../extension/common/errors';
+import { GitHubOutageError, RateLimitError } from '@common/errors';
 import { parseAndAssert, parseSearchRouteAndAssert } from './utils/parse-orchestrator';
 import { observeNewExperienceSearchObservability } from './utils/dual-probe';
 import { checkAvatarCoverage } from './utils/assertions';

@@ -1,6 +1,6 @@
-import type { PullRequest, PullRequestAuthor } from '../../common/types';
-import type { CompiledPatterns } from '../../common/pattern-types';
-import { ParserBreakageError } from '../../common/errors';
+import type { PullRequest, PullRequestAuthor } from '@common/types';
+import type { CompiledPatterns } from '@common/pattern-types';
+import { ParserBreakageError } from '@common/errors';
 
 /**
  * Pure static utility for parsing GitHub PR listing pages.

@@ -1,4 +1,4 @@
-import { useParserBreakage } from '../hooks/use-parser-breakage';
+import { useParserBreakage } from '@src/hooks/use-parser-breakage';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
 
 export const ParserBreakageBanner = () => {

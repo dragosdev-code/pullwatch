@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ExtensionSettings } from '../../extension/common/types';
+import type { ExtensionSettings } from '@common/types';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**

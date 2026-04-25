@@ -7,8 +7,8 @@ import {
   SETTINGS_TEST_ERROR_CHROME_DENIED,
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
-} from '../../../../../../extension/common/constants';
-import { usePrefersReducedMotion } from '../../../../../hooks/use-prefers-reduced-motion';
+} from '@common/constants';
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
 import { SETTINGS_SPRING_SNAPPY } from '../../../shared/animation/settings-motion';
 import { SettingsNoticeTransition } from '../../../shared/components/settings-notice-transition';
 import { SettingsTestCooldownRing } from './settings-test-cooldown-ring';

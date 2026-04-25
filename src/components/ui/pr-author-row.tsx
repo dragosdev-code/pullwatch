@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import type { PullRequestAuthor } from '../../../extension/common/types';
+import type { PullRequestAuthor } from '@common/types';
 
 const UNKNOWN = 'Unknown Author';
 

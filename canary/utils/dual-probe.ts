@@ -15,11 +15,11 @@
  */
 
 import { expect } from 'vitest';
-import { GitHubEmbeddedJsonPullHarvest } from '../../extension/background/services/GitHubEmbeddedJsonPullHarvest';
-import { NewExperienceGitHubHTMLParser } from '../../extension/background/services/NewExperienceGitHubHTMLParser';
-import { DEFAULT_COMPILED_PATTERNS } from '../../extension/common/default-patterns';
-import { GITHUB_BASE_URL } from '../../extension/common/constants';
-import type { PullRequest } from '../../extension/common/types';
+import { GitHubEmbeddedJsonPullHarvest } from '@background/services/GitHubEmbeddedJsonPullHarvest';
+import { NewExperienceGitHubHTMLParser } from '@background/services/NewExperienceGitHubHTMLParser';
+import { DEFAULT_COMPILED_PATTERNS } from '@common/default-patterns';
+import { GITHUB_BASE_URL } from '@common/constants';
+import type { PullRequest } from '@common/types';
 import {
   CANARY_MARKER_EMBEDDED_JSON_DRIFT,
   CANARY_MARKER_NEW_HTML_FALLBACK_DEGRADED,

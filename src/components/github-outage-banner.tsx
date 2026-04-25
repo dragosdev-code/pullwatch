@@ -1,4 +1,4 @@
-import { useGitHubOutage } from '../hooks/use-github-outage';
+import { useGitHubOutage } from '@src/hooks/use-github-outage';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 export const GitHubOutageBanner = () => {

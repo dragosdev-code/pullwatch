@@ -6,9 +6,9 @@ import {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_MERGED_PRS,
-} from '../../../extension/common/constants';
-import type { PullRequest, StoredPRs } from '../../../extension/common/types';
-import { queryKeys } from '../../constants/query-keys';
+} from '@common/constants';
+import type { PullRequest, StoredPRs } from '@common/types';
+import { queryKeys } from '@src/constants/query-keys';
 import { usePrListsStorageSync } from '../use-pr-lists-storage-sync';
 import type { StorageChange } from '@common/chrome-extension-service';
 
@@ -27,7 +27,7 @@ vi.mock('@common/chrome-extension-service', () => ({
   },
 }));
 
-vi.mock('../../utils/is-extension-context', () => ({
+vi.mock('@src/utils/is-extension-context', () => ({
   isExtensionContext: () => true,
 }));
 

@@ -6,8 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StorageService } from '../StorageService';
 import type { IDebugService } from '../../interfaces/IDebugService';
-import type { PullRequest } from '../../../common/types';
-import { STORAGE_KEY_ASSIGNED_PRS } from '../../../common/constants';
+import type { PullRequest } from '@common/types';
+import { STORAGE_KEY_ASSIGNED_PRS } from '@common/constants';
 
 describe('StorageService.remove + PR list fingerprints', () => {
   let localSet: ReturnType<typeof vi.fn>;

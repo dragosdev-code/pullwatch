@@ -1,8 +1,8 @@
 import { animated, useTransition } from '@react-spring/web';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-import type { CustomSoundMeta } from '../../../../../../extension/common/types';
-import type { SoundDefinition } from '../../../../../../extension/common/sound-config';
-import { usePrefersReducedMotion } from '../../../../../hooks/use-prefers-reduced-motion';
+import type { CustomSoundMeta } from '@common/types';
+import type { SoundDefinition } from '@common/sound-config';
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
 import { SETTINGS_SPRING_SOFT } from '../../../shared/animation/settings-motion';
 import { SoundOption } from './sound-option';
 import { ConfirmDeleteRow } from './confirm-delete-row';

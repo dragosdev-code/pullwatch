@@ -1,6 +1,6 @@
 import type { IAvatarService } from '../interfaces/IAvatarService';
 import type { IDebugService } from '../interfaces/IDebugService';
-import type { PullRequest } from '../../common/types';
+import type { PullRequest } from '@common/types';
 
 /**
  * WHY [no SW fetch]: Popup extension pages can load GitHub avatar URLs in `<img>`; doing

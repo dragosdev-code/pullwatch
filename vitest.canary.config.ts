@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import path from 'path';
+import { viteResolveAliases } from './vite.aliases';
 
 /**
  * Isolated Vitest config for the canary parser tests.
@@ -10,11 +10,7 @@ import path from 'path';
  */
 export default defineConfig({
   resolve: {
-    alias: {
-      '@extension': path.resolve(__dirname, 'extension'),
-      '@common': path.resolve(__dirname, 'extension/common'),
-      '@background': path.resolve(__dirname, 'extension/background'),
-    },
+    alias: viteResolveAliases,
   },
   test: {
     include: ['canary/**/*.canary.test.ts'],

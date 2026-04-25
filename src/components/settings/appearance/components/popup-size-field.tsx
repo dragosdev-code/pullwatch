@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { usePopupSize } from '../../../../hooks/use-popup-size';
-import type { PopupSizePresetId } from '../../../../constants/popup-sizes';
+import { usePopupSize } from '@src/hooks/use-popup-size';
+import type { PopupSizePresetId } from '@src/constants/popup-sizes';
 import {
   SegmentedControl,
   type SegmentedOption,

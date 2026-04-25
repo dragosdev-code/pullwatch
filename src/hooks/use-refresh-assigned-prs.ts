@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import { queryKeys } from '../constants/query-keys';
+import { queryKeys } from '@src/constants/query-keys';
 
 /**
  * Hook to manually refresh assigned/review PRs (force fetch from GitHub).

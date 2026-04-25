@@ -14,12 +14,12 @@
  */
 
 import { expect } from 'vitest';
-import { GitHubHTMLParser } from '../../extension/background/services/GitHubHTMLParser';
-import { DEFAULT_COMPILED_PATTERNS } from '../../extension/common/default-patterns';
-import { GITHUB_BASE_URL } from '../../extension/common/constants';
-import { ParserBreakageError } from '../../extension/common/errors';
-import { parsePullsListHTML } from '../../extension/common/pulls-list-parser';
-import type { PullRequest } from '../../extension/common/types';
+import { GitHubHTMLParser } from '@background/services/GitHubHTMLParser';
+import { DEFAULT_COMPILED_PATTERNS } from '@common/default-patterns';
+import { GITHUB_BASE_URL } from '@common/constants';
+import { ParserBreakageError } from '@common/errors';
+import { parsePullsListHTML } from '@common/pulls-list-parser';
+import type { PullRequest } from '@common/types';
 import type { CanaryTarget } from './config';
 import { assertPRValid } from './assertions';
 import { looksLikeNewPullsDashboard } from './dual-probe';

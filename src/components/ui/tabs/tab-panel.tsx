@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTransition, animated } from '@react-spring/web';
-import { useTabControlStore } from '../../../stores/tab-control/store';
+import { useTabControlStore } from '@src/stores/tab-control/store';
 import { TAB_SPRING_CONFIG } from './tabs-config';
 
 interface TabPanelProps {

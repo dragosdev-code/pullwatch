@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useDebugStore } from '../stores/debug';
+import { useDebugStore } from '@src/stores/debug';
 
 const SLOT_SEQUENCE = Array.from('testdev');
 

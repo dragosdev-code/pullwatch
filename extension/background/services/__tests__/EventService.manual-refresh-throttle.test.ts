@@ -13,9 +13,9 @@ import type { IPRService } from '../../interfaces/IPRService';
 import type { IStorageService } from '../../interfaces/IStorageService';
 import type { IAlarmService } from '../../interfaces/IAlarmService';
 import type { IDebugService } from '../../interfaces/IDebugService';
-import type { MessageResponse, PullRequest, RuntimeRequestMessage } from '../../../common/types';
-import { MIN_REFRESH_INTERVAL_MS, STORAGE_KEY_LAST_MANUAL_REFRESH_AT } from '../../../common/constants';
-import { EVENT_FETCH_PRS, PR_DATA_ACTION } from '../../../common/runtime-actions';
+import type { MessageResponse, PullRequest, RuntimeRequestMessage } from '@common/types';
+import { MIN_REFRESH_INTERVAL_MS, STORAGE_KEY_LAST_MANUAL_REFRESH_AT } from '@common/constants';
+import { EVENT_FETCH_PRS, PR_DATA_ACTION } from '@common/runtime-actions';
 import type { Alarm } from '@common/chrome-extension-service';
 
 function createDeferred<T>(): {

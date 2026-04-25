@@ -1,4 +1,4 @@
-import type { NotificationSound } from '../../../../../../extension/common/types';
+import type { NotificationSound } from '@common/types';
 
 export interface SoundPickerProps {
   /** Currently selected sound */

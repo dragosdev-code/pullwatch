@@ -28,13 +28,25 @@
 
     /*
      * WHY [Vite parity]: `paths` only affects TypeScript resolution (editor + `tsc`); it does not
-     * rewrite emitted imports. Vite already resolves `@common/*` in vite.config — duplicate the same
-     * mapping here so extension + src agree without "works in bundle, red in IDE" drift.
+     * rewrite emitted imports. Must mirror `vite.aliases.ts` / Vite `resolve.alias` so tooling agrees.
      */
     "baseUrl": ".",
     "paths": {
-      "@common/*": ["extension/common/*"]
+      "@extension/*": ["extension/*"],
+      "@common/*": ["extension/common/*"],
+      "@background/*": ["extension/background/*"],
+      "@offscreen/*": ["extension/offscreen/*"],
+      "@debug/*": ["extension/debug/*"],
+      "@src/*": ["src/*"]
     }
   },
-  "include": ["src", "extension"]
+  "include": [
+    "src",
+    "extension",
+    "canary",
+    "vite.config.ts",
+    "vite.aliases.ts",
+    "vitest.canary.config.ts",
+    "vitest.remote-patterns.config.ts"
+  ]
 }

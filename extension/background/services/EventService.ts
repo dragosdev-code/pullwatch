@@ -9,15 +9,15 @@ import type {
   NotificationSound,
   DevTestNotificationOverrides,
   SettingsNotificationTestPayload,
-} from '../../common/types';
+} from '@common/types';
 import {
   SETTINGS_TEST_ERROR_CHROME_DENIED,
   SETTINGS_TEST_ERROR_COOLDOWN,
   SETTINGS_TEST_ERROR_DISABLED,
   STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE,
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
-} from '../../common/constants';
-import { isGitHubWebSessionAuthError } from '../../common/errors';
+} from '@common/constants';
+import { isGitHubWebSessionAuthError } from '@common/errors';
 import { ManualPrRefreshCoordinator } from './coordinators/ManualPrRefreshCoordinator';
 import {
   DEV_TEST_ACTION,
@@ -30,7 +30,7 @@ import {
   PREVIEW_SOUND_ACTION,
   SETTINGS_ACTION,
   type RequestRuntimeAction,
-} from '../../common/runtime-actions';
+} from '@common/runtime-actions';
 import {
   chromeExtensionService,
   type Alarm,

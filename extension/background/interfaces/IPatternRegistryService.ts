@@ -1,5 +1,5 @@
 import type { IService } from './IService';
-import type { CompiledPatterns } from '../../common/pattern-types';
+import type { CompiledPatterns } from '@common/pattern-types';
 
 /**
  * Interface for the service that manages parser pattern lifecycle:

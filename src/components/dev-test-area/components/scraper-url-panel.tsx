@@ -1,7 +1,7 @@
 import { ArrowTopRightOnSquareIcon, CheckIcon, Square2StackIcon } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import type { ScraperUrl } from '../../../../extension/common/types';
+import type { ScraperUrl } from '@common/types';
 
 export const ScraperUrlPanel = () => {
   const [urls, setUrls] = useState<ScraperUrl[]>([]);

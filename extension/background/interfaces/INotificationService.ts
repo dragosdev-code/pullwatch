@@ -1,4 +1,4 @@
-import type { PullRequest } from '../../common/types';
+import type { PullRequest } from '@common/types';
 import type { IService } from './IService';
 import type { NotificationCreateOptions } from '@common/chrome-extension-service';
 

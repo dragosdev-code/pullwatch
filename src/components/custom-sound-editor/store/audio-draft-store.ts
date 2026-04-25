@@ -1,5 +1,5 @@
 import { createStore } from 'zustand/vanilla';
-import { MAX_CUSTOM_SOUND_DURATION_S } from '../../../../extension/common/constants';
+import { MAX_CUSTOM_SOUND_DURATION_S } from '@common/constants';
 import { getWaveformPeaks } from '../utils/audio-utils';
 
 /**

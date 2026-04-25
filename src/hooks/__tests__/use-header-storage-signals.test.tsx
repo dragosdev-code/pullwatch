@@ -3,7 +3,7 @@ import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import {
   STORAGE_KEY_LAST_FETCH,
   STORAGE_KEY_PR_FETCH_IN_PROGRESS,
-} from '../../../extension/common/constants';
+} from '@common/constants';
 import { useHeaderStorageSignals } from '../use-header-storage-signals';
 import type { StorageChange } from '@common/chrome-extension-service';
 
@@ -26,7 +26,7 @@ vi.mock('@common/chrome-extension-service', () => ({
   },
 }));
 
-vi.mock('../../utils/is-extension-context', () => ({
+vi.mock('@src/utils/is-extension-context', () => ({
   isExtensionContext: () => true,
 }));
 

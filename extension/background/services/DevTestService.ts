@@ -11,8 +11,8 @@ import type {
   ScraperUrl,
   PullRequest,
   NotificationSound,
-} from '../../common/types';
-import { getNotificationIconUrl } from '../../common/extension-assets';
+} from '@common/types';
+import { getNotificationIconUrl } from '@common/extension-assets';
 import {
   GITHUB_BASE_URL,
   GITHUB_REVIEW_REQUESTS_URL_TEMPLATE,
@@ -24,8 +24,8 @@ import {
   GITHUB_AUTHORED_COMMENTED_URL_TEMPLATE,
   GITHUB_AUTHORED_DRAFT_URL_TEMPLATE,
   DEV_TEST_MIN_LOOP_INTERVAL_MS,
-} from '../../common/constants';
-import { isPlayableSound } from '../../common/sound-config';
+} from '@common/constants';
+import { isPlayableSound } from '@common/sound-config';
 
 export class DevTestService implements IDevTestService {
   private debugService: IDebugService;

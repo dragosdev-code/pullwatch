@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { STORAGE_KEY_ASSIGNED_PRS } from '../../../extension/common/constants';
-import type { PullRequest, StoredPRs } from '../../../extension/common/types';
+import { STORAGE_KEY_ASSIGNED_PRS } from '@common/constants';
+import type { PullRequest, StoredPRs } from '@common/types';
 import { ChromeExtensionService } from '@common/chrome-extension-service';
 
-vi.mock('../../../extension/common/transient-storage-retry', () => ({
+vi.mock('@common/transient-storage-retry', () => ({
   runWithTransientStorageRetry: <T,>(fn: () => Promise<T>) => fn(),
 }));
 

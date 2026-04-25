@@ -4,7 +4,7 @@ import {
   STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_HAS_SEEN_ONBOARDING,
   STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
-} from '../../../extension/common/constants';
+} from '@common/constants';
 import { useOnboarding } from '../use-onboarding';
 import {
   chromeExtensionService,

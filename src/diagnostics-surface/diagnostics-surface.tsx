@@ -1,4 +1,4 @@
-import { useDebugStore } from '../stores/debug';
+import { useDebugStore } from '@src/stores/debug';
 import { DiagnosticsPromptModal } from './diagnostics-prompt-modal';
 import { useMergedTabChordActivation } from './use-merged-tab-chord-activation';
 

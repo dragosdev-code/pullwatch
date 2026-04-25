@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import type { CustomSoundId } from '../../../../extension/common/types';
+import type { CustomSoundId } from '@common/types';
 
 type SavedDeleteUiValue = {
   pendingDeleteId: CustomSoundId | null;

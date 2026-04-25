@@ -8,8 +8,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { AlarmService } from '../AlarmService';
 import type { IDebugService } from '../../interfaces/IDebugService';
-import { FETCH_INTERVAL_MS, STORAGE_KEY_ALARM_OVERRIDE } from '../../../common/constants';
-import { EVENT_FETCH_PRS } from '../../../common/runtime-actions';
+import { FETCH_INTERVAL_MS, STORAGE_KEY_ALARM_OVERRIDE } from '@common/constants';
+import { EVENT_FETCH_PRS } from '@common/runtime-actions';
 import type { Alarm, AlarmCreateInfo } from '@common/chrome-extension-service';
 
 describe.sequential('AlarmService.setupFetchAlarm', () => {

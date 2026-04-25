@@ -1,4 +1,4 @@
-import type { LinkOpenBehavior } from '../../../../hooks/use-link-behavior';
+import type { LinkOpenBehavior } from '@src/hooks/use-link-behavior';
 import {
   SegmentedControl,
   type SegmentedOption,

@@ -1,10 +1,10 @@
 import type { MouseEvent } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { SPONSOR_URL } from '../../../../constants/sponsor';
-import type { LinkOpenBehavior } from '../../../../hooks/use-link-behavior';
+import { SPONSOR_URL } from '@src/constants/sponsor';
+import type { LinkOpenBehavior } from '@src/hooks/use-link-behavior';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import { isExtensionContext } from '../../../../utils/is-extension-context';
+import { isExtensionContext } from '@src/utils/is-extension-context';
 
 interface SettingsSponsorLoungeProps {
   linkBehavior: LinkOpenBehavior;

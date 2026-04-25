@@ -1,11 +1,11 @@
-import type { PullRequest } from '../../common/types';
+import type { PullRequest } from '@common/types';
 import type {
   CompiledPatterns,
   CompiledNewExperiencePatterns,
   CompiledPattern,
   CompiledPatternTypeEntry,
-} from '../../common/pattern-types';
-import { ParserBreakageError } from '../../common/errors';
+} from '@common/pattern-types';
+import { ParserBreakageError } from '@common/errors';
 
 /**
  * Pure static utility for parsing GitHub's **new** React-based global pulls

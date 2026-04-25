@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { TabIndicator } from './tab-indicator';
 import { AnimatedTabButton } from './animated-tab-button';
-import { useTabControlStore } from '../../../stores/tab-control/store';
-import { useDebugStore } from '../../../stores/debug';
+import { useTabControlStore } from '@src/stores/tab-control/store';
+import { useDebugStore } from '@src/stores/debug';
 import type { Tab, UseTabsOptions } from './types';
-import { TAB_IDS } from '../../../constants/tabs';
+import { TAB_IDS } from '@src/constants/tabs';
 
 interface TabsProps extends Omit<UseTabsOptions, 'tabs' | 'defaultTab'> {
   tabs: Tab[];

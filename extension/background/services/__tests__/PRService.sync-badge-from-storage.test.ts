@@ -1,12 +1,12 @@
 import { describe, expect, it, vi, beforeEach, type Mock } from 'vitest';
 import { PRService } from '../PRService';
-import type { ExtensionSettings, PullRequest } from '../../../common/types';
+import type { ExtensionSettings, PullRequest } from '@common/types';
 import {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_GITHUB_OUTAGE,
   STORAGE_KEY_PARSER_BREAKAGE,
-} from '../../../common/constants';
-import { DEFAULT_EXTENSION_SETTINGS } from '../../../common/extension-settings-defaults';
+} from '@common/constants';
+import { DEFAULT_EXTENSION_SETTINGS } from '@common/extension-settings-defaults';
 
 function makePR(partial: Partial<PullRequest> & Pick<PullRequest, 'id' | 'url'>): PullRequest {
   return {

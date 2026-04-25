@@ -1,4 +1,4 @@
-import type { CustomSoundId, CustomSoundMeta } from '../../../extension/common/types';
+import type { CustomSoundId, CustomSoundMeta } from '@common/types';
 
 // ---------------------------------------------------------------------------
 // Drag / interaction types

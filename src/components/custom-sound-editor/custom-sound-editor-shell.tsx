@@ -2,13 +2,13 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { useStore } from 'zustand';
 import clsx from 'clsx';
-import type { CustomSoundId } from '../../../extension/common/types';
+import type { CustomSoundId } from '@common/types';
 import {
   MAX_CUSTOM_SOUND_FILE_SIZE_BYTES,
   MAX_CUSTOM_SOUND_NAME_LENGTH,
-} from '../../../extension/common/constants';
+} from '@common/constants';
 import { decodeAudioFile, trimAudioBuffer, audioBufferToWavBase64 } from './utils/audio-utils';
-import { useCustomSounds } from '../../hooks/use-custom-sounds';
+import { useCustomSounds } from '@src/hooks/use-custom-sounds';
 import { useAudioPreview } from './hooks/use-audio-preview';
 import { CustomSoundEditorHeader } from './components/custom-sound-editor-header';
 import { CustomSoundEditorFooter } from './components/custom-sound-editor-footer';

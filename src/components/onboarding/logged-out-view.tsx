@@ -1,10 +1,10 @@
 import { memo, useCallback, useId, useMemo } from 'react';
 import { animated, useTransition } from '@react-spring/web';
 import { ArrowPathIcon } from '@heroicons/react/24/outline';
-import { GITHUB_BASE_URL } from '../../../extension/common/constants';
+import { GITHUB_BASE_URL } from '@common/constants';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import { isExtensionContext } from '../../utils/is-extension-context';
-import type { OnboardingRefreshState } from '../../hooks/use-onboarding';
+import { isExtensionContext } from '@src/utils/is-extension-context';
+import type { OnboardingRefreshState } from '@src/hooks/use-onboarding';
 import {
   ONBOARDING_TEXT_MUTED,
   ONBOARDING_TEXT_PRIMARY,

@@ -2,8 +2,8 @@ import type { IGitHubService } from '../interfaces/IGitHubService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type { IAvatarService } from '../interfaces/IAvatarService';
 import type { IPatternRegistryService } from '../interfaces/IPatternRegistryService';
-import type { PullRequest } from '../../common/types';
-import type { CompiledPattern } from '../../common/pattern-types';
+import type { PullRequest } from '@common/types';
+import type { CompiledPattern } from '@common/pattern-types';
 import {
   GITHUB_BASE_URL,
   GITHUB_REVIEW_REQUESTS_URL_TEMPLATE,
@@ -18,20 +18,20 @@ import {
   GITHUB_FETCH_TIMEOUT_MS,
   STORAGE_KEY_ROUTE_HINT,
   ROUTE_HINT_TTL_MS,
-} from '../../common/constants';
+} from '@common/constants';
 import {
   GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE,
   RateLimitError,
   ParserBreakageError,
   GitHubOutageError,
   isGitHubWebSessionAuthError,
-} from '../../common/errors';
-import { isOfflineError } from '../../common/network-utils';
+} from '@common/errors';
+import { isOfflineError } from '@common/network-utils';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import { parsePullsListHTML } from '../../common/pulls-list-parser';
-import { toPullsSearchUrl } from '../../common/github-url-utils';
-import { delay } from '../../common/utils';
-import { isGitHubLoggedOutHtmlShell } from '../../common/github-html-session';
+import { parsePullsListHTML } from '@common/pulls-list-parser';
+import { toPullsSearchUrl } from '@common/github-url-utils';
+import { delay } from '@common/utils';
+import { isGitHubLoggedOutHtmlShell } from '@common/github-html-session';
 
 /**
  * Which pulls *list URL* shape {@link GitHubService.fetchPRs} prefers first

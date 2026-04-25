@@ -15,8 +15,8 @@
 
 import fs from 'node:fs';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
-import { GITHUB_BASE_URL } from '../../extension/common/constants';
-import { isGitHubLoggedOutHtmlShell } from '../../extension/common/github-html-session';
+import { GITHUB_BASE_URL } from '@common/constants';
+import { isGitHubLoggedOutHtmlShell } from '@common/github-html-session';
 import {
   isGitHubPageNotFoundDocument,
   isGitHubPageNotFoundTitle,

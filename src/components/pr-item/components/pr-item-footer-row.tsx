@@ -1,4 +1,4 @@
-import type { PullRequest } from '../../../../extension/common/types';
+import type { PullRequest } from '@common/types';
 import clsx from 'clsx';
 import { PrAuthorRow } from '../../ui/pr-author-row';
 import { formatTimeAgo } from '../utils/format-time-ago';

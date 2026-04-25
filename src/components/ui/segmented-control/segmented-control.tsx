@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import { usePrefersReducedMotion } from '../../../hooks/use-prefers-reduced-motion';
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
 import { TAB_INDICATOR_TRANSITION } from '../tabs/tabs-config';
 
 const PILL_TRANSITION = `${TAB_INDICATOR_TRANSITION}, transform 220ms cubic-bezier(0.22, 1.4, 0.36, 1)`;

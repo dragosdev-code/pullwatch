@@ -3,12 +3,12 @@ import {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_MERGED_PRS,
-} from '../extension/common/constants';
-import type { StoredPRs } from '../extension/common/types';
-import { runWithTransientStorageRetry } from '../extension/common/transient-storage-retry';
-import { queryKeys } from './constants/query-keys';
+} from '@common/constants';
+import type { StoredPRs } from '@common/types';
+import { runWithTransientStorageRetry } from '@common/transient-storage-retry';
+import { queryKeys } from '@src/constants/query-keys';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import { isExtensionContext } from './utils/is-extension-context';
+import { isExtensionContext } from '@src/utils/is-extension-context';
 
 /**
  * Prefills TanStack Query from chrome.storage.local before the first React paint. The background

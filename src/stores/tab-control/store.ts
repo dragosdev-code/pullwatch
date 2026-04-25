@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DEFAULT_TAB_ID } from '../../constants/tabs';
+import { DEFAULT_TAB_ID } from '@src/constants/tabs';
 import type { TabControlState } from './types';
 
 export const useTabControlStore = create<TabControlState>((set, get) => ({

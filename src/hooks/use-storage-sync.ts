@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useSetGlobalError } from '../stores/global-error';
-import { useDebugMode, useDebugStore } from '../stores/debug';
+import { useSetGlobalError } from '@src/stores/global-error';
+import { useDebugMode, useDebugStore } from '@src/stores/debug';
 import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /**
