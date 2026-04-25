@@ -33,7 +33,7 @@ The usual top level folders under `src/` are `components`, `hooks`, `stores`, `l
 
 Relative imports are still the default **inside** a coherent slice of the tree. That keeps diffs small when you rename a feature folder and preserves the mental model “everything in this directory belongs together.”
 
-- **`extension/common/`** — import siblings with `./types`, `./constants`, and the like. The shared layer should read like a small library, not like every file starts with `@common/`.
+- **`extension/common/`** — import siblings with `./types`, `./constants`, and the like. The shared layer should read like a small library, not like every file starts with `@common/`. For the chrome adapter/client subtree specifically, [extension/common/chrome/index.ts](../extension/common/chrome/index.ts) is an optional barrel (`./chrome` from other `extension/common/` modules) so imports do not sprawl across `adapters/` and `clients/` when you only need the public surface of that layer.
 - **`extension/background/`** — `services` importing `../interfaces/...` is correct. You are still inside the worker package; an `@background/interfaces/...` path from the same package adds noise without buying a boundary.
 - **`extension/offscreen/`** and **`extension/debug/`** — same story: stay relative inside each tree unless something **outside** that tree needs the symbol.
 - **`src/components/...`** — short hops within the components tree, including a feature folder importing its own `./components/...` children, stay relative. That is the same “feature locality” idea as the background worker.

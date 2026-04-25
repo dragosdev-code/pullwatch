@@ -16,8 +16,14 @@ import { RuntimeMessageClient } from './chrome/clients/runtime-message-client';
 
 /**
  * Composition root for the cross-context Chrome-extension API surface. Popup, MV3 service worker,
- * and offscreen all import the {@link chromeExtensionService} singleton — every `chrome.*` reference
- * is confined to `extension/common/chrome/**` (enforced by the `no-restricted-globals` lint rule).
+ * and offscreen all use {@link chromeExtensionService} (lazy) or {@link getChromeExtensionService} —
+ * every `chrome.*` reference is confined to `extension/common/chrome/**` (enforced by
+ * `no-restricted-globals`).
+ *
+ * WHY [lazy singleton]: Adapters resolve the live `chrome` global at call time (see storage adapter
+ * and other `make*Adapter` closures), so constructing this class in Node does not require
+ * `globalThis.chrome` to exist until an API is actually invoked. Deferring `new ChromeExtensionService()`
+ * avoids import-order coupling with Vitest and with tests that `vi.stubGlobal('chrome', …)`.
  *
  * ## Layers
  *
@@ -57,7 +63,28 @@ export class ChromeExtensionService {
   readonly messages = new RuntimeMessageClient(this.runtime);
 }
 
-export const chromeExtensionService = new ChromeExtensionService();
+let chromeExtensionServiceInstance: ChromeExtensionService | undefined;
+
+/** Explicit access when you need the concrete instance (e.g. tests constructing a second service). */
+export function getChromeExtensionService(): ChromeExtensionService {
+  return (chromeExtensionServiceInstance ??= new ChromeExtensionService());
+}
+
+/**
+ * Stable handle to the extension-wide service; underlying instance is created on first property read.
+ * WHY [Proxy]: Preserves `import { chromeExtensionService }` ergonomics without running the
+ * constructor at module load.
+ */
+export const chromeExtensionService = new Proxy({} as ChromeExtensionService, {
+  get(_target, prop, receiver) {
+    const inst = getChromeExtensionService();
+    const value = Reflect.get(inst, prop, receiver);
+    if (typeof value === 'function') {
+      return (value as (...args: unknown[]) => unknown).bind(inst);
+    }
+    return value;
+  },
+});
 
 // ─── Re-exports for back-compat callers ────────────────────────────────────
 export { ExtensionContextType } from './chrome/chrome-globals';

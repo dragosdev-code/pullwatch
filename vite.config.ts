@@ -117,7 +117,10 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: 'happy-dom',
-      setupFiles: ['./src/test/vitest-chrome-stub.ts'],
+      // WHY no test.setupFiles chrome polyfill: ChromeExtensionService is lazy-instantiated and
+      // adapters read `globalThis.chrome` at API call time (not at import), so extension unit tests
+      // can import production modules in Node without a global stub. Tests that replace `chrome`
+      // use vi.stubGlobal before invoking code paths that touch storage/runtime.
       include: [
         'src/**/*.{test,spec}.{ts,tsx}',
         'extension/**/*.{test,spec}.ts',

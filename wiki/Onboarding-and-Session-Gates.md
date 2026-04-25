@@ -118,9 +118,9 @@ const refreshGitHubSession = useCallback(async () => {
   setRefreshState('loading');
   try {
     await Promise.all([
-      chromeExtensionService.fetchFreshAssignedPRs(),
-      chromeExtensionService.fetchFreshMergedPRs(),
-      chromeExtensionService.fetchFreshAuthoredPRs(),
+      chromeExtensionService.prs.fetchFreshAssigned(),
+      chromeExtensionService.prs.fetchFreshMerged(),
+      chromeExtensionService.prs.fetchFreshAuthored(),
     ]);
     const result = await runWithTransientStorageRetry(() =>
       chrome.storage.local.get(STORAGE_KEY_GITHUB_VIEWER_IDENTITY)
@@ -250,5 +250,5 @@ The settings overlay deliberately does not use `FocusLock`. Settings is meant to
 ## See also
 
 - [Data Hydration and Storage](Data-Hydration-and-Storage): the hydration contract this hook reuses, and the `runWithTransientStorageRetry` wrapper that guards every storage read in the gate.
-- [Popup and Background Communication](Popup-and-Background-Communication): the `fetchFreshAssignedPRs` messages the Refresh button sends, and how `EVENT_SETTINGS_UPDATED` broadcasts let the gate react to settings changes while it is up.
+- [Popup and Background Communication](Popup-and-Background-Communication): the `prs.fetchFreshAssigned` / `fetchFreshMerged` / `fetchFreshAuthored` RPCs the Refresh button triggers, and how `EVENT_SETTINGS_UPDATED` broadcasts let the gate react to settings changes while it is up.
 - [The Parser Waterfall](The-Parser-Waterfall): where the logged out HTML shell is detected and turned into the session auth error that ultimately sets the reauth gate flag.

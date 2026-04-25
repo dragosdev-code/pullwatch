@@ -60,19 +60,19 @@ private sendMessage<T = unknown>(message: RuntimeRequestMessage): Promise<T> {
 }
 ```
 
-Every public method on `chromeExtensionService` is either one of these `sendMessage` commands, or a direct `chrome.storage.*` read for data the popup owns.
+`chromeExtensionService` groups popup behavior under domain clients (`prs`, `settings`, `sound`, `devTest`, `messages`). Each RPC-style call is either one of these `sendMessage` commands, or a direct `chrome.storage.*` read for data the popup owns.
 
-| Popup method                                             | What it does                                                            | Channel                                |
+| Popup surface (on `chromeExtensionService`)              | What it does                                                            | Channel                                |
 | -------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------- |
-| `fetchAssignedPRs`, `fetchMergedPRs`, `fetchAuthoredPRs` | Ask the worker to refresh one list.                                     | `sendMessage`                          |
-| `saveSettings`                                           | Persist a settings diff and broadcast to other open contexts.           | `sendMessage`                          |
-| `getSettings`                                            | Read current settings.                                                  | **Direct `chrome.storage.sync.get`**   |
-| `onSettingsChange`                                       | Subscribe to settings updates across tabs.                              | `chrome.storage.onChanged` (sync area) |
-| `previewSound` / `stopPreviewSound`                      | Play or halt a notification sound.                                      | `sendMessage`                          |
-| `testSettingsNotification`                               | Fire a category test notification with cooldown.                        | `sendMessage`                          |
-| PR list reads                                            | Read `github_assigned_prs`, `github_merged_prs`, `github_authored_prs`. | **Direct `chrome.storage.local.get`**  |
+| `prs.fetchFreshAssigned` / `fetchFreshMerged` / `fetchFreshAuthored` | Ask the worker to refresh one list.                         | `sendMessage`                          |
+| `settings.save`                                          | Persist a settings diff and broadcast to other open contexts.           | `sendMessage`                          |
+| `settings.get`                                           | Read current settings.                                                  | **Direct `chrome.storage.sync.get`**   |
+| `settings.onChange`                                      | Subscribe to settings updates across tabs.                              | `chrome.storage.onChanged` (sync area) |
+| `sound.playPreview` / `sound.stopPreview`                | Play or halt a notification sound.                                      | `sendMessage`                          |
+| `settings.testNotification`                              | Fire a category test notification with cooldown.                        | `sendMessage`                          |
+| `prs.readAssignedFromLocal` / `readMergedFromLocal` / `readAuthoredFromLocal` | Read `github_assigned_prs`, `github_merged_prs`, `github_authored_prs`. | **Direct `chrome.storage.local.get`**  |
 
-The pattern is the same every time. **Reading something the popup could always read from storage** goes straight to `chrome.storage`. **Asking the worker to do work** goes through a message. `getSettings` being a direct storage read rather than a message is deliberate: it is a pure query, and routing it through the worker would wake it for no reason.
+The pattern is the same every time. **Reading something the popup could always read from storage** goes straight to `chrome.storage`. **Asking the worker to do work** goes through a message. `settings.get` being a direct storage read rather than a message is deliberate: it is a pure query, and routing it through the worker would wake it for no reason.
 
 ---
 
@@ -211,7 +211,7 @@ Why broadcast, rather than letting each popup pick up the `chrome.storage.onChan
 On the popup, [useExtensionSettings](../src/hooks/use-extension-settings.ts) listens for this broadcast and keeps local React state in sync, with one wrinkle:
 
 ```ts
-const unsubscribe = chromeExtensionService.onSettingsChange((newSettings) => {
+const unsubscribe = chromeExtensionService.settings.onChange((newSettings) => {
   if (!isSavingRef.current) {
     setSettings(newSettings);
   }
@@ -246,7 +246,7 @@ The popup's `sendMessage` promise rejects when Chrome tears the channel down. Th
 
 ### A settings save races an `onChanged` for the same key
 
-`useExtensionSettings` sets `isSavingRef.current = true` before calling `saveSettings` and clears it in `finally`. Any `onSettingsChange` callback that arrives in that window is ignored so the optimistic update is not overwritten with a pre save snapshot. Saves queued during that window accumulate in `pendingSaveRef` and are sent as one trailing diff.
+`useExtensionSettings` sets `isSavingRef.current = true` before calling `settings.save` and clears it in `finally`. Any `settings.onChange` callback that arrives in that window is ignored so the optimistic update is not overwritten with a pre save snapshot. Saves queued during that window accumulate in `pendingSaveRef` and are sent as one trailing diff.
 
 ### An unknown action makes it to the worker
 
