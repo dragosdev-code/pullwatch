@@ -13,7 +13,7 @@ export const useAuthoredPRs = () => {
     queryKey: queryKeys.authoredPrs,
     queryFn: () =>
       isExtensionContext()
-        ? chromeExtensionService.readAuthoredPrsFromLocalStorage()
+        ? chromeExtensionService.prs.readAuthoredFromLocal()
         : Promise.resolve(authoredPRsMock as PullRequest[]),
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 1000 * 60 * 5,

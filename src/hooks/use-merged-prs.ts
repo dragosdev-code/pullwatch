@@ -13,7 +13,7 @@ export const useMergedPRs = () => {
     queryKey: queryKeys.mergedPrs,
     queryFn: () =>
       isExtensionContext()
-        ? chromeExtensionService.readMergedPrsFromLocalStorage()
+        ? chromeExtensionService.prs.readMergedFromLocal()
         : Promise.resolve(mergedPRsMock as PullRequest[]),
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 1000 * 60 * 5,

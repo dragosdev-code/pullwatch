@@ -12,8 +12,8 @@ export const NotificationLooperPanel = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    chromeExtensionService
-      .devTestGetLooperState()
+    chromeExtensionService.devTest
+      .getLooperState()
       .then((state) => {
         setIsRunning(state.isRunning);
         setSentCount(state.sentCount);
@@ -25,12 +25,12 @@ export const NotificationLooperPanel = () => {
     setError(null);
     try {
       if (isRunning) {
-        const state = await chromeExtensionService.devTestStopLoop();
+        const state = await chromeExtensionService.devTest.stopLoop();
         setIsRunning(state.isRunning);
         setSentCount(state.sentCount);
       } else {
         const interval = Math.max(looper.intervalMs, DEV_TEST_MIN_LOOP_INTERVAL_MS);
-        const state = await chromeExtensionService.devTestStartLoop(interval);
+        const state = await chromeExtensionService.devTest.startLoop(interval);
         setIsRunning(state.isRunning);
         setSentCount(state.sentCount);
       }
@@ -43,7 +43,7 @@ export const NotificationLooperPanel = () => {
     if (!isRunning) return;
     const poll = setInterval(async () => {
       try {
-        const state = await chromeExtensionService.devTestGetLooperState();
+        const state = await chromeExtensionService.devTest.getLooperState();
         setSentCount(state.sentCount);
         if (!state.isRunning) setIsRunning(false);
       } catch {

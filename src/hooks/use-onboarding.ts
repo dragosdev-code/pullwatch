@@ -75,7 +75,7 @@ async function persistOnboardingDismissal(): Promise<void> {
  * next open instead of stranding a half-seen state in storage.
  *
  * WHY [refresh mirrors header]: Same three background calls as {@link useRateLimitedRefresh}
- * (`fetchFreshAssignedPRs`, `fetchFreshMergedPRs`, `fetchFreshAuthoredPRs`) so storage-backed
+ * (`prs.fetchFreshAssigned`, `prs.fetchFreshMerged`, `prs.fetchFreshAuthored`) so storage-backed
  * lists and `github_viewer_identity` stay consistent after onboarding refresh — not only To Review.
  *
  * WHY [reauth gate flag]: After a session wipe, `has_seen_onboarding` stays true so a returning
@@ -255,9 +255,9 @@ export function useOnboarding() {
 
     try {
       await Promise.all([
-        chromeExtensionService.fetchFreshAssignedPRs(),
-        chromeExtensionService.fetchFreshMergedPRs(),
-        chromeExtensionService.fetchFreshAuthoredPRs(),
+        chromeExtensionService.prs.fetchFreshAssigned(),
+        chromeExtensionService.prs.fetchFreshMerged(),
+        chromeExtensionService.prs.fetchFreshAuthored(),
       ]);
       const result = await runWithTransientStorageRetry(() =>
         chromeExtensionService.storage.local.get(STORAGE_KEY_GITHUB_VIEWER_IDENTITY)

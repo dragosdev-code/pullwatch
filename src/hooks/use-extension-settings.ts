@@ -25,7 +25,7 @@ export const useExtensionSettings = () => {
         setIsLoading(true);
         setError(null);
 
-        const loadedSettings = await chromeExtensionService.getSettings();
+        const loadedSettings = await chromeExtensionService.settings.get();
         setSettings(loadedSettings);
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Failed to load settings');
@@ -43,7 +43,7 @@ export const useExtensionSettings = () => {
    * Listen for settings changes from other contexts (background, other tabs)
    */
   useEffect(() => {
-    const unsubscribe = chromeExtensionService.onSettingsChange((newSettings) => {
+    const unsubscribe = chromeExtensionService.settings.onChange((newSettings) => {
       // Only update if we're not currently saving to avoid overwriting pending changes
       if (!isSavingRef.current) {
         setSettings(newSettings);
@@ -71,7 +71,7 @@ export const useExtensionSettings = () => {
       setSettings((prev) => (prev ? { ...prev, ...newSettings } : null));
 
       // Send to background script for persistence
-      const savedSettings = await chromeExtensionService.saveSettings(newSettings);
+      const savedSettings = await chromeExtensionService.settings.save(newSettings);
 
       // Update with confirmed settings from server
       setSettings(savedSettings);
@@ -92,7 +92,7 @@ export const useExtensionSettings = () => {
 
       // Revert to last known good settings on error
       try {
-        const currentSettings = await chromeExtensionService.getSettings();
+        const currentSettings = await chromeExtensionService.settings.get();
         setSettings(currentSettings);
       } catch {
         // If we can't even get settings, we're in a bad state

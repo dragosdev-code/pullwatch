@@ -52,7 +52,7 @@ export const SettingsNotificationTestButton = ({
     setPending(true);
     let startCooldown = false;
     try {
-      await chromeExtensionService.testSettingsNotification(category);
+      await chromeExtensionService.settings.testNotification(category);
       startCooldown = true;
       // WHY [clear on success]: Re-enabling Chrome notifications then Preview must hide the notice immediately.
       setChromeDenied(false);

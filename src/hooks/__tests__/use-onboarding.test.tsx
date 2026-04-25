@@ -20,9 +20,11 @@ const removeListenerMock = vi.fn();
 vi.mock('@common/chrome-extension-service', () => ({
   chromeExtensionService: {
     isExtensionContext: vi.fn(() => true),
-    fetchFreshAssignedPRs: vi.fn().mockResolvedValue([]),
-    fetchFreshMergedPRs: vi.fn().mockResolvedValue([]),
-    fetchFreshAuthoredPRs: vi.fn().mockResolvedValue([]),
+    prs: {
+      fetchFreshAssigned: vi.fn().mockResolvedValue([]),
+      fetchFreshMerged: vi.fn().mockResolvedValue([]),
+      fetchFreshAuthored: vi.fn().mockResolvedValue([]),
+    },
     storage: {
       local: {
         get: (...args: unknown[]) => getMock(...args),
@@ -169,9 +171,9 @@ describe('useOnboarding', () => {
         [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: undefined,
       });
       const authErr = new Error('NotLoggedIn: User is not logged in to GitHub.');
-      vi.mocked(chromeExtensionService.fetchFreshAssignedPRs).mockRejectedValueOnce(authErr);
-      vi.mocked(chromeExtensionService.fetchFreshMergedPRs).mockRejectedValueOnce(authErr);
-      vi.mocked(chromeExtensionService.fetchFreshAuthoredPRs).mockRejectedValueOnce(authErr);
+      vi.mocked(chromeExtensionService.prs.fetchFreshAssigned).mockRejectedValueOnce(authErr);
+      vi.mocked(chromeExtensionService.prs.fetchFreshMerged).mockRejectedValueOnce(authErr);
+      vi.mocked(chromeExtensionService.prs.fetchFreshAuthored).mockRejectedValueOnce(authErr);
 
       const { result } = renderHook(() => useOnboarding());
       await waitFor(() => expect(result.current.storageReady).toBe(true));

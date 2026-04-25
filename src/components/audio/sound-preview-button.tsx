@@ -88,7 +88,7 @@ export const SoundPreviewButton = ({
 
       if (isPlaying) {
         // WHY release after stop: `subscribePreviewSession` clears UI; release nulls ownership so the next play is not treated as a steal mid-stop.
-        void chromeExtensionService.stopSoundPreview();
+        void chromeExtensionService.sound.stopPreview();
         releasePreviewSession(clientId);
         return;
       }
@@ -109,7 +109,7 @@ export const SoundPreviewButton = ({
       setIsPlaying(true);
 
       try {
-        await chromeExtensionService.playSoundPreview(sound);
+        await chromeExtensionService.sound.playPreview(sound);
       } catch (error) {
         console.error('[SoundPreviewButton] Failed to play sound:', error);
         releasePreviewSession(clientId);

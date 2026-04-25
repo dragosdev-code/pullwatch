@@ -4,7 +4,7 @@
  * **Why this exists:** Preview audio is not rendered inside React—it is played in one offscreen
  * `AudioContext` via the service worker. Each button still keeps local `isPlaying` state, so two
  * mounted buttons (e.g. settings row + picker modal) could both show the wave while only one
- * pipeline runs, and one global `stopSoundPreview()` would desync the other. This module makes
+ * pipeline runs, and one global `sound.stopPreview()` would desync the other. This module makes
  * ownership explicit: at most one `clientId` is active; everyone else resets when someone claims.
  *
  * @module sound-preview-session
@@ -44,11 +44,11 @@ export const subscribePreviewSession = (listener: () => void): (() => void) => {
  * Takes exclusive ownership: stops any current offscreen playback, sets this client as active,
  * then notifies others so they clear their playing UI and discard in-flight completion work.
  *
- * **Why stop first:** Clears the SW/offscreen tail before the next `playSoundPreview`, avoiding
+ * **Why stop first:** Clears the SW/offscreen tail before the next `sound.playPreview`, avoiding
  * overlapping preview messages when switching sounds quickly.
  */
 export const claimPreviewSession = async (clientId: string): Promise<void> => {
-  await chromeExtensionService.stopSoundPreview();
+  await chromeExtensionService.sound.stopPreview();
   activeClientId = clientId;
   notifyListeners();
 };

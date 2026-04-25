@@ -12,8 +12,8 @@ export const AlarmOverridePanel = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    chromeExtensionService
-      .devTestGetAlarmState()
+    chromeExtensionService.devTest
+      .getAlarmState()
       .then((state) => {
         setIsOverridden(state.isOverridden);
         setCurrentIntervalMs(state.intervalMs);
@@ -25,12 +25,12 @@ export const AlarmOverridePanel = () => {
     setError(null);
     try {
       if (isOverridden) {
-        const state = await chromeExtensionService.devTestRestoreAlarm();
+        const state = await chromeExtensionService.devTest.restoreAlarm();
         setIsOverridden(state.isOverridden);
         setCurrentIntervalMs(state.intervalMs);
       } else {
         const ms = Math.max(alarmOverride.intervalMs, DEV_TEST_MIN_ALARM_OVERRIDE_MS);
-        const state = await chromeExtensionService.devTestOverrideAlarm(ms);
+        const state = await chromeExtensionService.devTest.overrideAlarm(ms);
         setIsOverridden(state.isOverridden);
         setCurrentIntervalMs(state.intervalMs);
       }

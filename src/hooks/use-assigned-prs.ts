@@ -12,7 +12,7 @@ type AssignedPrsQueryKey = typeof queryKeys.assignedPrs;
  * without duplicating `queryFn`, extension vs mock behavior, or timing.
  *
  * In the extension, the cache is filled by: (1) hydratePrQueriesFromStorage before React mounts,
- * (2) this queryFn via chromeExtensionService.readAssignedPrsFromLocalStorage, (3) usePrListsStorageSync while the popup is open
+ * (2) this queryFn via chromeExtensionService.prs.readAssignedFromLocal, (3) usePrListsStorageSync while the popup is open
  * when the background writes list keys. Fresh GitHub data only enters via the service worker
  * (alarm or manual fetch*). staleTime is infinite because invalidation is storage-driven, not TTL-based.
  */
@@ -23,7 +23,7 @@ export const assignedPrsQueryOptions: Omit<
   queryKey: queryKeys.assignedPrs,
   queryFn: () =>
     isExtensionContext()
-      ? chromeExtensionService.readAssignedPrsFromLocalStorage()
+      ? chromeExtensionService.prs.readAssignedFromLocal()
       : Promise.resolve(assignedPRsMock as PullRequest[]),
   staleTime: Number.POSITIVE_INFINITY,
   gcTime: 1000 * 60 * 5,

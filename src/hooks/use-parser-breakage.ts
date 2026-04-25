@@ -22,7 +22,7 @@ export function useParserBreakage(): boolean {
       setBroken(!!result[STORAGE_KEY_PARSER_BREAKAGE]);
     });
 
-    const cleanupMessage = chromeExtensionService.onMessage((message) => {
+    const cleanupMessage = chromeExtensionService.messages.subscribe((message) => {
       if (message.action === BROADCAST_ACTION.parserBreakageDetected) {
         setBroken(true);
       } else if (message.action === BROADCAST_ACTION.parserBreakageCleared) {

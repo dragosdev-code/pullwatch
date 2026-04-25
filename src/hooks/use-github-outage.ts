@@ -23,7 +23,7 @@ export function useGitHubOutage(): boolean {
       setOutage(!!result[STORAGE_KEY_GITHUB_OUTAGE]);
     });
 
-    const cleanupMessage = chromeExtensionService.onMessage((message) => {
+    const cleanupMessage = chromeExtensionService.messages.subscribe((message) => {
       if (message.action === BROADCAST_ACTION.githubOutageDetected) {
         setOutage(true);
       } else if (message.action === BROADCAST_ACTION.githubOutageCleared) {

@@ -18,7 +18,7 @@ export const InstantNotificationPanel = () => {
     setError(null);
 
     try {
-      await chromeExtensionService.devTestFireNotification({
+      await chromeExtensionService.devTest.fireNotification({
         title: notification.title || undefined,
         message: notification.message || undefined,
         sound: notification.sound,

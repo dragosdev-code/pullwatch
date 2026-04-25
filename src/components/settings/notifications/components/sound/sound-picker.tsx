@@ -79,7 +79,7 @@ export const SoundPicker = ({
   }, [onOpenCustomEditor]);
 
   const stopPreviewForCustomRow = useCallback((id: CustomSoundId) => {
-    void chromeExtensionService.stopSoundPreview();
+    void chromeExtensionService.sound.stopPreview();
     setPreviewInterruptByCustomId((prev) => ({
       ...prev,
       [id]: (prev[id] ?? 0) + 1,

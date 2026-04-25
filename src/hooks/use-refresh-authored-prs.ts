@@ -9,7 +9,7 @@ export const useRefreshAuthoredPRs = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => chromeExtensionService.fetchFreshAuthoredPRs(),
+    mutationFn: () => chromeExtensionService.prs.fetchFreshAuthored(),
     onSuccess: (freshPRs) => {
       // Update the cached PR data immediately
       queryClient.setQueryData(queryKeys.authoredPrs, freshPRs);

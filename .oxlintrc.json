@@ -178,7 +178,10 @@
       }
     },
     {
-      "files": ["extension/common/chrome-extension-service.ts"],
+      "files": [
+        "extension/common/chrome-extension-service.ts",
+        "extension/common/chrome/**/*.ts"
+      ],
       "rules": {
         "no-restricted-globals": "off"
       }

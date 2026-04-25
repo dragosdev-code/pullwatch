@@ -9,13 +9,15 @@ import {
   useShowDraftsListHiddenHint,
 } from '../hooks/use-show-drafts-list-hidden-hint';
 
-const { readAssignedPrsFromLocalStorage } = vi.hoisted(() => ({
-  readAssignedPrsFromLocalStorage: vi.fn(),
+const { readAssignedFromLocal } = vi.hoisted(() => ({
+  readAssignedFromLocal: vi.fn(),
 }));
 
 vi.mock('@common/chrome-extension-service', () => ({
   chromeExtensionService: {
-    readAssignedPrsFromLocalStorage,
+    prs: {
+      readAssignedFromLocal,
+    },
   },
 }));
 
@@ -69,7 +71,7 @@ describe('useShowDraftsListHiddenHint', () => {
     queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    readAssignedPrsFromLocalStorage.mockResolvedValue([openPr()]);
+    readAssignedFromLocal.mockResolvedValue([openPr()]);
   });
 
   afterEach(() => {
@@ -77,7 +79,7 @@ describe('useShowDraftsListHiddenHint', () => {
   });
 
   it('does not show on mount when list setting is already off (no user transition)', async () => {
-    readAssignedPrsFromLocalStorage.mockResolvedValue([draftPr()]);
+    readAssignedFromLocal.mockResolvedValue([draftPr()]);
     const { result } = renderHook(() => useShowDraftsListHiddenHint(false), {
       wrapper: createWrapper(),
     });
@@ -87,7 +89,7 @@ describe('useShowDraftsListHiddenHint', () => {
   });
 
   it('shows after user turns setting off when cache still has drafts', async () => {
-    readAssignedPrsFromLocalStorage.mockResolvedValue([draftPr()]);
+    readAssignedFromLocal.mockResolvedValue([draftPr()]);
     const { result, rerender } = renderHook(
       ({ showDraftsInList }) => useShowDraftsListHiddenHint(showDraftsInList),
       {
@@ -96,7 +98,7 @@ describe('useShowDraftsListHiddenHint', () => {
       },
     );
     await waitFor(() => {
-      expect(readAssignedPrsFromLocalStorage).toHaveBeenCalled();
+      expect(readAssignedFromLocal).toHaveBeenCalled();
     });
     act(() => {
       rerender({ showDraftsInList: false });
@@ -105,7 +107,7 @@ describe('useShowDraftsListHiddenHint', () => {
   });
 
   it('hides when drafts are removed from cache (simulating sync/refresh)', async () => {
-    readAssignedPrsFromLocalStorage.mockResolvedValue([draftPr()]);
+    readAssignedFromLocal.mockResolvedValue([draftPr()]);
     const { result, rerender } = renderHook(
       ({ showDraftsInList }) => useShowDraftsListHiddenHint(showDraftsInList),
       {
@@ -114,7 +116,7 @@ describe('useShowDraftsListHiddenHint', () => {
       },
     );
     await waitFor(() => {
-      expect(readAssignedPrsFromLocalStorage).toHaveBeenCalled();
+      expect(readAssignedFromLocal).toHaveBeenCalled();
     });
     act(() => {
       rerender({ showDraftsInList: false });
@@ -130,7 +132,7 @@ describe('useShowDraftsListHiddenHint', () => {
   });
 
   it('hides immediately when user turns setting back on', async () => {
-    readAssignedPrsFromLocalStorage.mockResolvedValue([draftPr()]);
+    readAssignedFromLocal.mockResolvedValue([draftPr()]);
     const { result, rerender } = renderHook(
       ({ showDraftsInList }) => useShowDraftsListHiddenHint(showDraftsInList),
       {
@@ -139,7 +141,7 @@ describe('useShowDraftsListHiddenHint', () => {
       },
     );
     await waitFor(() => {
-      expect(readAssignedPrsFromLocalStorage).toHaveBeenCalled();
+      expect(readAssignedFromLocal).toHaveBeenCalled();
     });
     act(() => {
       rerender({ showDraftsInList: false });

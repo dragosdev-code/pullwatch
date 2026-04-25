@@ -8,8 +8,8 @@ export const ScraperUrlPanel = () => {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    chromeExtensionService
-      .devTestGetScraperUrls()
+    chromeExtensionService.devTest
+      .getScraperUrls()
       .then(setUrls)
       .catch(() => {});
   }, []);
