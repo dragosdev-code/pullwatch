@@ -24,8 +24,8 @@ export async function readMinigameStats(): Promise<MinigameStats> {
 /**
  * Persists the full MinigameStats blob to chrome.storage.local.
  *
- * WHY [single key write]: the blob is small and self-contained, so one atomic write keeps the
- * `popupOpenCount` and `hasDiscovered` flip in lockstep without sequencing concerns.
+ * WHY [single key write]: the blob is small and self-contained, so one atomic write keeps
+ * counters and `hasDiscovered` consistent without cross-key sequencing.
  */
 export async function writeMinigameStats(stats: MinigameStats): Promise<void> {
   await runWithTransientStorageRetry(() =>

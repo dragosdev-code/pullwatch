@@ -167,7 +167,8 @@ export interface MinigameModeStats {
  * Squash the Bugs minigame storage blob.
  *
  * WHY [popupOpenCount lives here]: keeps the entire feature behind one storage key for atomic
- * reads/writes; flipping `hasDiscovered` happens in the same `set` call as the increment.
+ * reads/writes; the open counter increments with each popup launch while `hasDiscovered` is a
+ * separate explicit opt-in written from the popup UI.
  *
  * WHY [lastPlayedMode optional]: undefined until the first round finishes; pre-seeding a mode
  * before any play would misrepresent state for the launcher UI added in Phase 5.

@@ -104,7 +104,7 @@ describe('useMinigameDiscovery', () => {
     });
   });
 
-  it('flips hasDiscovered to true on exactly the threshold open', async () => {
+  it('keeps hasDiscovered false on the threshold open until discoverMinigame', async () => {
     getMock.mockResolvedValueOnce({
       [STORAGE_KEY_MINIGAME_STATS]: buildStored({
         popupOpenCount: MINIGAME_DISCOVERY_THRESHOLD - 1,
@@ -115,6 +115,25 @@ describe('useMinigameDiscovery', () => {
 
     await waitFor(() => expect(result.current.ready).toBe(true));
     expect(result.current.stats?.popupOpenCount).toBe(MINIGAME_DISCOVERY_THRESHOLD);
+    expect(result.current.stats?.hasDiscovered).toBe(false);
+    expect(setMock).toHaveBeenCalledWith({
+      [STORAGE_KEY_MINIGAME_STATS]: expect.objectContaining({
+        popupOpenCount: MINIGAME_DISCOVERY_THRESHOLD,
+        hasDiscovered: false,
+      }),
+    });
+
+    getMock.mockResolvedValueOnce({
+      [STORAGE_KEY_MINIGAME_STATS]: buildStored({
+        popupOpenCount: MINIGAME_DISCOVERY_THRESHOLD,
+        hasDiscovered: false,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.discoverMinigame();
+    });
+
     expect(result.current.stats?.hasDiscovered).toBe(true);
     expect(setMock).toHaveBeenCalledWith({
       [STORAGE_KEY_MINIGAME_STATS]: expect.objectContaining({
@@ -122,6 +141,34 @@ describe('useMinigameDiscovery', () => {
         hasDiscovered: true,
       }),
     });
+  });
+
+  it('discoverMinigame does not write when already discovered', async () => {
+    getMock.mockResolvedValueOnce({
+      [STORAGE_KEY_MINIGAME_STATS]: buildStored({
+        popupOpenCount: 2,
+        hasDiscovered: true,
+      }),
+    });
+
+    const { result } = renderHook(() => useMinigameDiscovery());
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    const writesAfterHydrate = setMock.mock.calls.length;
+
+    getMock.mockResolvedValueOnce({
+      [STORAGE_KEY_MINIGAME_STATS]: buildStored({
+        popupOpenCount: 3,
+        hasDiscovered: true,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.discoverMinigame();
+    });
+
+    expect(setMock.mock.calls.length).toBe(writesAfterHydrate);
+    expect(result.current.stats?.hasDiscovered).toBe(true);
   });
 
   it('keeps hasDiscovered true on opens past the threshold and never flips it back', async () => {
@@ -150,6 +197,13 @@ describe('useMinigameDiscovery', () => {
     expect(addListenerMock).not.toHaveBeenCalled();
     expect(result.current.stats?.popupOpenCount).toBe(0);
     expect(result.current.stats?.hasDiscovered).toBe(false);
+
+    await act(async () => {
+      await result.current.discoverMinigame();
+    });
+
+    expect(result.current.stats?.hasDiscovered).toBe(true);
+    expect(setMock).not.toHaveBeenCalled();
   });
 
   it('propagates onChanged updates from another popup mount', async () => {
