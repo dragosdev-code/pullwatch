@@ -5,6 +5,13 @@ export type GameStatus = 'idle' | 'playing' | 'finished';
 export type TargetKind = 'bug' | 'feature';
 
 /**
+ * Lifetime phase of a bug. Derived from `(now - spawnedAt) / lifetimeMs` via
+ * {@link import('./game-phase').computeBugPhase}; never stored on `Target`. Each phase has its
+ * own base point value (10 / 5 / 2) and visual opacity tier.
+ */
+export type BugPhase = 'fresh' | 'middle' | 'final';
+
+/**
  * One target occupying a single grid cell. `damageStage` advances on each successful click and
  * is only meaningful when the active mode requires more than one click to kill (legacy variant).
  */

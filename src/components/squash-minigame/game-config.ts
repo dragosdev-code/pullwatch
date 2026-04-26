@@ -1,4 +1,4 @@
-import type { GameMode } from './game-types';
+import type { BugPhase, GameMode } from './game-types';
 
 /** Pause the simulation for this many ms after a successful bug squash, per spec. */
 export const HIT_STOP_MS = 50;
@@ -8,6 +8,17 @@ export const SCREEN_SHAKE_MS = 300;
 
 export const POINTS_PER_BUG = 10;
 export const POINTS_PER_FEATURE = -20;
+
+/**
+ * Base score awarded for a bug squash, indexed by the bug's lifetime phase. Combo multiplier
+ * is applied on top in `clickCell`. Kept as a plain `Record` so the store reads one map and the
+ * audio + FCT layers can read the same source if they ever need to display the base value.
+ */
+export const PHASE_BASE_POINTS: Record<BugPhase, number> = {
+  fresh: 10,
+  middle: 5,
+  final: 2,
+};
 
 /** Fraction of spawns that produce a feature target instead of a bug, per spec (20 percent). */
 export const FEATURE_SPAWN_PROBABILITY = 0.2;
