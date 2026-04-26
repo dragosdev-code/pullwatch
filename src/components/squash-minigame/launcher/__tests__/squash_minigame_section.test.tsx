@@ -5,6 +5,7 @@ import type { GameMode, MinigameStats } from '@common/types';
 
 const discoverMinigameStub = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const openSquashGameStub = vi.hoisted(() => vi.fn((_: GameMode) => undefined));
+const beginSquashFromHeaderCtaStub = vi.hoisted(() => vi.fn());
 
 const useSquashMinigameExperienceMock = vi.hoisted(() =>
   vi.fn<
@@ -13,6 +14,7 @@ const useSquashMinigameExperienceMock = vi.hoisted(() =>
       ready: boolean;
       discoverMinigame: () => Promise<void>;
       openSquashGame: (mode: GameMode) => void;
+      beginSquashFromHeaderCta: () => void;
     }
   >()
 );
@@ -29,11 +31,13 @@ beforeEach(() => {
   useSquashMinigameExperienceMock.mockReset();
   discoverMinigameStub.mockReset().mockResolvedValue(undefined);
   openSquashGameStub.mockReset();
+  beginSquashFromHeaderCtaStub.mockReset();
 });
 
 function buildStats(overrides: Partial<MinigameStats>): MinigameStats {
   return {
     hasDiscovered: false,
+    hasSeenSquashQuickStart: false,
     popupOpenCount: 0,
     overall: { totalBugsSquashed: 0, totalFeaturesBroken: 0, totalTimePlayedSeconds: 0 },
     modes: {
@@ -53,6 +57,7 @@ describe('SquashMinigameSection', () => {
       ready: false,
       discoverMinigame: discoverMinigameStub,
       openSquashGame: openSquashGameStub,
+      beginSquashFromHeaderCta: beginSquashFromHeaderCtaStub,
     });
     const { container } = render(<SquashMinigameSection />);
     expect(container.firstChild).toBeNull();
@@ -64,6 +69,7 @@ describe('SquashMinigameSection', () => {
       ready: true,
       discoverMinigame: discoverMinigameStub,
       openSquashGame: openSquashGameStub,
+      beginSquashFromHeaderCta: beginSquashFromHeaderCtaStub,
     });
     const { container } = render(<SquashMinigameSection />);
     expect(container.firstChild).toBeNull();
@@ -75,6 +81,7 @@ describe('SquashMinigameSection', () => {
       ready: true,
       discoverMinigame: discoverMinigameStub,
       openSquashGame: openSquashGameStub,
+      beginSquashFromHeaderCta: beginSquashFromHeaderCtaStub,
     });
     render(<SquashMinigameSection />);
     expect(screen.getByTestId('neo-terminal-stub')).toBeTruthy();

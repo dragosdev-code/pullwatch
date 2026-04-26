@@ -15,7 +15,10 @@ import {
   type UseMinigameDiscoveryResult,
 } from './hooks/use-minigame-discovery';
 import { useRecordRoundResult } from './hooks/use-record-round-result';
+import { ensureCompleteMinigameStats } from './storage/minigame-stats-defaults';
+import { readMinigameStats, writeMinigameStats } from './storage/minigame-stats-storage';
 import { applyMinigameSessionPopupDimensions } from './minigame-popup-session-size';
+import { SquashQuickStartBoard } from './quick-start/squash-quick-start-board';
 import { SquashMinigameLoadingScreen } from './squash-minigame-loading-screen';
 import { SquashMinigameLazy } from './squash-minigame.lazy';
 import type { FinishedRoundSummary } from './squash-minigame-shell';
@@ -26,12 +29,15 @@ import {
 
 type SessionState =
   | null
+  | { stage: 'intro' }
   | { stage: 'loading'; mode: GameMode }
   | { stage: 'game'; mode: GameMode }
   | { stage: 'closing' };
 
 export type SquashMinigameExperienceValue = UseMinigameDiscoveryResult & {
   openSquashGame: (mode: GameMode) => void;
+  /** Header Play path: optional one-time quick-start before {@link openSquashGame}. */
+  beginSquashFromHeaderCta: () => void;
 };
 
 const SquashMinigameExperienceContext = createContext<SquashMinigameExperienceValue | null>(null);
@@ -74,6 +80,38 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
     setSession({ stage: 'loading', mode });
   }, []);
 
+  const beginSquashFromHeaderCta = useCallback(() => {
+    const live = discovery.stats;
+    if (!live) {
+      openSquashGame('standard');
+      return;
+    }
+    if (!live.hasSeenSquashQuickStart) {
+      setSession({ stage: 'intro' });
+      return;
+    }
+    openSquashGame(live.lastPlayedMode ?? 'standard');
+  }, [discovery.stats, openSquashGame]);
+
+  const handleQuickStartConfirm = useCallback(
+    async (mode: GameMode) => {
+      const stored = await readMinigameStats();
+      const live = discovery.stats;
+      const next = ensureCompleteMinigameStats({
+        ...stored,
+        ...(live ? { ...live } : {}),
+        hasSeenSquashQuickStart: true,
+      });
+      try {
+        await writeMinigameStats(next);
+      } catch {
+        /* same as discoverMinigame: do not block starting after a failed write */
+      }
+      setSession({ stage: 'loading', mode });
+    },
+    [discovery.stats]
+  );
+
   const handleFinish = useCallback(
     (summary: FinishedRoundSummary) => {
       void recordRound(summary);
@@ -82,6 +120,13 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
   );
 
   const loadingToken = session?.stage === 'loading' ? session.mode : null;
+  const introActive = session?.stage === 'intro';
+
+  useEffect(() => {
+    if (!introActive) return;
+    applyMinigameSessionPopupDimensions();
+    void import('./squash-minigame-shell');
+  }, [introActive]);
 
   // WHY [parallel Promise.all]: chunk download runs during the CSS resize animation so the gate
   // hides combined latency; the board mounts only after both complete so layout matches final vars.
@@ -144,6 +189,7 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
   const value: SquashMinigameExperienceValue = {
     ...discovery,
     openSquashGame,
+    beginSquashFromHeaderCta,
   };
 
   const portal =
@@ -153,6 +199,15 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
         role="presentation"
         data-testid="squash-minigame-overlay-root"
       >
+        {session.stage === 'intro' ? (
+          <SquashQuickStartBoard
+            lastPlayedMode={discovery.stats?.lastPlayedMode}
+            onClose={closeSquashGame}
+            onStart={(mode) => {
+              void handleQuickStartConfirm(mode);
+            }}
+          />
+        ) : null}
         {session.stage === 'loading' ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <SquashMinigameLoadingScreen />

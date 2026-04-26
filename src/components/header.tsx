@@ -72,9 +72,8 @@ export const Header = () => {
     !squash.stats.hasDiscovered;
 
   const handlePlayMinigame = async () => {
-    const mode = squash.stats?.lastPlayedMode ?? 'standard';
     await squash.discoverMinigame();
-    squash.openSquashGame(mode);
+    squash.beginSquashFromHeaderCta();
   };
 
   return (

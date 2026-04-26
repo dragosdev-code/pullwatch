@@ -21,6 +21,7 @@ const ALL_GAME_MODES: readonly GameMode[] = [
  */
 export const DEFAULT_MINIGAME_STATS: MinigameStats = Object.freeze({
   hasDiscovered: false,
+  hasSeenSquashQuickStart: false,
   popupOpenCount: 0,
   overall: Object.freeze({
     totalBugsSquashed: 0,
@@ -67,6 +68,8 @@ export function ensureCompleteMinigameStats(
 
   return {
     hasDiscovered: base.hasDiscovered ?? DEFAULT_MINIGAME_STATS.hasDiscovered,
+    hasSeenSquashQuickStart:
+      base.hasSeenSquashQuickStart ?? DEFAULT_MINIGAME_STATS.hasSeenSquashQuickStart,
     popupOpenCount: base.popupOpenCount ?? DEFAULT_MINIGAME_STATS.popupOpenCount,
     lastPlayedMode: base.lastPlayedMode,
     overall: {

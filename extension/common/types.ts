@@ -172,9 +172,14 @@ export interface MinigameModeStats {
  *
  * WHY [lastPlayedMode optional]: undefined until the first round finishes; pre-seeding a mode
  * before any play would misrepresent state for the launcher UI added in Phase 5.
+ *
+ * WHY [hasSeenSquashQuickStart]: one-time onboarding + mode pick from the header CTA; persisted
+ * so repeat opens skip the intro. Settings / other entry points can reuse the same flag later.
  */
 export interface MinigameStats {
   hasDiscovered: boolean;
+  /** After the user completes the header quick-start flow (info + mode + Start). */
+  hasSeenSquashQuickStart: boolean;
   popupOpenCount: number;
   lastPlayedMode?: GameMode;
   overall: {

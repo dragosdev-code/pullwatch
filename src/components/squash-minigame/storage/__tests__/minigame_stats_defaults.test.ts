@@ -8,6 +8,7 @@ describe('ensureCompleteMinigameStats', () => {
   it('returns a fully populated default object when given undefined', () => {
     const result = ensureCompleteMinigameStats(undefined);
     expect(result.hasDiscovered).toBe(false);
+    expect(result.hasSeenSquashQuickStart).toBe(false);
     expect(result.popupOpenCount).toBe(0);
     expect(result.lastPlayedMode).toBeUndefined();
     expect(result.overall).toEqual({
@@ -37,6 +38,7 @@ describe('ensureCompleteMinigameStats', () => {
     expect(result.overall.totalFeaturesBroken).toBe(0);
     expect(result.popupOpenCount).toBe(0);
     expect(result.hasDiscovered).toBe(false);
+    expect(result.hasSeenSquashQuickStart).toBe(false);
     for (const mode of ALL_MODES) {
       expect(result.modes[mode]).toEqual({ playCount: 0, highScore: 0, highestCombo: 0 });
     }
@@ -73,6 +75,7 @@ describe('ensureCompleteMinigameStats', () => {
   it('round trips a complete value', () => {
     const input = {
       hasDiscovered: true,
+      hasSeenSquashQuickStart: true,
       popupOpenCount: 42,
       lastPlayedMode: 'fridayDeploy' as GameMode,
       overall: { totalBugsSquashed: 10, totalFeaturesBroken: 2, totalTimePlayedSeconds: 90 },
