@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useStore } from 'zustand';
 import { createGameStore, type GameStore } from './game-store';
@@ -11,9 +11,24 @@ import { FctOverlay } from './fct/fct-overlay';
 import { useAudioEffects, type UseAudioEffectsOptions } from './hooks/use-audio-effects';
 import { useScreenShake } from './hooks/use-screen-shake';
 
+export interface FinishedRoundSummary {
+  mode: GameMode;
+  score: number;
+  highestCombo: number;
+  bugsSquashed: number;
+  featuresBroken: number;
+  durationSeconds: number;
+}
+
 export interface SquashMinigameProps {
   mode: GameMode;
   onExit?: () => void;
+  /**
+   * Fired once when the round transitions to `finished`. The launcher uses this to fold the
+   * round into persisted MinigameStats. Decoupled from the shell so storage stays out of the
+   * render layer's tests.
+   */
+  onFinish?: (summary: FinishedRoundSummary) => void;
   /**
    * Hooks for tests. Production callers omit these and the shell builds a real store and a real
    * RAF backed loop.
@@ -41,6 +56,7 @@ const defaultCreateLoop = (store: GameStore) => createGameLoop(store);
 export function SquashMinigame({
   mode,
   onExit,
+  onFinish,
   createStoreFn = defaultCreateStore,
   createLoopFn = defaultCreateLoop,
   audioOptions,
@@ -73,7 +89,9 @@ export function SquashMinigame({
   return (
     <GameStoreProvider store={store}>
       <SquashMinigameBody
+        mode={mode}
         onExit={onExit}
+        onFinish={onFinish}
         audioOptions={audioOptions}
         disableFctOverlay={disableFctOverlay}
       />
@@ -82,13 +100,22 @@ export function SquashMinigame({
 }
 
 interface BodyProps {
+  mode: GameMode;
   onExit?: () => void;
+  onFinish?: (summary: FinishedRoundSummary) => void;
   audioOptions?: UseAudioEffectsOptions;
   disableFctOverlay: boolean;
 }
 
-function SquashMinigameBody({ onExit, audioOptions, disableFctOverlay }: BodyProps) {
+function SquashMinigameBody({
+  mode,
+  onExit,
+  onFinish,
+  audioOptions,
+  disableFctOverlay,
+}: BodyProps) {
   useAudioEffects(audioOptions);
+  useFinishedReporter(mode, onFinish);
   const isShaking = useScreenShake();
 
   return (
@@ -105,6 +132,39 @@ function SquashMinigameBody({ onExit, audioOptions, disableFctOverlay }: BodyPro
       <FinishedOverlay onExit={onExit} />
     </div>
   );
+}
+
+/**
+ * Fires `onFinish` exactly once per session when the store flips to `finished`. Captures the
+ * summary stats at the transition so a subsequent reset (Phase 5 launcher returning to the menu)
+ * does not zero them out before the launcher reads them.
+ */
+function useFinishedReporter(
+  mode: GameMode,
+  onFinish: ((summary: FinishedRoundSummary) => void) | undefined
+) {
+  const store = useGameStore();
+  const status = useStore(store, (s) => s.status);
+  const reportedRef = useRef(false);
+
+  useEffect(() => {
+    if (status !== 'finished') {
+      reportedRef.current = false;
+      return;
+    }
+    if (reportedRef.current) return;
+    reportedRef.current = true;
+    if (!onFinish) return;
+    const s = store.getState();
+    onFinish({
+      mode,
+      score: s.score,
+      highestCombo: s.highestCombo,
+      bugsSquashed: s.bugsSquashed,
+      featuresBroken: s.featuresBroken,
+      durationSeconds: Math.round(s.elapsedMs / 1000),
+    });
+  }, [status, store, mode, onFinish]);
 }
 
 function FinishedOverlay({ onExit }: { onExit?: () => void }) {

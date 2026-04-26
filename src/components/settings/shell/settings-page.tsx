@@ -11,6 +11,7 @@ import { LinkBehaviorField } from '../behavior/components/link-behavior-field';
 import { ThemePicker } from '../appearance/components/theme-picker';
 import { PopupSizeField } from '../appearance/components/popup-size-field';
 import { SettingsSponsorLounge } from '../support/components/settings-sponsor-lounge';
+import { SquashMinigameSection } from '../../squash-minigame/launcher/squash-minigame-section';
 import { DEFAULT_SETTINGS } from '../types';
 import type { ExtensionSettings } from '../types';
 import { useExtensionSettings } from '@src/hooks/use-extension-settings';
@@ -110,6 +111,8 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
             <PopupSizeField />
             <ThemePicker />
           </SettingsSection>
+
+          <SquashMinigameSection />
 
           <SettingsSponsorLounge linkBehavior={linkBehavior} />
         </div>
