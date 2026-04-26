@@ -29,6 +29,8 @@ import {
 
 type SessionState =
   | null
+  /** Same warm-up as `loading` (spinner + resize + shell chunk) before first-time quick start. */
+  | { stage: 'intro_loading' }
   | { stage: 'intro' }
   | { stage: 'loading'; mode: GameMode }
   | { stage: 'game'; mode: GameMode }
@@ -87,7 +89,7 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
       return;
     }
     if (!live.hasSeenSquashQuickStart) {
-      setSession({ stage: 'intro' });
+      setSession({ stage: 'intro_loading' });
       return;
     }
     openSquashGame(live.lastPlayedMode ?? 'standard');
@@ -107,7 +109,8 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
       } catch {
         /* same as discoverMinigame: do not block starting after a failed write */
       }
-      setSession({ stage: 'loading', mode });
+      // Shell chunk was prefetched during `intro_loading`; go straight into the round.
+      setSession({ stage: 'game', mode });
     },
     [discovery.stats]
   );
@@ -120,13 +123,30 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
   );
 
   const loadingToken = session?.stage === 'loading' ? session.mode : null;
-  const introActive = session?.stage === 'intro';
+  const introLoadingActive = session?.stage === 'intro_loading';
 
   useEffect(() => {
-    if (!introActive) return;
+    if (!introLoadingActive) return;
+    let cancelled = false;
+
     applyMinigameSessionPopupDimensions();
-    void import('./squash-minigame-shell');
-  }, [introActive]);
+    const chunkPromise = import('./squash-minigame-shell');
+    const resizePromise = prefersReducedMotion()
+      ? waitTwoAnimationFrames()
+      : waitForPopupShellResizeComplete(document.documentElement, popupResizeFallbackTimeoutMs());
+
+    void Promise.all([resizePromise, chunkPromise]).then(() => {
+      if (cancelled) return;
+      setSession((prev) => {
+        if (!prev || prev.stage !== 'intro_loading') return prev;
+        return { stage: 'intro' };
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [introLoadingActive]);
 
   // WHY [parallel Promise.all]: chunk download runs during the CSS resize animation so the gate
   // hides combined latency; the board mounts only after both complete so layout matches final vars.
@@ -199,6 +219,11 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
         role="presentation"
         data-testid="squash-minigame-overlay-root"
       >
+        {session.stage === 'intro_loading' ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <SquashMinigameLoadingScreen />
+          </div>
+        ) : null}
         {session.stage === 'intro' ? (
           <SquashQuickStartBoard
             lastPlayedMode={discovery.stats?.lastPlayedMode}

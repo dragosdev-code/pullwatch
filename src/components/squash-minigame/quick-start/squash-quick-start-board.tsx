@@ -54,9 +54,7 @@ export function SquashQuickStartBoard({
           'w-full max-w-lg transform-gpu rounded-xl border border-primary/35 bg-base-100/80 p-5 shadow-[0_0_28px_-14px_var(--color-primary)] backdrop-blur',
           !reducedMotion &&
             'transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
-          entered
-            ? 'translate-y-0 scale-100 opacity-100'
-            : 'translate-y-3 scale-[0.99] opacity-0'
+          entered ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-3 scale-[0.99] opacity-0'
         )}
       >
         <header className="mb-4 border-b border-primary/25 pb-3">
