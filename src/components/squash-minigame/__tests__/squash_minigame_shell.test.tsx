@@ -175,4 +175,79 @@ describe('SquashMinigame shell', () => {
     });
     expect(screen.queryByTestId('squash-finished-exit')).toBeNull();
   });
+
+  it('Try again restarts the round and hides the finished overlay', () => {
+    const store = createGameStore();
+    const built = buildLoop();
+    render(
+      <SquashMinigame mode="standard" createStoreFn={() => store} createLoopFn={() => built.loop} />
+    );
+    act(() => {
+      store.setState({
+        status: 'finished',
+        score: 1,
+        highestCombo: 1,
+        bugsSquashed: 1,
+        featuresBroken: 0,
+      });
+    });
+    expect(screen.getByTestId('squash-finished-overlay')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('squash-finished-try-again'));
+    expect(screen.queryByTestId('squash-finished-overlay')).toBeNull();
+    expect(store.getState().status).toBe('playing');
+  });
+
+  it('does not render change-mode when onChangeMode is omitted', () => {
+    const store = createGameStore();
+    const built = buildLoop();
+    render(
+      <SquashMinigame mode="standard" createStoreFn={() => store} createLoopFn={() => built.loop} />
+    );
+    act(() => {
+      store.setState({ status: 'finished' });
+    });
+    expect(screen.queryByTestId('squash-finished-change-mode')).toBeNull();
+  });
+
+  it('calls onChangeMode when a different mode is picked from the finished overlay', () => {
+    const store = createGameStore();
+    const built = buildLoop();
+    const onChangeMode = vi.fn();
+    render(
+      <SquashMinigame
+        mode="standard"
+        onChangeMode={onChangeMode}
+        createStoreFn={() => store}
+        createLoopFn={() => built.loop}
+      />
+    );
+    act(() => {
+      store.setState({ status: 'finished' });
+    });
+    fireEvent.click(screen.getByTestId('squash-finished-change-mode'));
+    fireEvent.click(screen.getByTestId('squash-finished-mode-option-legacy'));
+    expect(onChangeMode).toHaveBeenCalledWith('legacy');
+  });
+
+  it('picking the same mode in the overlay acts like try again', () => {
+    const store = createGameStore();
+    const built = buildLoop();
+    const onChangeMode = vi.fn();
+    render(
+      <SquashMinigame
+        mode="standard"
+        onChangeMode={onChangeMode}
+        createStoreFn={() => store}
+        createLoopFn={() => built.loop}
+      />
+    );
+    act(() => {
+      store.setState({ status: 'finished' });
+    });
+    fireEvent.click(screen.getByTestId('squash-finished-change-mode'));
+    fireEvent.click(screen.getByTestId('squash-finished-mode-option-standard'));
+    expect(onChangeMode).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('squash-finished-overlay')).toBeNull();
+    expect(store.getState().status).toBe('playing');
+  });
 });

@@ -8,6 +8,7 @@ vi.mock('../../squash-minigame.lazy', () => ({
     mode,
     onExit,
     onFinish,
+    onChangeMode: _onChangeMode,
   }: {
     mode: string;
     onExit?: () => void;
@@ -20,6 +21,7 @@ vi.mock('../../squash-minigame.lazy', () => ({
       featuresBroken: number;
       durationSeconds: number;
     }) => void;
+    onChangeMode?: (m: string) => void;
   }) => (
     <div data-testid="squash-lazy-stub">
       <span data-testid="squash-lazy-mode">{mode}</span>

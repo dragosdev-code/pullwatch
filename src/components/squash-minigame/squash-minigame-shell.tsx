@@ -26,6 +26,11 @@ export interface SquashMinigameProps {
   mode: GameMode;
   onExit?: () => void;
   /**
+   * When set, the finished overlay can switch modes in place (overlay popup or settings launcher).
+   * Picking the same mode as the current round starts a fresh run via the shell replay path.
+   */
+  onChangeMode?: (mode: GameMode) => void;
+  /**
    * Fired once when the round transitions to `finished`. The launcher uses this to fold the
    * round into persisted MinigameStats. Decoupled from the shell so storage stays out of the
    * render layer's tests.
@@ -63,13 +68,17 @@ export function __resetLastFinishNotificationForTests(): void {
  * disposes the previous store/loop and rebuilds. Phase 5 launchers always pass a fresh `mode`
  * per attempt, so this is the natural reset trigger.
  *
- * WHY [ref factories + mode only in deps]: keeps the default factories from churning the effect
+ * WHY [`replayToken` in deps]: "Try again" after `finished` bumps the token so the effect
+ * rebuilds the store and loop without changing the `mode` prop.
+ *
+ * WHY [ref factories; mode + replayToken in effect deps]: keeps the default factories from churning the effect
  * and avoids a parent render loop when the caller's inject lambdas are not referentially stable.
  * The ref always points at the latest inject so a mode change still uses the current factory.
  */
 export function SquashMinigame({
   mode,
   onExit,
+  onChangeMode,
   onFinish,
   createStoreFn = defaultCreateStore,
   createLoopFn = defaultCreateLoop,
@@ -77,6 +86,7 @@ export function SquashMinigame({
   disableFctOverlay = false,
 }: SquashMinigameProps) {
   const [store, setStore] = useState<GameStore | null>(null);
+  const [replayToken, setReplayToken] = useState(0);
   const createStoreRef = useRef(createStoreFn);
   const createLoopRef = useRef(createLoopFn);
   createStoreRef.current = createStoreFn;
@@ -96,7 +106,7 @@ export function SquashMinigame({
       nextLoop.stop();
       nextStore.getState().reset();
     };
-  }, [mode]);
+  }, [mode, replayToken]);
 
   if (!store) {
     return (
@@ -114,7 +124,9 @@ export function SquashMinigame({
       <SquashMinigameBody
         mode={mode}
         onExit={onExit}
+        onChangeMode={onChangeMode}
         onFinish={onFinish}
+        onTryAgain={() => setReplayToken((n) => n + 1)}
         audioOptions={audioOptions}
         disableFctOverlay={disableFctOverlay}
       />
@@ -125,7 +137,9 @@ export function SquashMinigame({
 interface BodyProps {
   mode: GameMode;
   onExit?: () => void;
+  onChangeMode?: (mode: GameMode) => void;
   onFinish?: (summary: FinishedRoundSummary) => void;
+  onTryAgain: () => void;
   audioOptions?: UseAudioEffectsOptions;
   disableFctOverlay: boolean;
 }
@@ -133,7 +147,9 @@ interface BodyProps {
 function SquashMinigameBody({
   mode,
   onExit,
+  onChangeMode,
   onFinish,
+  onTryAgain,
   audioOptions,
   disableFctOverlay,
 }: BodyProps) {
@@ -187,7 +203,12 @@ function SquashMinigameBody({
           </div>
         </div>
       </div>
-      <FinishedOverlay onExit={onExit} />
+      <FinishedOverlay
+        mode={mode}
+        onTryAgain={onTryAgain}
+        onChangeMode={onChangeMode}
+        onExit={onExit}
+      />
     </div>
   );
 }

@@ -49,7 +49,12 @@ export function NeoTerminalLauncher({
             </div>
           }
         >
-          <SquashMinigameLazy mode={activeMode} onExit={exitToMenu} onFinish={handleFinish} />
+          <SquashMinigameLazy
+            mode={activeMode}
+            onExit={exitToMenu}
+            onFinish={handleFinish}
+            onChangeMode={(next) => setActiveMode(next)}
+          />
         </Suspense>
       </div>
     );

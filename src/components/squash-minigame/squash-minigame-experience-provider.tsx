@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -69,7 +70,17 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
   const discovery = useMinigameDiscovery();
   const { presetId } = usePopupSize();
   const [session, setSession] = useState<SessionState>(null);
+  /** Bumps React `key` on `SquashMinigameLazy` when the overlay picks the same mode again. */
+  const [gameMountKey, setGameMountKey] = useState(0);
+  const sessionRef = useRef<SessionState>(null);
+  sessionRef.current = session;
   const recordRound = useRecordRoundResult();
+
+  useEffect(() => {
+    if (session === null || session.stage !== 'game') {
+      setGameMountKey(0);
+    }
+  }, [session]);
 
   const closeSquashGame = useCallback(() => {
     setSession((s) => {
@@ -121,6 +132,16 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
     },
     [recordRound]
   );
+
+  const handleGameChangeMode = useCallback((nextMode: GameMode) => {
+    const s = sessionRef.current;
+    if (!s || s.stage !== 'game') return;
+    if (s.mode === nextMode) {
+      setGameMountKey((k) => k + 1);
+    } else {
+      setSession({ stage: 'game', mode: nextMode });
+    }
+  }, []);
 
   const loadingToken = session?.stage === 'loading' ? session.mode : null;
   const introLoadingActive = session?.stage === 'intro_loading';
@@ -248,9 +269,11 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
           >
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <SquashMinigameLazy
+                key={`${session.mode}-${gameMountKey}`}
                 mode={session.mode}
                 onExit={closeSquashGame}
                 onFinish={handleFinish}
+                onChangeMode={handleGameChangeMode}
               />
             </div>
           </Suspense>
