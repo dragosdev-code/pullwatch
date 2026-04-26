@@ -14,12 +14,20 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
+/** Fallback when a CSS variable is missing or empty (e.g. headless test). */
+const FALLBACK_COLOR: Record<string, string> = {
+  '--color-success': '#22c55e',
+  '--color-warning': '#fbbf24',
+  '--color-error': '#ef4444',
+};
+
 function drawParticle(
   ctx: CanvasRenderingContext2D,
   particle: FctParticle,
   now: number,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  resolveColor: (token: string) => string
 ) {
   const g = particle.layoutGridSize;
   const cellWidth = canvasWidth / g;
@@ -35,7 +43,7 @@ function drawParticle(
   const alpha = 1 - eased;
 
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = particle.color;
+  ctx.fillStyle = resolveColor(particle.color);
   ctx.font = 'bold 14px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -87,8 +95,24 @@ export function FctOverlay({
       const t = now();
       const snapshot = e.snapshot(t);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      /**
+       * WHY [per-frame cache]: getComputedStyle is expensive; caching per unique token per frame
+       * means at most 3 lookups (success, warning, error) regardless of particle count.
+       */
+      const colorCache = new Map<string, string>();
+      const computedStyle = globalThis.getComputedStyle?.(canvas);
+      const resolveColor = (token: string): string => {
+        const cached = colorCache.get(token);
+        if (cached) return cached;
+        const resolved = computedStyle?.getPropertyValue(token).trim();
+        const color = resolved || FALLBACK_COLOR[token] || token;
+        colorCache.set(token, color);
+        return color;
+      };
+
       for (const particle of snapshot.particles) {
-        drawParticle(ctx, particle, t, canvas.width, canvas.height);
+        drawParticle(ctx, particle, t, canvas.width, canvas.height, resolveColor);
       }
       handle = requestFrame(draw);
     };

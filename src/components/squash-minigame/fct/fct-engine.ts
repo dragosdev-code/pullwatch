@@ -17,18 +17,26 @@ export interface FctSnapshot {
 
 export const FCT_LIFETIME_MS = 700;
 
+/**
+ * Returns the text + CSS variable name for a click outcome. The overlay resolves the variable
+ * at draw time via `getComputedStyle` so colors stay theme-aware without the engine knowing
+ * the active DaisyUI theme.
+ *
+ * WHY [var names, not hex]: hardcoded hex works only for one theme. By returning the semantic
+ * token name, callers can resolve it against the live DOM and automatically pick up theme switches.
+ */
 export function describeOutcome(outcome: ClickOutcome): { text: string; color: string } | null {
   switch (outcome.kind) {
     case 'bug_squashed': {
       const comboTag = outcome.combo > 1 ? ` x${outcome.combo}` : '';
-      return { text: `+${outcome.points}${comboTag}`, color: '#22c55e' };
+      return { text: `+${outcome.points}${comboTag}`, color: '--color-success' };
     }
     case 'bug_cracked':
-      return { text: 'crack', color: '#fbbf24' };
+      return { text: 'crack', color: '--color-warning' };
     case 'feature_broken':
-      return { text: `${outcome.points}`, color: '#ef4444' };
+      return { text: `${outcome.points}`, color: '--color-error' };
     case 'miss':
-      return { text: 'miss', color: '#f87171' };
+      return { text: 'miss', color: '--color-error' };
     case 'noop':
       return null;
   }

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createFctEngine, describeOutcome, FCT_LIFETIME_MS } from '../fct-engine';
 
 describe('describeOutcome', () => {
-  it('returns a green plus points label for a bug squash with no combo tag at combo one', () => {
+  it('returns a success-token plus points label for a bug squash with no combo tag at combo one', () => {
     const desc = describeOutcome({
       kind: 'bug_squashed',
       basePoints: 10,
@@ -11,7 +11,7 @@ describe('describeOutcome', () => {
       combo: 1,
       phase: 'fresh',
     });
-    expect(desc).toEqual({ text: '+10', color: '#22c55e' });
+    expect(desc).toEqual({ text: '+10', color: '--color-success' });
   });
 
   it('appends an x combo suffix when combo is greater than one', () => {
@@ -26,15 +26,15 @@ describe('describeOutcome', () => {
     expect(desc?.text).toBe('+50 x5');
   });
 
-  it('returns a yellow crack label for a cracked bug', () => {
+  it('returns a warning-token crack label for a cracked bug', () => {
     const desc = describeOutcome({ kind: 'bug_cracked', combo: 0, phase: 'fresh' });
-    expect(desc).toEqual({ text: 'crack', color: '#fbbf24' });
+    expect(desc).toEqual({ text: 'crack', color: '--color-warning' });
   });
 
-  it('returns a red negative points label for a feature break', () => {
+  it('returns an error-token negative points label for a feature break', () => {
     const desc = describeOutcome({ kind: 'feature_broken', points: -20 });
     expect(desc?.text).toBe('-20');
-    expect(desc?.color).toBe('#ef4444');
+    expect(desc?.color).toBe('--color-error');
   });
 
   it('returns a miss label for an empty cell click', () => {
