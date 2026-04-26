@@ -84,7 +84,7 @@ export function SquashQuickStartBoard({
                   </span>
                   {isLast ? (
                     <span className="shrink-0 rounded bg-accent/90 px-1 py-0.5 font-mono text-[8px] uppercase text-accent-content">
-                      last
+                      last played
                     </span>
                   ) : null}
                 </div>
