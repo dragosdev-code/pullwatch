@@ -226,6 +226,7 @@ describe('SquashMinigame shell', () => {
     });
     fireEvent.click(screen.getByTestId('squash-finished-change-mode'));
     fireEvent.click(screen.getByTestId('squash-finished-mode-option-legacy'));
+    fireEvent.click(screen.getByTestId('squash-finished-mode-play'));
     expect(onChangeMode).toHaveBeenCalledWith('legacy');
   });
 
@@ -246,6 +247,7 @@ describe('SquashMinigame shell', () => {
     });
     fireEvent.click(screen.getByTestId('squash-finished-change-mode'));
     fireEvent.click(screen.getByTestId('squash-finished-mode-option-standard'));
+    fireEvent.click(screen.getByTestId('squash-finished-mode-play'));
     expect(onChangeMode).not.toHaveBeenCalled();
     expect(screen.queryByTestId('squash-finished-overlay')).toBeNull();
     expect(store.getState().status).toBe('playing');
