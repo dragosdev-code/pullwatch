@@ -1,6 +1,7 @@
 import clsx from 'clsx';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { GameMode } from '@common/types';
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
 import { MODE_METADATA } from '../launcher/mode-metadata';
 import {
   SQUASH_QUICK_START_HINTS,
@@ -23,14 +24,41 @@ export function SquashQuickStartBoard({
   onStart,
   onClose,
 }: SquashQuickStartBoardProps) {
+  const reducedMotion = usePrefersReducedMotion();
+  const [entered, setEntered] = useState(reducedMotion);
   const [selected, setSelected] = useState<GameMode>(lastPlayedMode ?? 'standard');
+
+  useEffect(() => {
+    if (reducedMotion) {
+      setEntered(true);
+      return;
+    }
+    let cancelled = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) setEntered(true);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [reducedMotion]);
 
   return (
     <div
       data-testid="squash-quick-start-board"
       className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center overflow-y-auto bg-base-300/95 p-4"
     >
-      <div className="w-full max-w-lg rounded-xl border border-primary/35 bg-base-100/80 p-5 shadow-[0_0_28px_-14px_var(--color-primary)] backdrop-blur">
+      <div
+        className={clsx(
+          'w-full max-w-lg transform-gpu rounded-xl border border-primary/35 bg-base-100/80 p-5 shadow-[0_0_28px_-14px_var(--color-primary)] backdrop-blur',
+          !reducedMotion &&
+            'transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+          entered
+            ? 'translate-y-0 scale-100 opacity-100'
+            : 'translate-y-3 scale-[0.99] opacity-0'
+        )}
+      >
         <header className="mb-4 border-b border-primary/25 pb-3">
           <div className="flex items-start justify-between gap-3">
             <div>
