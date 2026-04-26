@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import clsx from 'clsx';
 import { useStore } from 'zustand';
 import { createGameStore, type GameStore } from './game-store';
 import { createGameLoop, type GameLoop } from './game-loop';
@@ -6,6 +7,9 @@ import type { GameMode } from './game-types';
 import { GameStoreProvider, useGameStore } from './context/game-store-context';
 import { GameBoard } from './components/game-board';
 import { Hud } from './components/hud';
+import { FctOverlay } from './fct/fct-overlay';
+import { useAudioEffects, type UseAudioEffectsOptions } from './hooks/use-audio-effects';
+import { useScreenShake } from './hooks/use-screen-shake';
 
 export interface SquashMinigameProps {
   mode: GameMode;
@@ -16,6 +20,9 @@ export interface SquashMinigameProps {
    */
   createStoreFn?: () => GameStore;
   createLoopFn?: (store: GameStore) => GameLoop;
+  audioOptions?: UseAudioEffectsOptions;
+  /** Disable the FCT canvas overlay. Tests omit this to keep happy dom canvas mocks tiny. */
+  disableFctOverlay?: boolean;
 }
 
 const defaultCreateStore = () => createGameStore();
@@ -36,6 +43,8 @@ export function SquashMinigame({
   onExit,
   createStoreFn = defaultCreateStore,
   createLoopFn = defaultCreateLoop,
+  audioOptions,
+  disableFctOverlay = false,
 }: SquashMinigameProps) {
   const [store, setStore] = useState<GameStore | null>(null);
 
@@ -63,16 +72,36 @@ export function SquashMinigame({
 
   return (
     <GameStoreProvider store={store}>
-      <SquashMinigameBody onExit={onExit} />
+      <SquashMinigameBody
+        onExit={onExit}
+        audioOptions={audioOptions}
+        disableFctOverlay={disableFctOverlay}
+      />
     </GameStoreProvider>
   );
 }
 
-function SquashMinigameBody({ onExit }: { onExit?: () => void }) {
+interface BodyProps {
+  onExit?: () => void;
+  audioOptions?: UseAudioEffectsOptions;
+  disableFctOverlay: boolean;
+}
+
+function SquashMinigameBody({ onExit, audioOptions, disableFctOverlay }: BodyProps) {
+  useAudioEffects(audioOptions);
+  const isShaking = useScreenShake();
+
   return (
     <div className="flex w-full flex-col gap-3 p-3">
       <Hud />
-      <GameBoard />
+      <div
+        data-testid="squash-board-container"
+        data-shaking={isShaking ? 'true' : 'false'}
+        className={clsx('relative w-full', isShaking && 'pw-squash-shake')}
+      >
+        <GameBoard />
+        {!disableFctOverlay && <FctOverlay />}
+      </div>
       <FinishedOverlay onExit={onExit} />
     </div>
   );
