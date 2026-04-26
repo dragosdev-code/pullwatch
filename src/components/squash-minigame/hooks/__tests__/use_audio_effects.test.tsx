@@ -20,6 +20,7 @@ function buildEngineStub(): AudioEngine & {
   const closeSpy = vi.fn();
   return {
     playOutcome: playSpy,
+    playRoundEnd: vi.fn(),
     close: closeSpy,
     playSpy,
     closeSpy,

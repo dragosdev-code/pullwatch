@@ -93,7 +93,7 @@ describe('createAudioEngine', () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
-  it('plays a square pop for bug squash with combo pitch shift one plus combo times zero point zero five', () => {
+  it('plays a square pop at 880Hz for a fresh-phase bug squash with combo pitch shift', () => {
     const ctx = buildFakeContext();
     const engine = createAudioEngine({
       audioContextFactory: () => ctx as unknown as AudioContext,
@@ -101,7 +101,8 @@ describe('createAudioEngine', () => {
     engine.playOutcome(bugSquashed(4), 4);
     expect(ctx.oscillators).toHaveLength(1);
     expect(ctx.oscillators[0].type).toBe('square');
-    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(440 * (1 + 4 * 0.05), 4);
+    // fresh phase base = 880Hz, combo multiplier = 1 + 4*0.05 = 1.2
+    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(880 * (1 + 4 * 0.05), 4);
     expect(ctx.oscillators[0].start).toHaveBeenCalledTimes(1);
     expect(ctx.oscillators[0].stop).toHaveBeenCalledTimes(1);
   });
@@ -112,16 +113,43 @@ describe('createAudioEngine', () => {
       audioContextFactory: () => ctx as unknown as AudioContext,
     });
     engine.playOutcome(bugSquashed(500), 500);
-    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(440 * 4, 4);
+    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(880 * 4, 4);
   });
 
-  it('does not pitch shift the bug crack tone by combo', () => {
+  it('uses 660Hz square for a middle-phase bug squash', () => {
+    const ctx = buildFakeContext();
+    const engine = createAudioEngine({
+      audioContextFactory: () => ctx as unknown as AudioContext,
+    });
+    const outcome: ClickOutcome = {
+      kind: 'bug_squashed', basePoints: 5, multiplier: 1, points: 5, combo: 1, phase: 'middle',
+    };
+    engine.playOutcome(outcome, 1);
+    expect(ctx.oscillators[0].type).toBe('square');
+    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(660 * (1 + 1 * 0.05), 4);
+  });
+
+  it('uses 440Hz triangle for a final-phase bug squash', () => {
+    const ctx = buildFakeContext();
+    const engine = createAudioEngine({
+      audioContextFactory: () => ctx as unknown as AudioContext,
+    });
+    const outcome: ClickOutcome = {
+      kind: 'bug_squashed', basePoints: 2, multiplier: 1, points: 2, combo: 1, phase: 'final',
+    };
+    engine.playOutcome(outcome, 1);
+    expect(ctx.oscillators[0].type).toBe('triangle');
+    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(440 * (1 + 1 * 0.05), 4);
+  });
+
+  it('does not pitch shift the bug crack tone by combo and uses phase freq times 0.75', () => {
     const ctx = buildFakeContext();
     const engine = createAudioEngine({
       audioContextFactory: () => ctx as unknown as AudioContext,
     });
     engine.playOutcome({ kind: 'bug_cracked', combo: 9, phase: 'fresh' }, 9);
-    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(440 * 0.75, 4);
+    // fresh phase = 880Hz, crack = 880 * 0.75 = 660, no combo scaling
+    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(880 * 0.75, 4);
   });
 
   it('plays a sawtooth tone for feature break and a triangle for miss', () => {
@@ -159,5 +187,23 @@ describe('createAudioEngine', () => {
     engine.close();
     engine.close();
     expect(ctx.closeCalls).toBe(1);
+  });
+
+  it('plays a three-note descending arpeggio for playRoundEnd', () => {
+    const ctx = buildFakeContext();
+    const engine = createAudioEngine({
+      audioContextFactory: () => ctx as unknown as AudioContext,
+    });
+    engine.playRoundEnd();
+    expect(ctx.oscillators).toHaveLength(3);
+    expect(ctx.oscillators[0].frequency.value).toBe(660);
+    expect(ctx.oscillators[1].frequency.value).toBe(440);
+    expect(ctx.oscillators[2].frequency.value).toBe(220);
+    // All three use triangle waveform
+    for (const osc of ctx.oscillators) {
+      expect(osc.type).toBe('triangle');
+      expect(osc.start).toHaveBeenCalledTimes(1);
+      expect(osc.stop).toHaveBeenCalledTimes(1);
+    }
   });
 });

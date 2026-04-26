@@ -1,7 +1,8 @@
-import type { ClickOutcome } from '../game-types';
+import type { BugPhase, ClickOutcome } from '../game-types';
 
 export interface AudioEngine {
   playOutcome(outcome: ClickOutcome, combo: number): void;
+  playRoundEnd(): void;
   close(): void;
 }
 
@@ -13,11 +14,23 @@ export interface AudioEngineDeps {
 }
 
 const POP_DURATION_S = 0.08;
-const POP_BASE_FREQ = 440;
 const FEATURE_DURATION_S = 0.25;
 const FEATURE_FREQ = 180;
 const MISS_DURATION_S = 0.1;
 const MISS_FREQ = 110;
+
+/**
+ * Phase-specific frequencies and wave shapes for bug squash / crack tones.
+ *
+ * WHY [descending freq by phase]: fresh bugs are the most valuable (10 pts) so they get the
+ * highest, brightest tone. Final-phase bugs use a softer triangle wave at 440Hz to signal
+ * that the player waited too long and the reward is diminished.
+ */
+const PHASE_TONE: Record<BugPhase, { freq: number; type: OscillatorType; peakGain: number }> = {
+  fresh:  { freq: 880, type: 'square',   peakGain: 0.30 },
+  middle: { freq: 660, type: 'square',   peakGain: 0.25 },
+  final:  { freq: 440, type: 'triangle', peakGain: 0.20 },
+};
 
 interface ToneSpec {
   freq: number;
@@ -30,22 +43,26 @@ interface ToneSpec {
 
 function specForOutcome(outcome: ClickOutcome): ToneSpec | null {
   switch (outcome.kind) {
-    case 'bug_squashed':
+    case 'bug_squashed': {
+      const tone = PHASE_TONE[outcome.phase];
       return {
-        freq: POP_BASE_FREQ,
+        freq: tone.freq,
         durationS: POP_DURATION_S,
-        type: 'square',
+        type: tone.type,
         scaleByCombo: true,
-        peakGain: 0.3,
+        peakGain: tone.peakGain,
       };
-    case 'bug_cracked':
+    }
+    case 'bug_cracked': {
+      const tone = PHASE_TONE[outcome.phase];
       return {
-        freq: POP_BASE_FREQ * 0.75,
+        freq: tone.freq * 0.75,
         durationS: POP_DURATION_S,
-        type: 'square',
+        type: tone.type,
         scaleByCombo: false,
-        peakGain: 0.2,
+        peakGain: tone.peakGain * 0.65,
       };
+    }
     case 'feature_broken':
       return {
         freq: FEATURE_FREQ,
@@ -121,6 +138,41 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
       osc.start(startAt);
       osc.stop(startAt + spec.durationS);
     },
+
+    /**
+     * Brief descending arpeggio signalling round completion.
+     *
+     * WHY [one-shot, no dedup here]: dedup is the caller's responsibility (via `useRoundEndAudio`
+     * which tracks `roundId`). The engine just plays sounds.
+     */
+    playRoundEnd() {
+      const audio = ensureContext();
+      if (!audio) return;
+
+      const startAt = now(audio);
+      const notes = [
+        { freq: 660, delay: 0 },
+        { freq: 440, delay: 0.12 },
+        { freq: 220, delay: 0.28 },
+      ];
+      const noteDuration = 0.15;
+      const gain = 0.2;
+
+      for (const note of notes) {
+        const osc = audio.createOscillator();
+        const g = audio.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = note.freq;
+        g.gain.setValueAtTime(0, startAt + note.delay);
+        g.gain.linearRampToValueAtTime(gain, startAt + note.delay + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, startAt + note.delay + noteDuration);
+        osc.connect(g);
+        g.connect(audio.destination);
+        osc.start(startAt + note.delay);
+        osc.stop(startAt + note.delay + noteDuration);
+      }
+    },
+
     close() {
       if (!ctx) return;
       void ctx.close();

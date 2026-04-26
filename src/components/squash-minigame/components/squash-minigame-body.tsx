@@ -5,8 +5,13 @@ import { GameBoard } from './game-board';
 import { FinishedOverlay } from './finished-overlay';
 import { Hud } from './hud';
 import { FctOverlay } from '../fct/fct-overlay';
+import {
+  createAudioEngine,
+  type AudioEngine,
+} from '../audio/audio-engine';
 import { useAudioEffects, type UseAudioEffectsOptions } from '../hooks/use-audio-effects';
 import { useFinishedReporter } from '../hooks/use-finished-reporter';
+import { useRoundEndAudio } from '../hooks/use-round-end-audio';
 import { useScreenShake } from '../hooks/use-screen-shake';
 
 export interface SquashMinigameBodyProps {
@@ -31,7 +36,18 @@ export function SquashMinigameBody({
   audioOptions,
   disableFctOverlay,
 }: SquashMinigameBodyProps) {
-  useAudioEffects(audioOptions);
+  /**
+   * WHY [shared engineRef]: both `useAudioEffects` (click tones) and `useRoundEndAudio`
+   * (round-end cue) need access to the same AudioEngine instance so they share a single
+   * AudioContext. We create it once here and pass it down to both hooks.
+   */
+  const engineRef = useRef<AudioEngine | null>(null);
+  if (!engineRef.current) {
+    engineRef.current = audioOptions?.engine ?? createAudioEngine(audioOptions?.engineDeps);
+  }
+
+  useAudioEffects({ ...audioOptions, engine: engineRef.current });
+  useRoundEndAudio(engineRef.current);
   useFinishedReporter(mode, onFinish);
   const isShaking = useScreenShake();
   const playgroundRef = useRef<HTMLDivElement>(null);
