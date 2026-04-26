@@ -6,8 +6,17 @@ export const HIT_STOP_MS = 50;
 /** Multi directional shake duration applied after a feature break or empty cell miss, per spec. */
 export const SCREEN_SHAKE_MS = 300;
 
-export const POINTS_PER_BUG = 10;
 export const POINTS_PER_FEATURE = -20;
+
+/**
+ * Cap on the combo multiplier applied to per-hit base points (`points = base * min(cap, combo)`).
+ *
+ * WHY [cap]: without one, a 50-combo run pays 50x base — old high scores become trivially
+ * unreachable and HUD numbers explode. Cap aligns with the existing audio pitch ceiling concept
+ * (audio caps at 4x via `1 + combo * 0.05`, asymptote at 60), but is intentionally higher so the
+ * scoring reward outpaces the audio sweetener.
+ */
+export const COMBO_SCORE_MULTIPLIER_CAP = 10;
 
 /**
  * Base score awarded for a bug squash, indexed by the bug's lifetime phase. Combo multiplier

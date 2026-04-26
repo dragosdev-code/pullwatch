@@ -94,7 +94,14 @@ describe('FctOverlay', () => {
       store.setState({
         lastClick: {
           id: 0,
-          outcome: { kind: 'bug_squashed', points: 10, combo: 2 },
+          outcome: {
+            kind: 'bug_squashed',
+            basePoints: 10,
+            multiplier: 2,
+            points: 20,
+            combo: 2,
+            phase: 'fresh',
+          },
           cellIndex: 3,
           at: 500,
         },

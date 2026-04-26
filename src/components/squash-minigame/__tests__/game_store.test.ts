@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createGameStore, __resetSessionRoundIdForTests } from '../game-store';
 import {
+  COMBO_SCORE_MULTIPLIER_CAP,
   FEATURE_SPAWN_PROBABILITY,
   HIT_STOP_MS,
   MODE_CONFIGS,
-  POINTS_PER_BUG,
+  PHASE_BASE_POINTS,
   POINTS_PER_FEATURE,
   SCREEN_SHAKE_MS,
 } from '../game-config';
@@ -275,9 +276,16 @@ describe('clickCell scoring and combo behavior', () => {
     store.setState({ activeTargets: next });
 
     const outcome = store.getState().clickCell(0, 100);
-    expect(outcome).toEqual({ kind: 'bug_squashed', points: POINTS_PER_BUG, combo: 1 });
+    expect(outcome).toEqual({
+      kind: 'bug_squashed',
+      basePoints: PHASE_BASE_POINTS.fresh,
+      multiplier: 1,
+      points: PHASE_BASE_POINTS.fresh,
+      combo: 1,
+      phase: 'fresh',
+    });
     const s = store.getState();
-    expect(s.score).toBe(POINTS_PER_BUG);
+    expect(s.score).toBe(PHASE_BASE_POINTS.fresh);
     expect(s.combo).toBe(1);
     expect(s.highestCombo).toBe(1);
     expect(s.bugsSquashed).toBe(1);
@@ -286,7 +294,7 @@ describe('clickCell scoring and combo behavior', () => {
     expect(s.lastClick?.outcome.kind).toBe('bug_squashed');
   });
 
-  it('tracks highestCombo as the combo grows across multiple kills', () => {
+  it('multiplies points by capped combo on consecutive squashes', () => {
     const { store } = buildStore();
     store.getState().startGame('standard', 0);
     const bug = (id: string): Target => ({
@@ -303,12 +311,92 @@ describe('clickCell scoring and combo behavior', () => {
     store.setState({ activeTargets: next });
 
     store.getState().clickCell(0, 100);
-    store.getState().clickCell(1, 200);
-    store.getState().clickCell(2, 300);
+    store.getState().clickCell(1, 150);
+    store.getState().clickCell(2, 200);
     const s = store.getState();
     expect(s.combo).toBe(3);
     expect(s.highestCombo).toBe(3);
-    expect(s.score).toBe(POINTS_PER_BUG * 3);
+    // Each clicked at <1/3 of standard lifetime (1100ms) → fresh tier (10 base) every time.
+    // Score = 10*1 + 10*2 + 10*3 = 60.
+    expect(s.score).toBe(PHASE_BASE_POINTS.fresh * (1 + 2 + 3));
+  });
+
+  it('caps the combo multiplier on the per-hit score', () => {
+    const { store } = buildStore();
+    store.getState().startGame('standard', 0);
+    const bug: Target = {
+      id: 'capped',
+      kind: 'bug',
+      spawnedAt: 0,
+      despawnAt: 5_000,
+      damageStage: 0,
+    };
+    const next = store.getState().activeTargets.slice();
+    next[0] = bug;
+    store.setState({
+      activeTargets: next,
+      // Pre-load combo so the next squash would exceed the cap.
+      combo: COMBO_SCORE_MULTIPLIER_CAP + 4,
+      highestCombo: COMBO_SCORE_MULTIPLIER_CAP + 4,
+    });
+
+    const outcome = store.getState().clickCell(0, 50);
+    expect(outcome.kind).toBe('bug_squashed');
+    if (outcome.kind !== 'bug_squashed') return;
+    expect(outcome.combo).toBe(COMBO_SCORE_MULTIPLIER_CAP + 5);
+    expect(outcome.multiplier).toBe(COMBO_SCORE_MULTIPLIER_CAP);
+    expect(outcome.points).toBe(PHASE_BASE_POINTS.fresh * COMBO_SCORE_MULTIPLIER_CAP);
+    expect(store.getState().score).toBe(PHASE_BASE_POINTS.fresh * COMBO_SCORE_MULTIPLIER_CAP);
+  });
+
+  it('awards middle-tier base points when the bug is in its middle phase', () => {
+    const { store } = buildStore();
+    store.getState().startGame('standard', 0);
+    const lifetime = MODE_CONFIGS.standard.targetLifetimeMs;
+    const bug: Target = {
+      id: 'mid',
+      kind: 'bug',
+      spawnedAt: 0,
+      despawnAt: lifetime,
+      damageStage: 0,
+    };
+    const next = store.getState().activeTargets.slice();
+    next[0] = bug;
+    store.setState({ activeTargets: next });
+
+    // Clock at ~50% of lifetime → middle phase.
+    const outcome = store.getState().clickCell(0, Math.floor(lifetime / 2));
+    expect(outcome.kind).toBe('bug_squashed');
+    if (outcome.kind !== 'bug_squashed') return;
+    expect(outcome.phase).toBe('middle');
+    expect(outcome.basePoints).toBe(PHASE_BASE_POINTS.middle);
+    expect(outcome.points).toBe(PHASE_BASE_POINTS.middle);
+    expect(store.getState().score).toBe(PHASE_BASE_POINTS.middle);
+  });
+
+  it('awards final-tier base points when the bug is in its final phase', () => {
+    const { store } = buildStore();
+    store.getState().startGame('standard', 0);
+    const lifetime = MODE_CONFIGS.standard.targetLifetimeMs;
+    const bug: Target = {
+      id: 'late',
+      kind: 'bug',
+      spawnedAt: 0,
+      despawnAt: lifetime,
+      damageStage: 0,
+    };
+    const next = store.getState().activeTargets.slice();
+    next[0] = bug;
+    store.setState({ activeTargets: next });
+
+    // Clock past the 2/3 lifetime threshold but before despawn → final phase.
+    const outcome = store.getState().clickCell(0, Math.floor((lifetime * 5) / 6));
+    expect(outcome.kind).toBe('bug_squashed');
+    if (outcome.kind !== 'bug_squashed') return;
+    expect(outcome.phase).toBe('final');
+    expect(outcome.basePoints).toBe(PHASE_BASE_POINTS.final);
+    expect(outcome.points).toBe(PHASE_BASE_POINTS.final);
+    expect(store.getState().score).toBe(PHASE_BASE_POINTS.final);
   });
 
   it('breaks a feature for minus twenty points and resets the combo to zero', () => {
@@ -365,7 +453,7 @@ describe('clickCell scoring and combo behavior', () => {
     store.setState({ activeTargets: next, combo: 2 });
 
     const outcome = store.getState().clickCell(4, 100);
-    expect(outcome).toEqual({ kind: 'bug_cracked', combo: 2 });
+    expect(outcome).toEqual({ kind: 'bug_cracked', combo: 2, phase: 'fresh' });
     const s = store.getState();
     expect(s.score).toBe(0);
     expect(s.combo).toBe(2);
@@ -389,8 +477,15 @@ describe('clickCell scoring and combo behavior', () => {
     store.setState({ activeTargets: next });
 
     const outcome = store.getState().clickCell(4, 200);
-    expect(outcome).toEqual({ kind: 'bug_squashed', points: POINTS_PER_BUG, combo: 1 });
-    expect(store.getState().score).toBe(POINTS_PER_BUG);
+    expect(outcome).toEqual({
+      kind: 'bug_squashed',
+      basePoints: PHASE_BASE_POINTS.fresh,
+      multiplier: 1,
+      points: PHASE_BASE_POINTS.fresh,
+      combo: 1,
+      phase: 'fresh',
+    });
+    expect(store.getState().score).toBe(PHASE_BASE_POINTS.fresh);
     expect(store.getState().activeTargets[4]).toBeNull();
   });
 });

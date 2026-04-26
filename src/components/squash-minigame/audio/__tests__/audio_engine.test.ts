@@ -71,8 +71,11 @@ function buildFakeContext(): FakeContext {
 
 const bugSquashed = (combo: number): ClickOutcome => ({
   kind: 'bug_squashed',
-  points: 10,
+  basePoints: 10,
+  multiplier: Math.min(10, combo || 1),
+  points: 10 * Math.min(10, combo || 1),
   combo,
+  phase: 'fresh',
 });
 
 beforeEach(() => {
@@ -117,7 +120,7 @@ describe('createAudioEngine', () => {
     const engine = createAudioEngine({
       audioContextFactory: () => ctx as unknown as AudioContext,
     });
-    engine.playOutcome({ kind: 'bug_cracked', combo: 9 }, 9);
+    engine.playOutcome({ kind: 'bug_cracked', combo: 9, phase: 'fresh' }, 9);
     expect(ctx.oscillators[0].frequency.value).toBeCloseTo(440 * 0.75, 4);
   });
 

@@ -39,7 +39,14 @@ describe('useAudioEffects', () => {
         combo: 3,
         lastClick: {
           id: 0,
-          outcome: { kind: 'bug_squashed', points: 10, combo: 3 },
+          outcome: {
+            kind: 'bug_squashed',
+            basePoints: 10,
+            multiplier: 3,
+            points: 30,
+            combo: 3,
+            phase: 'fresh',
+          },
           cellIndex: 0,
           at: 100,
         },
@@ -48,7 +55,17 @@ describe('useAudioEffects', () => {
     });
 
     expect(engine.playSpy).toHaveBeenCalledTimes(1);
-    expect(engine.playSpy).toHaveBeenCalledWith({ kind: 'bug_squashed', points: 10, combo: 3 }, 3);
+    expect(engine.playSpy).toHaveBeenCalledWith(
+      {
+        kind: 'bug_squashed',
+        basePoints: 10,
+        multiplier: 3,
+        points: 30,
+        combo: 3,
+        phase: 'fresh',
+      },
+      3
+    );
   });
 
   it('falls back to the live combo for non bug squash outcomes', () => {

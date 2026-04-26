@@ -27,10 +27,22 @@ export interface Target {
  * Result of a single click on a cell. The store mutates state regardless; the outcome is also
  * stored on `lastClick` so the canvas overlay (Phase 4) can render Floating Combat Text without
  * polling the full store on every frame.
+ *
+ * WHY [bug_squashed carries basePoints + multiplier + points]: the combo multiplier is applied
+ * in `clickCell`, but downstream consumers (FCT, audio) need the breakdown. `points` is the
+ * actual amount added to score (`basePoints * multiplier`); `basePoints` reflects the phase tier
+ * (10 / 5 / 2); `multiplier` is the capped combo. Keeping all three avoids re-derivation drift.
  */
 export type ClickOutcome =
-  | { kind: 'bug_squashed'; points: number; combo: number }
-  | { kind: 'bug_cracked'; combo: number }
+  | {
+      kind: 'bug_squashed';
+      basePoints: number;
+      multiplier: number;
+      points: number;
+      combo: number;
+      phase: BugPhase;
+    }
+  | { kind: 'bug_cracked'; combo: number; phase: BugPhase }
   | { kind: 'feature_broken'; points: number }
   | { kind: 'miss' }
   | { kind: 'noop' };

@@ -1,13 +1,15 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import {
+  COMBO_SCORE_MULTIPLIER_CAP,
   FEATURE_SPAWN_PROBABILITY,
   HIT_STOP_MS,
   MODE_CONFIGS,
-  POINTS_PER_BUG,
+  PHASE_BASE_POINTS,
   POINTS_PER_FEATURE,
   SCREEN_SHAKE_MS,
   type ModeConfig,
 } from './game-config';
+import { computeBugPhase } from './game-phase';
 import type { ClickOutcome, GameMode, GameStatus, LastClick, Target } from './game-types';
 
 export interface GameState {
@@ -287,11 +289,12 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
         return outcome;
       }
 
+      const phase = computeBugPhase(target, now, s.config.targetLifetimeMs);
       const remainingClicks = s.config.bugClicksToKill - target.damageStage - 1;
       if (remainingClicks > 0) {
         const next = s.activeTargets.slice();
         next[cellIndex] = { ...target, damageStage: target.damageStage + 1 };
-        const outcome: ClickOutcome = { kind: 'bug_cracked', combo: s.combo };
+        const outcome: ClickOutcome = { kind: 'bug_cracked', combo: s.combo, phase };
         set((state) => {
           const id = state.nextClickId;
           return {
@@ -307,16 +310,22 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
       const next = s.activeTargets.slice();
       next[cellIndex] = null;
       const newCombo = s.combo + 1;
+      const basePoints = PHASE_BASE_POINTS[phase];
+      const multiplier = Math.min(COMBO_SCORE_MULTIPLIER_CAP, newCombo);
+      const points = basePoints * multiplier;
       const outcome: ClickOutcome = {
         kind: 'bug_squashed',
-        points: POINTS_PER_BUG,
+        basePoints,
+        multiplier,
+        points,
         combo: newCombo,
+        phase,
       };
       set((state) => {
         const id = state.nextClickId;
         return {
           activeTargets: next,
-          score: s.score + POINTS_PER_BUG,
+          score: s.score + points,
           combo: newCombo,
           highestCombo: Math.max(s.highestCombo, newCombo),
           bugsSquashed: s.bugsSquashed + 1,

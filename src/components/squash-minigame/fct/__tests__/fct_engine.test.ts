@@ -3,17 +3,31 @@ import { createFctEngine, describeOutcome, FCT_LIFETIME_MS } from '../fct-engine
 
 describe('describeOutcome', () => {
   it('returns a green plus points label for a bug squash with no combo tag at combo one', () => {
-    const desc = describeOutcome({ kind: 'bug_squashed', points: 10, combo: 1 });
+    const desc = describeOutcome({
+      kind: 'bug_squashed',
+      basePoints: 10,
+      multiplier: 1,
+      points: 10,
+      combo: 1,
+      phase: 'fresh',
+    });
     expect(desc).toEqual({ text: '+10', color: '#22c55e' });
   });
 
   it('appends an x combo suffix when combo is greater than one', () => {
-    const desc = describeOutcome({ kind: 'bug_squashed', points: 10, combo: 5 });
-    expect(desc?.text).toBe('+10 x5');
+    const desc = describeOutcome({
+      kind: 'bug_squashed',
+      basePoints: 10,
+      multiplier: 5,
+      points: 50,
+      combo: 5,
+      phase: 'fresh',
+    });
+    expect(desc?.text).toBe('+50 x5');
   });
 
   it('returns a yellow crack label for a cracked bug', () => {
-    const desc = describeOutcome({ kind: 'bug_cracked', combo: 0 });
+    const desc = describeOutcome({ kind: 'bug_cracked', combo: 0, phase: 'fresh' });
     expect(desc).toEqual({ text: 'crack', color: '#fbbf24' });
   });
 
@@ -36,8 +50,18 @@ describe('describeOutcome', () => {
 describe('createFctEngine', () => {
   it('spawns a particle with a unique id and the spawn time', () => {
     const engine = createFctEngine();
-    const a = engine.spawn({ kind: 'bug_squashed', points: 10, combo: 1 }, 4, 1_000, 3);
-    const b = engine.spawn({ kind: 'bug_squashed', points: 10, combo: 2 }, 5, 1_010, 3);
+    const a = engine.spawn(
+      { kind: 'bug_squashed', basePoints: 10, multiplier: 1, points: 10, combo: 1, phase: 'fresh' },
+      4,
+      1_000,
+      3
+    );
+    const b = engine.spawn(
+      { kind: 'bug_squashed', basePoints: 10, multiplier: 2, points: 20, combo: 2, phase: 'fresh' },
+      5,
+      1_010,
+      3
+    );
     expect(a?.id).not.toBe(b?.id);
     expect(a?.spawnedAt).toBe(1_000);
     expect(b?.spawnedAt).toBe(1_010);
