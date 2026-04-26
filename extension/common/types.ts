@@ -177,6 +177,16 @@ export interface MinigameModeStats {
  * so repeat opens skip the intro. Settings / other entry points can reuse the same flag later.
  */
 export interface MinigameStats {
+  /**
+   * Schema version stamp. Bumped on any field addition or structural change so
+   * {@link ensureCompleteMinigameStats} can detect stale blobs and apply targeted migrations
+   * instead of resetting the entire object.
+   *
+   * Version history:
+   *   1 — initial schema (hasDiscovered, popupOpenCount, modes, overall).
+   *   2 — added hasSeenSquashQuickStart, lastPlayedMode, dataVersion itself.
+   */
+  dataVersion: number;
   hasDiscovered: boolean;
   /** After the user completes the header quick-start flow (info + mode + Start). */
   hasSeenSquashQuickStart: boolean;

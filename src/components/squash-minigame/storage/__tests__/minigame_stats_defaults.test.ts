@@ -74,6 +74,7 @@ describe('ensureCompleteMinigameStats', () => {
 
   it('round trips a complete value', () => {
     const input = {
+      dataVersion: 2,
       hasDiscovered: true,
       hasSeenSquashQuickStart: true,
       popupOpenCount: 42,

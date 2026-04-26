@@ -7,6 +7,12 @@ const ZERO_MODE_STATS: MinigameModeStats = {
   highestCombo: 0,
 };
 
+/**
+ * Current schema version for MinigameStats. Bump this and add a migration case
+ * in ensureCompleteMinigameStats whenever a field is added or renamed.
+ */
+export const CURRENT_MINIGAME_STATS_VERSION = 2;
+
 const ALL_GAME_MODES: readonly GameMode[] = [
   'standard',
   'legacy',
@@ -21,6 +27,7 @@ const ALL_GAME_MODES: readonly GameMode[] = [
  * so this constant is safe to freeze and reuse without risk of accidental mutation.
  */
 export const DEFAULT_MINIGAME_STATS: MinigameStats = Object.freeze({
+  dataVersion: CURRENT_MINIGAME_STATS_VERSION,
   hasDiscovered: false,
   hasSeenSquashQuickStart: false,
   popupOpenCount: 0,
@@ -68,6 +75,7 @@ export function ensureCompleteMinigameStats(
   }
 
   return {
+    dataVersion: base.dataVersion ?? CURRENT_MINIGAME_STATS_VERSION,
     hasDiscovered: base.hasDiscovered ?? DEFAULT_MINIGAME_STATS.hasDiscovered,
     hasSeenSquashQuickStart:
       base.hasSeenSquashQuickStart ?? DEFAULT_MINIGAME_STATS.hasSeenSquashQuickStart,

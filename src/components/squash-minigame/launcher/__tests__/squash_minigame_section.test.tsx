@@ -37,6 +37,7 @@ beforeEach(() => {
 
 function buildStats(overrides: Partial<MinigameStats>): MinigameStats {
   return {
+    dataVersion: 2,
     hasDiscovered: false,
     hasSeenSquashQuickStart: false,
     popupOpenCount: 0,
