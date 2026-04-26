@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useStore } from 'zustand';
 import type { GameMode } from '../game-types';
 import { useGameStore } from '../context/game-store-context';
+import { formatScore } from '../format-score';
 import { MODE_METADATA } from '../launcher/mode-metadata';
 
 export interface FinishedOverlayProps {
@@ -130,7 +131,7 @@ export function FinishedOverlay({
               round over
             </h3>
             <ul className="mb-5 space-y-1 text-xs text-base-content/90">
-              <li data-testid="squash-finished-score">final score {score}</li>
+              <li data-testid="squash-finished-score" aria-label={`final score ${score}`}>final score {formatScore(score)}</li>
               <li data-testid="squash-finished-combo">best combo x{highestCombo}</li>
               <li data-testid="squash-finished-bugs">bugs {bugsSquashed}</li>
               <li data-testid="squash-finished-features">features {featuresBroken}</li>
