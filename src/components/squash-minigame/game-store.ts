@@ -1,7 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import {
   COMBO_SCORE_MULTIPLIER_CAP,
-  FEATURE_SPAWN_PROBABILITY,
   HIT_STOP_MS,
   MODE_CONFIGS,
   PHASE_BASE_POINTS,
@@ -10,7 +9,13 @@ import {
   type ModeConfig,
 } from './game-config';
 import { computeBugPhase } from './game-phase';
-import type { ClickOutcome, GameMode, GameStatus, LastClick, Target } from './game-types';
+import type {
+  ClickOutcome,
+  GameMode,
+  GameStatus,
+  LastClick,
+  Target,
+} from './game-types';
 
 export interface GameState {
   mode: GameMode;
@@ -31,7 +36,19 @@ export interface GameState {
   hitStopUntil: number;
   /** Render layer reads this to apply the shake transform until `now >= shakeUntil`. */
   shakeUntil: number;
-  nextSpawnAt: number;
+  /**
+   * Earliest tick clock at which the bug spawner is allowed to fire.
+   *
+   * WHY [adaptive rhythm]: a successful squash sets this to `now`, so the very next tick spawns
+   * a fresh bug. Effective bug cadence is therefore the player's reaction time, bounded below
+   * by `config.spawnIntervalMs` for the case of no clicks.
+   */
+  nextBugSpawnAt: number;
+  /**
+   * Earliest tick clock at which the feature spawner is allowed to fire. Independent of the bug
+   * timer so a hot squash streak does not drag features in with it.
+   */
+  nextFeatureSpawnAt: number;
   /** Most recent click outcome, kept for the canvas overlay to consume in Phase 4. */
   lastClick: LastClick | null;
   /** Monotonic per `startGame`, used to dedupe onFinish and stats in React StrictMode. */
@@ -73,6 +90,20 @@ function defaultIdGenerator(): string {
   return `target_${fallbackIdCounter}`;
 }
 
+/** Indices of `null` slots in the target grid. */
+function pickEmptyIndices(targets: (Target | null)[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < targets.length; i += 1) {
+    if (targets[i] === null) out.push(i);
+  }
+  return out;
+}
+
+/** Select one index from `indices` using the injected `random` source. */
+function pickOne(indices: number[], random: () => number): number {
+  return indices[Math.min(indices.length - 1, Math.floor(random() * indices.length))];
+}
+
 function buildIdleState(): GameState {
   const config = MODE_CONFIGS.standard;
   return {
@@ -91,7 +122,8 @@ function buildIdleState(): GameState {
     timeRemainingMs: 0,
     hitStopUntil: 0,
     shakeUntil: 0,
-    nextSpawnAt: 0,
+    nextBugSpawnAt: 0,
+    nextFeatureSpawnAt: 0,
     lastClick: null,
     roundId: 0,
     nextClickId: 0,
@@ -134,7 +166,8 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
         timeRemainingMs: config.durationMs,
         hitStopUntil: 0,
         shakeUntil: 0,
-        nextSpawnAt: now + config.spawnIntervalMs,
+        nextBugSpawnAt: now + config.spawnIntervalMs,
+        nextFeatureSpawnAt: now + config.featureSpawnIntervalMs,
         lastClick: null,
         roundId: getNextSessionRoundId(),
         nextClickId: 0,
@@ -195,22 +228,23 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
         activeTargets = afterDespawn;
       }
 
-      let nextSpawnAt = s.nextSpawnAt;
-      if (now >= nextSpawnAt) {
-        const emptyIndices: number[] = [];
-        for (let i = 0; i < activeTargets.length; i += 1) {
-          if (activeTargets[i] === null) emptyIndices.push(i);
-        }
-        if (emptyIndices.length > 0) {
-          const cellPick = Math.min(
-            emptyIndices.length - 1,
-            Math.floor(random() * emptyIndices.length)
-          );
-          const cellIndex = emptyIndices[cellPick];
-          const isFeature = random() < FEATURE_SPAWN_PROBABILITY;
+      /**
+       * WHY [two independent spawn gates]: bugs and features each run on their own cadence so a
+       * hot squash streak (which resets `nextBugSpawnAt` to `now`) does not drag features along.
+       * Each gate scans empty cells independently — a bug and a feature may land in the same tick
+       * if both timers fire, but they will never fight for the same cell because the second scan
+       * sees the first spawn's mutation.
+       */
+      let nextBugSpawnAt = s.nextBugSpawnAt;
+      let nextFeatureSpawnAt = s.nextFeatureSpawnAt;
+
+      if (now >= nextBugSpawnAt) {
+        const emptyCells = pickEmptyIndices(activeTargets);
+        if (emptyCells.length > 0) {
+          const cellIndex = pickOne(emptyCells, random);
           const target: Target = {
             id: generateId(),
-            kind: isFeature ? 'feature' : 'bug',
+            kind: 'bug',
             spawnedAt: now,
             despawnAt: now + s.config.targetLifetimeMs,
             damageStage: 0,
@@ -218,7 +252,24 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
           activeTargets = activeTargets.slice();
           activeTargets[cellIndex] = target;
         }
-        nextSpawnAt = now + s.config.spawnIntervalMs;
+        nextBugSpawnAt = now + s.config.spawnIntervalMs;
+      }
+
+      if (now >= nextFeatureSpawnAt) {
+        const emptyCells = pickEmptyIndices(activeTargets);
+        if (emptyCells.length > 0) {
+          const cellIndex = pickOne(emptyCells, random);
+          const target: Target = {
+            id: generateId(),
+            kind: 'feature',
+            spawnedAt: now,
+            despawnAt: now + s.config.targetLifetimeMs,
+            damageStage: 0,
+          };
+          activeTargets = activeTargets.slice();
+          activeTargets[cellIndex] = target;
+        }
+        nextFeatureSpawnAt = now + s.config.featureSpawnIntervalMs;
       }
 
       if (timeRemainingMs <= 0) {
@@ -227,7 +278,8 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
           timeRemainingMs: 0,
           gridSize,
           activeTargets: new Array(activeTargets.length).fill(null),
-          nextSpawnAt,
+          nextBugSpawnAt,
+          nextFeatureSpawnAt,
           status: 'finished',
         });
         return;
@@ -238,7 +290,8 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
         timeRemainingMs,
         gridSize,
         activeTargets,
-        nextSpawnAt,
+        nextBugSpawnAt,
+        nextFeatureSpawnAt,
       });
     },
 
@@ -332,6 +385,12 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
           hitStopUntil: now + HIT_STOP_MS,
           lastClick: { id, outcome, cellIndex, at: now },
           nextClickId: id + 1,
+          /**
+           * WHY [adaptive rhythm]: reset the bug spawn timer so a new bug appears on the very next
+           * tick. The player's reaction time becomes the effective cadence, bounded below by
+           * `spawnIntervalMs` for the idle case (no clicks).
+           */
+          nextBugSpawnAt: now,
         };
       });
       return outcome;

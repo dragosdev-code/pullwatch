@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createGameStore, __resetSessionRoundIdForTests } from '../game-store';
 import {
   COMBO_SCORE_MULTIPLIER_CAP,
-  FEATURE_SPAWN_PROBABILITY,
   HIT_STOP_MS,
   MODE_CONFIGS,
   PHASE_BASE_POINTS,
@@ -63,7 +62,8 @@ describe('startGame', () => {
     expect(s.activeTargets).toHaveLength(9);
     expect(s.timeRemainingMs).toBe(30_000);
     expect(s.startedAt).toBe(1_000);
-    expect(s.nextSpawnAt).toBe(1_000 + MODE_CONFIGS.standard.spawnIntervalMs);
+    expect(s.nextBugSpawnAt).toBe(1_000 + MODE_CONFIGS.standard.spawnIntervalMs);
+    expect(s.nextFeatureSpawnAt).toBe(1_000 + MODE_CONFIGS.standard.featureSpawnIntervalMs);
   });
 
   it('seeds fridayDeploy mode with a fifteen second timer and tripled spawn rate', () => {
@@ -153,15 +153,15 @@ describe('tick advancing the simulation', () => {
     const next = store.getState().activeTargets.slice();
     next[0] = expired;
     next[1] = fresh;
-    store.setState({ activeTargets: next, nextSpawnAt: 60_000 });
+    store.setState({ activeTargets: next, nextBugSpawnAt: 60_000, nextFeatureSpawnAt: 60_000 });
     store.getState().tick(1_000);
     const s = store.getState();
     expect(s.activeTargets[0]).toBeNull();
     expect(s.activeTargets[1]?.id).toBe('fresh');
   });
 
-  it('spawns a bug into the first empty cell when random places early', () => {
-    const { store } = buildStore({ randomSequence: [0, 0.9] });
+  it('spawns a bug into the first empty cell when the bug timer fires', () => {
+    const { store } = buildStore({ randomSequence: [0] });
     store.getState().startGame('standard', 0);
     const interval = MODE_CONFIGS.standard.spawnIntervalMs;
     store.getState().tick(interval + 10);
@@ -169,16 +169,20 @@ describe('tick advancing the simulation', () => {
     const spawned = s.activeTargets[0];
     expect(spawned).not.toBeNull();
     expect(spawned?.kind).toBe('bug');
-    expect(s.nextSpawnAt).toBe(interval + 10 + interval);
+    expect(s.nextBugSpawnAt).toBe(interval + 10 + interval);
   });
 
-  it('spawns a feature when the random roll is below the feature probability', () => {
-    const { store } = buildStore({
-      randomSequence: [0, FEATURE_SPAWN_PROBABILITY - 0.01],
-    });
+  it('spawns a feature when the feature timer fires', () => {
+    const { store } = buildStore({ randomSequence: [0] });
     store.getState().startGame('standard', 0);
-    store.getState().tick(MODE_CONFIGS.standard.spawnIntervalMs + 1);
-    expect(store.getState().activeTargets[0]?.kind).toBe('feature');
+    const featureInterval = MODE_CONFIGS.standard.featureSpawnIntervalMs;
+    // Advance past the feature interval. The bug timer fires first (shorter interval)
+    // so we push it far ahead to isolate the feature gate.
+    store.setState({ nextBugSpawnAt: 999_999 });
+    store.getState().tick(featureInterval + 1);
+    const s = store.getState();
+    expect(s.activeTargets[0]?.kind).toBe('feature');
+    expect(s.nextFeatureSpawnAt).toBe(featureInterval + 1 + featureInterval);
   });
 
   it('does not overwrite an occupied cell when picking the spawn slot', () => {
@@ -487,5 +491,79 @@ describe('clickCell scoring and combo behavior', () => {
     });
     expect(store.getState().score).toBe(PHASE_BASE_POINTS.fresh);
     expect(store.getState().activeTargets[4]).toBeNull();
+  });
+});
+
+describe('adaptive bug rhythm and independent feature cadence', () => {
+  it('resets nextBugSpawnAt to now when a bug is squashed', () => {
+    const { store } = buildStore();
+    store.getState().startGame('standard', 0);
+    const bug: Target = {
+      id: 'rhythm',
+      kind: 'bug',
+      spawnedAt: 0,
+      despawnAt: 5_000,
+      damageStage: 0,
+    };
+    const next = store.getState().activeTargets.slice();
+    next[0] = bug;
+    store.setState({ activeTargets: next });
+
+    store.getState().clickCell(0, 500);
+    expect(store.getState().nextBugSpawnAt).toBe(500);
+  });
+
+  it('spawns a new bug on the very next tick after a squash', () => {
+    const { store } = buildStore({ randomSequence: [0] });
+    store.getState().startGame('standard', 0);
+    const bug: Target = {
+      id: 'killed',
+      kind: 'bug',
+      spawnedAt: 0,
+      despawnAt: 5_000,
+      damageStage: 0,
+    };
+    const targets = store.getState().activeTargets.slice();
+    targets[0] = bug;
+    store.setState({ activeTargets: targets, nextFeatureSpawnAt: 999_999 });
+
+    store.getState().clickCell(0, 500);
+    // hitStopUntil = 500 + HIT_STOP_MS (50) = 550. Tick must be past that.
+    store.getState().tick(551);
+    const s = store.getState();
+    const spawned = s.activeTargets.find((t) => t !== null && t.id !== 'killed');
+    expect(spawned).toBeDefined();
+    expect(spawned?.kind).toBe('bug');
+  });
+
+  it('does not reset nextFeatureSpawnAt when a bug is squashed', () => {
+    const { store } = buildStore();
+    store.getState().startGame('standard', 0);
+    const featureSpawnBefore = store.getState().nextFeatureSpawnAt;
+    const bug: Target = {
+      id: 'indep',
+      kind: 'bug',
+      spawnedAt: 0,
+      despawnAt: 5_000,
+      damageStage: 0,
+    };
+    const next = store.getState().activeTargets.slice();
+    next[0] = bug;
+    store.setState({ activeTargets: next });
+
+    store.getState().clickCell(0, 500);
+    expect(store.getState().nextFeatureSpawnAt).toBe(featureSpawnBefore);
+  });
+
+  it('bug and feature can both spawn in the same tick when both timers fire', () => {
+    // random returns 0 twice: first pick → cell 0 for bug, second pick → cell 1 for feature.
+    const { store } = buildStore({ randomSequence: [0, 0] });
+    store.getState().startGame('standard', 0);
+    // Set both timers to fire at the same time.
+    store.setState({ nextBugSpawnAt: 100, nextFeatureSpawnAt: 100 });
+    store.getState().tick(100);
+    const s = store.getState();
+    expect(s.activeTargets[0]?.kind).toBe('bug');
+    expect(s.activeTargets[1]?.kind).toBe('feature');
   });
 });

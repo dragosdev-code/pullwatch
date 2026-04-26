@@ -29,8 +29,20 @@ export const PHASE_BASE_POINTS: Record<BugPhase, number> = {
   final: 2,
 };
 
-/** Fraction of spawns that produce a feature target instead of a bug, per spec (20 percent). */
+/**
+ * Target fraction of spawns that produce a feature instead of a bug, per spec (20 percent).
+ *
+ * WHY [now a density target, not a per-spawn coin flip]: bugs and features used to share one
+ * spawn cadence with this value as a per-tick roll. After PR-3 they spawn on independent timers
+ * so the bug timer can react to player skill (immediate respawn on a squash). To preserve the
+ * feel of "1 in 5 cells is a feature", the feature interval is derived as
+ * `bugInterval / FEATURE_SPAWN_PROBABILITY`.
+ */
 export const FEATURE_SPAWN_PROBABILITY = 0.2;
+
+function defaultFeatureSpawnIntervalMs(bugSpawnIntervalMs: number): number {
+  return Math.round(bugSpawnIntervalMs / FEATURE_SPAWN_PROBABILITY);
+}
 
 /**
  * Schedule entry for variants that grow the grid mid round. `triggerAtRemainingMs` is checked
@@ -45,7 +57,10 @@ export interface GridExpansionStage {
 export interface ModeConfig {
   initialGridSize: number;
   durationMs: number;
+  /** Cadence between two scheduled bug spawns when the player is not driving the rhythm. */
   spawnIntervalMs: number;
+  /** Independent feature spawn cadence; decoupled from `spawnIntervalMs` so a hot streak of squashes does not flood the board with features. */
+  featureSpawnIntervalMs: number;
   targetLifetimeMs: number;
   /** Number of clicks needed to squash a bug. Legacy mode requires two; everything else is one. */
   bugClicksToKill: 1 | 2;
@@ -62,6 +77,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     initialGridSize: 3,
     durationMs: STANDARD_DURATION_MS,
     spawnIntervalMs: STANDARD_SPAWN_INTERVAL_MS,
+    featureSpawnIntervalMs: defaultFeatureSpawnIntervalMs(STANDARD_SPAWN_INTERVAL_MS),
     targetLifetimeMs: STANDARD_TARGET_LIFETIME_MS,
     bugClicksToKill: 1,
     gridExpansionSchedule: [],
@@ -70,6 +86,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     initialGridSize: 3,
     durationMs: STANDARD_DURATION_MS,
     spawnIntervalMs: 850,
+    featureSpawnIntervalMs: defaultFeatureSpawnIntervalMs(850),
     targetLifetimeMs: 1500,
     bugClicksToKill: 2,
     gridExpansionSchedule: [],
@@ -78,6 +95,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     initialGridSize: 3,
     durationMs: STANDARD_DURATION_MS,
     spawnIntervalMs: STANDARD_SPAWN_INTERVAL_MS,
+    featureSpawnIntervalMs: defaultFeatureSpawnIntervalMs(STANDARD_SPAWN_INTERVAL_MS),
     targetLifetimeMs: STANDARD_TARGET_LIFETIME_MS,
     bugClicksToKill: 1,
     gridExpansionSchedule: [
@@ -89,6 +107,7 @@ export const MODE_CONFIGS: Record<GameMode, ModeConfig> = {
     initialGridSize: 3,
     durationMs: 15_000,
     spawnIntervalMs: 250,
+    featureSpawnIntervalMs: defaultFeatureSpawnIntervalMs(250),
     targetLifetimeMs: 400,
     bugClicksToKill: 1,
     gridExpansionSchedule: [],
