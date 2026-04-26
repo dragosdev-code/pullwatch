@@ -1,4 +1,5 @@
-import type { GameMode, MinigameModeStats, MinigameStats } from '@common/types';
+import type { MinigameModeStats, MinigameStats } from '@common/types';
+import type { GameMode } from '../game-types';
 
 const ZERO_MODE_STATS: MinigameModeStats = {
   playCount: 0,

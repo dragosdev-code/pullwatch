@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
-import type { GameMode } from '@common/types';
+import type { GameMode } from '../game-types';
 import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
 import { MODE_METADATA } from '../launcher/mode-metadata';
 import {

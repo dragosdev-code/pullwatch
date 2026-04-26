@@ -1,4 +1,4 @@
-import type { GameMode } from '@common/types';
+import type { GameMode } from './game-types';
 
 /** Pause the simulation for this many ms after a successful bug squash, per spec. */
 export const HIT_STOP_MS = 50;

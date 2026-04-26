@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SquashMinigameSection } from '../squash-minigame-section';
-import type { GameMode, MinigameStats } from '@common/types';
+import type { MinigameStats } from '@common/types';
+import type { GameMode } from '../../game-types';
 
 const discoverMinigameStub = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const openSquashGameStub = vi.hoisted(() => vi.fn((_: GameMode) => undefined));

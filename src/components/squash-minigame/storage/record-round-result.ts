@@ -1,4 +1,5 @@
-import type { GameMode, MinigameStats } from '@common/types';
+import type { MinigameStats } from '@common/types';
+import type { GameMode } from '../game-types';
 
 export interface RoundResult {
   /**

@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import type { GameMode } from '@common/types';
+import type { FinishedRoundSummary, GameMode } from './game-types';
 import { applyPopupSizePresetToDocument, usePopupSize } from '@src/hooks/use-popup-size';
 import {
   useMinigameDiscovery,
@@ -22,7 +22,6 @@ import { applyMinigameSessionPopupDimensions } from './minigame-popup-session-si
 import { SquashQuickStartBoard } from './quick-start/squash-quick-start-board';
 import { SquashMinigameLoadingScreen } from './squash-minigame-loading-screen';
 import { SquashMinigameLazy } from './squash-minigame.lazy';
-import type { FinishedRoundSummary } from './squash-minigame-shell';
 import {
   popupResizeFallbackTimeoutMs,
   waitForPopupShellResizeComplete,

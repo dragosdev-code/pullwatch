@@ -1,4 +1,4 @@
-import type { GameMode } from '@common/types';
+import type { GameMode } from '../game-types';
 
 export interface ModeMetadata {
   mode: GameMode;

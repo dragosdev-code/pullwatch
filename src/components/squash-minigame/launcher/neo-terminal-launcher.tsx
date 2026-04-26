@@ -1,8 +1,8 @@
 import { Suspense, useCallback, useState } from 'react';
 import clsx from 'clsx';
-import type { GameMode, MinigameStats } from '@common/types';
+import type { MinigameStats } from '@common/types';
+import type { FinishedRoundSummary, GameMode } from '../game-types';
 import { SquashMinigameLazy } from '../squash-minigame.lazy';
-import type { FinishedRoundSummary } from '../squash-minigame-shell';
 import { MODE_METADATA } from './mode-metadata';
 import { useRecordRoundResult } from '../hooks/use-record-round-result';
 

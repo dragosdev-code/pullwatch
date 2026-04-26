@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { GameMode } from '@common/types';
+import type { GameMode } from '../../game-types';
 import { DEFAULT_MINIGAME_STATS, ensureCompleteMinigameStats } from '../minigame-stats-defaults';
 
 const ALL_MODES: GameMode[] = ['standard', 'legacy', 'scopeCreep', 'fridayDeploy'];

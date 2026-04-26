@@ -36,4 +36,15 @@ export interface LastClick {
   at: number;
 }
 
+/** Payload for `SquashMinigameProps.onFinish` and persisted round stats. */
+export interface FinishedRoundSummary {
+  mode: GameMode;
+  roundId: number;
+  score: number;
+  highestCombo: number;
+  bugsSquashed: number;
+  featuresBroken: number;
+  durationSeconds: number;
+}
+
 export type { GameMode };

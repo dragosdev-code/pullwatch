@@ -1,26 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import clsx from 'clsx';
-import { useStore } from 'zustand';
+import { useEffect, useRef, useState } from 'react';
 import { createGameStore, type GameStore } from './game-store';
 import { createGameLoop, type GameLoop } from './game-loop';
-import type { GameMode } from './game-types';
-import { GameStoreProvider, useGameStore } from './context/game-store-context';
-import { GameBoard } from './components/game-board';
-import { FinishedOverlay } from './components/finished-overlay';
-import { Hud } from './components/hud';
-import { FctOverlay } from './fct/fct-overlay';
-import { useAudioEffects, type UseAudioEffectsOptions } from './hooks/use-audio-effects';
-import { useScreenShake } from './hooks/use-screen-shake';
-
-export interface FinishedRoundSummary {
-  mode: GameMode;
-  roundId: number;
-  score: number;
-  highestCombo: number;
-  bugsSquashed: number;
-  featuresBroken: number;
-  durationSeconds: number;
-}
+import type { FinishedRoundSummary, GameMode } from './game-types';
+import { GameStoreProvider } from './context/game-store-context';
+import { SquashMinigameBody } from './components/squash-minigame-body';
+import { SquashShellBooting } from './components/squash-shell-booting';
+import type { UseAudioEffectsOptions } from './hooks/use-audio-effects';
 
 export interface SquashMinigameProps {
   mode: GameMode;
@@ -52,14 +37,6 @@ export interface SquashMinigameProps {
 
 const defaultCreateStore = () => createGameStore();
 const defaultCreateLoop = (store: GameStore) => createGameLoop(store);
-
-/** Survives React 18 dev StrictMode subtree remounts; paired with `store.roundId` from `startGame`. */
-let lastNotifiedFinishRoundId: number | null = null;
-
-/** Test only. */
-export function __resetLastFinishNotificationForTests(): void {
-  lastNotifiedFinishRoundId = null;
-}
 
 /**
  * Owns one game session: builds the vanilla store, drives the RAF loop, and renders the board.
@@ -109,14 +86,7 @@ export function SquashMinigame({
   }, [mode, replayToken]);
 
   if (!store) {
-    return (
-      <div
-        data-testid="squash-shell-loading"
-        className="flex min-h-0 flex-1 items-center justify-center p-4 text-xs uppercase"
-      >
-        booting
-      </div>
-    );
+    return <SquashShellBooting />;
   }
 
   return (
@@ -134,113 +104,5 @@ export function SquashMinigame({
   );
 }
 
-interface BodyProps {
-  mode: GameMode;
-  onExit?: () => void;
-  onChangeMode?: (mode: GameMode) => void;
-  onFinish?: (summary: FinishedRoundSummary) => void;
-  onTryAgain: () => void;
-  audioOptions?: UseAudioEffectsOptions;
-  disableFctOverlay: boolean;
-}
-
-function SquashMinigameBody({
-  mode,
-  onExit,
-  onChangeMode,
-  onFinish,
-  onTryAgain,
-  audioOptions,
-  disableFctOverlay,
-}: BodyProps) {
-  useAudioEffects(audioOptions);
-  useFinishedReporter(mode, onFinish);
-  const isShaking = useScreenShake();
-  const playgroundRef = useRef<HTMLDivElement>(null);
-  const squareRef = useRef<HTMLDivElement>(null);
-
-  // WHY [ResizeObserver]: largest square that fits the padded playground is not expressible
-  // reliably with flex + aspect-ratio alone across extension popup sizes; we size the grid slot
-  // in px so cells stay square without scrolling.
-  useLayoutEffect(() => {
-    const slot = playgroundRef.current;
-    const inner = squareRef.current;
-    if (!slot || !inner) return;
-
-    const apply = () => {
-      const w = slot.clientWidth;
-      const h = slot.clientHeight;
-      const s = Math.max(0, Math.floor(Math.min(w, h)));
-      inner.style.width = `${s}px`;
-      inner.style.height = `${s}px`;
-    };
-
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(slot);
-    return () => ro.disconnect();
-  }, []);
-
-  return (
-    <div className="relative flex h-full min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden p-3 sm:gap-3 sm:p-4">
-      <Hud onExit={onExit} />
-      <div
-        ref={playgroundRef}
-        data-testid="squash-board-container"
-        data-shaking={isShaking ? 'true' : 'false'}
-        className={clsx(
-          'relative box-border flex min-h-0 flex-1 min-w-0 items-center justify-center px-3 pb-3 pt-1 sm:px-5 sm:pb-5 sm:pt-2',
-          isShaking && 'pw-squash-shake'
-        )}
-      >
-        <div
-          ref={squareRef}
-          className="relative mx-auto min-h-0 min-w-0 shrink-0 overflow-hidden rounded-lg border border-base-300/40 bg-base-200/30"
-        >
-          <div className="relative box-border h-full w-full p-2 sm:p-3">
-            <GameBoard />
-            {!disableFctOverlay && <FctOverlay />}
-          </div>
-        </div>
-      </div>
-      <FinishedOverlay
-        mode={mode}
-        onTryAgain={onTryAgain}
-        onChangeMode={onChangeMode}
-        onExit={onExit}
-      />
-    </div>
-  );
-}
-
-/**
- * Fires `onFinish` once per finished `roundId` (survives StrictMode remount). Captures summary
- * stats at the transition so a subsequent reset does not zero them before the launcher reads them.
- */
-function useFinishedReporter(
-  mode: GameMode,
-  onFinish: ((summary: FinishedRoundSummary) => void) | undefined
-) {
-  const store = useGameStore();
-  const status = useStore(store, (s) => s.status);
-
-  useEffect(() => {
-    if (status !== 'finished' || !onFinish) {
-      return;
-    }
-    const s = store.getState();
-    if (s.roundId === lastNotifiedFinishRoundId) {
-      return;
-    }
-    lastNotifiedFinishRoundId = s.roundId;
-    onFinish({
-      mode,
-      roundId: s.roundId,
-      score: s.score,
-      highestCombo: s.highestCombo,
-      bugsSquashed: s.bugsSquashed,
-      featuresBroken: s.featuresBroken,
-      durationSeconds: Math.round(s.elapsedMs / 1000),
-    });
-  }, [status, store, mode, onFinish]);
-}
+export type { FinishedRoundSummary } from './game-types';
+export { __resetLastFinishNotificationForTests } from './hooks/use-finished-reporter';
