@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useStore } from 'zustand';
 import { createGameStore, type GameStore } from './game-store';
@@ -99,7 +99,10 @@ export function SquashMinigame({
 
   if (!store) {
     return (
-      <div data-testid="squash-shell-loading" className="p-4 text-xs uppercase">
+      <div
+        data-testid="squash-shell-loading"
+        className="flex min-h-0 flex-1 items-center justify-center p-4 text-xs uppercase"
+      >
         booting
       </div>
     );
@@ -136,17 +139,52 @@ function SquashMinigameBody({
   useAudioEffects(audioOptions);
   useFinishedReporter(mode, onFinish);
   const isShaking = useScreenShake();
+  const playgroundRef = useRef<HTMLDivElement>(null);
+  const squareRef = useRef<HTMLDivElement>(null);
+
+  // WHY [ResizeObserver]: largest square that fits the padded playground is not expressible
+  // reliably with flex + aspect-ratio alone across extension popup sizes; we size the grid slot
+  // in px so cells stay square without scrolling.
+  useLayoutEffect(() => {
+    const slot = playgroundRef.current;
+    const inner = squareRef.current;
+    if (!slot || !inner) return;
+
+    const apply = () => {
+      const w = slot.clientWidth;
+      const h = slot.clientHeight;
+      const s = Math.max(0, Math.floor(Math.min(w, h)));
+      inner.style.width = `${s}px`;
+      inner.style.height = `${s}px`;
+    };
+
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(slot);
+    return () => ro.disconnect();
+  }, []);
 
   return (
-    <div className="flex w-full flex-col gap-3 p-3">
-      <Hud />
+    <div className="relative flex h-full min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden p-3 sm:gap-3 sm:p-4">
+      <Hud onExit={onExit} />
       <div
+        ref={playgroundRef}
         data-testid="squash-board-container"
         data-shaking={isShaking ? 'true' : 'false'}
-        className={clsx('relative w-full', isShaking && 'pw-squash-shake')}
+        className={clsx(
+          'relative box-border flex min-h-0 flex-1 min-w-0 items-center justify-center px-3 pb-3 pt-1 sm:px-5 sm:pb-5 sm:pt-2',
+          isShaking && 'pw-squash-shake'
+        )}
       >
-        <GameBoard />
-        {!disableFctOverlay && <FctOverlay />}
+        <div
+          ref={squareRef}
+          className="relative mx-auto min-h-0 min-w-0 shrink-0 overflow-hidden rounded-lg border border-base-300/40 bg-base-200/30"
+        >
+          <div className="relative box-border h-full w-full p-2 sm:p-3">
+            <GameBoard />
+            {!disableFctOverlay && <FctOverlay />}
+          </div>
+        </div>
       </div>
       <FinishedOverlay onExit={onExit} />
     </div>
@@ -195,25 +233,38 @@ function FinishedOverlay({ onExit }: { onExit?: () => void }) {
   return (
     <div
       data-testid="squash-finished-overlay"
-      className="flex flex-col items-center gap-2 rounded-md border border-base-300 bg-base-200 p-4 text-center"
+      className="absolute inset-0 z-50 flex items-center justify-center bg-base-300/55 p-4 backdrop-blur-[3px]"
+      role="presentation"
     >
-      <h3 className="text-sm font-bold uppercase tracking-wide">round over</h3>
-      <ul className="text-xs">
-        <li data-testid="squash-finished-score">final score {score}</li>
-        <li data-testid="squash-finished-combo">best combo x{highestCombo}</li>
-        <li data-testid="squash-finished-bugs">bugs {bugsSquashed}</li>
-        <li data-testid="squash-finished-features">features {featuresBroken}</li>
-      </ul>
-      {onExit && (
-        <button
-          type="button"
-          data-testid="squash-finished-exit"
-          onClick={onExit}
-          className="btn btn-sm"
+      <div
+        className="w-full max-w-xs rounded-2xl border border-base-content/10 bg-base-100/85 px-5 py-6 text-center shadow-2xl shadow-base-300/40 sm:max-w-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="squash-finished-title"
+      >
+        <h3
+          id="squash-finished-title"
+          className="mb-3 text-sm font-bold uppercase tracking-wide text-base-content"
         >
-          exit
-        </button>
-      )}
+          round over
+        </h3>
+        <ul className="mb-5 space-y-1 text-xs text-base-content/90">
+          <li data-testid="squash-finished-score">final score {score}</li>
+          <li data-testid="squash-finished-combo">best combo x{highestCombo}</li>
+          <li data-testid="squash-finished-bugs">bugs {bugsSquashed}</li>
+          <li data-testid="squash-finished-features">features {featuresBroken}</li>
+        </ul>
+        {onExit ? (
+          <button
+            type="button"
+            data-testid="squash-finished-exit"
+            onClick={onExit}
+            className="btn btn-primary btn-sm w-full max-w-48 font-semibold uppercase tracking-wide"
+          >
+            Close
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

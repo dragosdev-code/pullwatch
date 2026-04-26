@@ -1,22 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SquashMinigameSection } from '../squash-minigame-section';
-import type { MinigameStats } from '@common/types';
+import type { GameMode, MinigameStats } from '@common/types';
 
 const discoverMinigameStub = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const openSquashGameStub = vi.hoisted(() => vi.fn((_: GameMode) => undefined));
 
-const useMinigameDiscoveryMock = vi.hoisted(() =>
+const useSquashMinigameExperienceMock = vi.hoisted(() =>
   vi.fn<
     () => {
       stats: MinigameStats | null;
       ready: boolean;
       discoverMinigame: () => Promise<void>;
+      openSquashGame: (mode: GameMode) => void;
     }
   >()
 );
 
-vi.mock('../../hooks/use-minigame-discovery', () => ({
-  useMinigameDiscovery: useMinigameDiscoveryMock,
+vi.mock('../../squash-minigame-experience-provider', () => ({
+  useSquashMinigameExperience: useSquashMinigameExperienceMock,
 }));
 
 vi.mock('../neo-terminal-launcher', () => ({
@@ -24,8 +26,9 @@ vi.mock('../neo-terminal-launcher', () => ({
 }));
 
 beforeEach(() => {
-  useMinigameDiscoveryMock.mockReset();
+  useSquashMinigameExperienceMock.mockReset();
   discoverMinigameStub.mockReset().mockResolvedValue(undefined);
+  openSquashGameStub.mockReset();
 });
 
 function buildStats(overrides: Partial<MinigameStats>): MinigameStats {
@@ -45,30 +48,33 @@ function buildStats(overrides: Partial<MinigameStats>): MinigameStats {
 
 describe('SquashMinigameSection', () => {
   it('renders nothing while stats are still hydrating', () => {
-    useMinigameDiscoveryMock.mockReturnValue({
+    useSquashMinigameExperienceMock.mockReturnValue({
       stats: null,
       ready: false,
       discoverMinigame: discoverMinigameStub,
+      openSquashGame: openSquashGameStub,
     });
     const { container } = render(<SquashMinigameSection />);
     expect(container.firstChild).toBeNull();
   });
 
   it('renders nothing when the user has not discovered the minigame', () => {
-    useMinigameDiscoveryMock.mockReturnValue({
+    useSquashMinigameExperienceMock.mockReturnValue({
       stats: buildStats({ hasDiscovered: false }),
       ready: true,
       discoverMinigame: discoverMinigameStub,
+      openSquashGame: openSquashGameStub,
     });
     const { container } = render(<SquashMinigameSection />);
     expect(container.firstChild).toBeNull();
   });
 
   it('renders the launcher once stats indicate discovery', () => {
-    useMinigameDiscoveryMock.mockReturnValue({
+    useSquashMinigameExperienceMock.mockReturnValue({
       stats: buildStats({ hasDiscovered: true }),
       ready: true,
       discoverMinigame: discoverMinigameStub,
+      openSquashGame: openSquashGameStub,
     });
     render(<SquashMinigameSection />);
     expect(screen.getByTestId('neo-terminal-stub')).toBeTruthy();

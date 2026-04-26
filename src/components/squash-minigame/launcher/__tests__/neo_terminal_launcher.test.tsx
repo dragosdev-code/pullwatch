@@ -105,7 +105,18 @@ describe('NeoTerminalLauncher menu', () => {
     expect(button.textContent?.toLowerCase()).toContain('last');
   });
 
-  it('mounts the lazy game shell with the chosen mode when a button is clicked', () => {
+  it('delegates to onRequestPlayMode instead of mounting inline when provided', () => {
+    const stats = ensureCompleteMinigameStats({ hasDiscovered: true } as never);
+    const onRequestPlayMode = vi.fn();
+    render(<NeoTerminalLauncher stats={stats} onRequestPlayMode={onRequestPlayMode} />);
+
+    fireEvent.click(screen.getByTestId('neo-terminal-mode-fridayDeploy'));
+
+    expect(onRequestPlayMode).toHaveBeenCalledWith('fridayDeploy');
+    expect(screen.queryByTestId('neo-terminal-active')).toBeNull();
+  });
+
+  it('mounts the lazy game shell with the chosen mode when a button is clicked (inline)', () => {
     const stats = ensureCompleteMinigameStats({ hasDiscovered: true } as never);
     render(<NeoTerminalLauncher stats={stats} />);
 

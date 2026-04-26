@@ -9,13 +9,14 @@ import {
   type PopupSizePresetId,
 } from '@src/constants/popup-sizes';
 
-const applyPresetToDocument = (id: PopupSizePresetId) => {
+/** Applies the user's saved popup preset to the same CSS vars as `public/popup-size-init.js`. */
+export function applyPopupSizePresetToDocument(id: PopupSizePresetId): void {
   if (typeof document === 'undefined') return;
   const preset = getPopupSizePreset(id);
   const root = document.documentElement;
   root.style.setProperty(POPUP_WIDTH_CSS_VAR, `${preset.width}px`);
   root.style.setProperty(POPUP_HEIGHT_CSS_VAR, `${preset.height}px`);
-};
+}
 
 const validate = (raw: unknown): PopupSizePresetId =>
   getPopupSizePreset(typeof raw === 'string' ? raw : null).id;
@@ -25,7 +26,7 @@ export const usePopupSize = () => {
     key: POPUP_SIZE_STORAGE_KEY,
     defaultValue: DEFAULT_POPUP_SIZE_ID,
     validate,
-    onApply: applyPresetToDocument,
+    onApply: applyPopupSizePresetToDocument,
   });
   return { presetId, presets: POPUP_SIZE_PRESETS, setPreset };
 };

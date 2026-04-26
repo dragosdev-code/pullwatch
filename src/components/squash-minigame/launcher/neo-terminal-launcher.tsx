@@ -8,6 +8,8 @@ import { useRecordRoundResult } from '../hooks/use-record-round-result';
 
 export interface NeoTerminalLauncherProps {
   stats: MinigameStats;
+  /** When set, mode picks open the app overlay instead of mounting `SquashMinigameLazy` inline. */
+  onRequestPlayMode?: (mode: GameMode) => void;
   /** Test seam: replaces the real recorder so storage IO can be observed without mocks. */
   recordRoundResult?: (summary: FinishedRoundSummary) => Promise<void> | void;
 }
@@ -16,7 +18,11 @@ export interface NeoTerminalLauncherProps {
  * Hidden Easter egg launcher. Style: glassmorphism plate with neon accents, theme palette comes
  * from DaisyUI tokens (`primary`, `accent`, `success`) so the user's chosen theme drives the look.
  */
-export function NeoTerminalLauncher({ stats, recordRoundResult }: NeoTerminalLauncherProps) {
+export function NeoTerminalLauncher({
+  stats,
+  onRequestPlayMode,
+  recordRoundResult,
+}: NeoTerminalLauncherProps) {
   const [activeMode, setActiveMode] = useState<GameMode | null>(null);
   const fallbackRecorder = useRecordRoundResult();
 
@@ -34,7 +40,7 @@ export function NeoTerminalLauncher({ stats, recordRoundResult }: NeoTerminalLau
     return (
       <div
         data-testid="neo-terminal-active"
-        className="rounded-xl border border-primary/40 bg-base-100/70 p-1 shadow-[0_0_24px_-12px_var(--color-primary)] backdrop-blur"
+        className="flex min-h-0 min-w-0 flex-1 flex-col rounded-xl border border-primary/40 bg-base-100/70 p-1 shadow-[0_0_24px_-12px_var(--color-primary)] backdrop-blur"
       >
         <Suspense
           fallback={
@@ -68,7 +74,9 @@ export function NeoTerminalLauncher({ stats, recordRoundResult }: NeoTerminalLau
               key={meta.mode}
               type="button"
               data-testid={`neo-terminal-mode-${meta.mode}`}
-              onClick={() => setActiveMode(meta.mode)}
+              onClick={() =>
+                onRequestPlayMode ? onRequestPlayMode(meta.mode) : setActiveMode(meta.mode)
+              }
               className={clsx(
                 'group flex flex-col gap-1 rounded-lg border border-base-300 bg-base-200/60 p-3 text-left transition',
                 'hover:border-primary hover:bg-primary/10 hover:shadow-[0_0_12px_-4px_var(--color-primary)]',

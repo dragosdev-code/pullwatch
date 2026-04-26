@@ -1,21 +1,21 @@
 import { SettingsSection } from '../../settings/shared/components/settings-section';
-import { useMinigameDiscovery } from '../hooks/use-minigame-discovery';
+import { useSquashMinigameExperience } from '../squash-minigame-experience-provider';
 import { NeoTerminalLauncher } from './neo-terminal-launcher';
 
 /**
  * Settings page entry point. Hidden until the user opts in (`stats.hasDiscovered` via
- * {@link useMinigameDiscovery}'s `discoverMinigame`), after the popup-open CTA threshold.
+ * `discoverMinigame`), after the popup-open CTA threshold.
  * Renders nothing while stats hydrate to avoid a flash of the section as the popup boots.
  */
 export function SquashMinigameSection() {
-  const { stats, ready } = useMinigameDiscovery();
+  const { stats, ready, openSquashGame } = useSquashMinigameExperience();
 
   if (!ready || !stats) return null;
   if (!stats.hasDiscovered) return null;
 
   return (
     <SettingsSection title="Squash the Bugs">
-      <NeoTerminalLauncher stats={stats} />
+      <NeoTerminalLauncher stats={stats} onRequestPlayMode={openSquashGame} />
     </SettingsSection>
   );
 }

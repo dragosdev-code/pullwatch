@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { Hud } from '../components/hud';
 import { GameStoreProvider } from '../context/game-store-context';
 import { createGameStore } from '../game-store';
@@ -51,5 +51,18 @@ describe('Hud', () => {
     expect(scoreEl.textContent).toBe('score 20');
     expect(comboEl.textContent).toBe('x1');
     expect(timeEl.textContent).toBe('5s');
+  });
+
+  it('renders Close and calls onExit when provided', () => {
+    const store = createGameStore();
+    store.getState().startGame('standard', 0);
+    const onExit = vi.fn();
+    render(
+      <GameStoreProvider store={store}>
+        <Hud onExit={onExit} />
+      </GameStoreProvider>
+    );
+    fireEvent.click(screen.getByTestId('squash-hud-close'));
+    expect(onExit).toHaveBeenCalledTimes(1);
   });
 });
