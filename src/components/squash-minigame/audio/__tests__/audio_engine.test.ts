@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createAudioEngine } from '../audio-engine';
+import { bugSquashComboPitchMultiplier, createAudioEngine } from '../audio-engine';
 import type { ClickOutcome } from '../../game-types';
 
 interface FakeOscillator {
@@ -93,30 +93,37 @@ describe('createAudioEngine', () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
-  it('plays a square pop at 880Hz for a fresh-phase bug squash with combo pitch shift', () => {
+  it('plays a soft sine pop for a fresh-phase bug squash with gentle log combo pitch shift', () => {
     const ctx = buildFakeContext();
     const engine = createAudioEngine({
       audioContextFactory: () => ctx as unknown as AudioContext,
     });
     engine.playOutcome(bugSquashed(4), 4);
     expect(ctx.oscillators).toHaveLength(1);
-    expect(ctx.oscillators[0].type).toBe('square');
-    // fresh phase base = 880Hz, combo multiplier = 1 + 4*0.05 = 1.2
-    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(880 * (1 + 4 * 0.05), 4);
+    expect(ctx.oscillators[0].type).toBe('sine');
+    const base = 720;
+    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(
+      base * bugSquashComboPitchMultiplier(4),
+      4,
+    );
     expect(ctx.oscillators[0].start).toHaveBeenCalledTimes(1);
     expect(ctx.oscillators[0].stop).toHaveBeenCalledTimes(1);
   });
 
-  it('caps the combo pitch multiplier at 4x to stay under the Nyquist limit', () => {
+  it('caps the combo pitch lift so long streaks stay in a warm band (no runaway highs)', () => {
     const ctx = buildFakeContext();
     const engine = createAudioEngine({
       audioContextFactory: () => ctx as unknown as AudioContext,
     });
     engine.playOutcome(bugSquashed(500), 500);
-    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(880 * 4, 4);
+    const base = 720;
+    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(
+      base * bugSquashComboPitchMultiplier(500),
+      4,
+    );
   });
 
-  it('uses 660Hz square for a middle-phase bug squash', () => {
+  it('uses 600Hz sine for a middle-phase bug squash', () => {
     const ctx = buildFakeContext();
     const engine = createAudioEngine({
       audioContextFactory: () => ctx as unknown as AudioContext,
@@ -125,11 +132,11 @@ describe('createAudioEngine', () => {
       kind: 'bug_squashed', basePoints: 5, multiplier: 1, points: 5, combo: 1, phase: 'middle',
     };
     engine.playOutcome(outcome, 1);
-    expect(ctx.oscillators[0].type).toBe('square');
-    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(660 * (1 + 1 * 0.05), 4);
+    expect(ctx.oscillators[0].type).toBe('sine');
+    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(600 * bugSquashComboPitchMultiplier(1), 4);
   });
 
-  it('uses 440Hz triangle for a final-phase bug squash', () => {
+  it('uses 500Hz sine for a final-phase bug squash', () => {
     const ctx = buildFakeContext();
     const engine = createAudioEngine({
       audioContextFactory: () => ctx as unknown as AudioContext,
@@ -138,8 +145,8 @@ describe('createAudioEngine', () => {
       kind: 'bug_squashed', basePoints: 2, multiplier: 1, points: 2, combo: 1, phase: 'final',
     };
     engine.playOutcome(outcome, 1);
-    expect(ctx.oscillators[0].type).toBe('triangle');
-    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(440 * (1 + 1 * 0.05), 4);
+    expect(ctx.oscillators[0].type).toBe('sine');
+    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(500 * bugSquashComboPitchMultiplier(1), 4);
   });
 
   it('does not pitch shift the bug crack tone by combo and uses phase freq times 0.75', () => {
@@ -148,8 +155,8 @@ describe('createAudioEngine', () => {
       audioContextFactory: () => ctx as unknown as AudioContext,
     });
     engine.playOutcome({ kind: 'bug_cracked', combo: 9, phase: 'fresh' }, 9);
-    // fresh phase = 880Hz, crack = 880 * 0.75 = 660, no combo scaling
-    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(880 * 0.75, 4);
+    // fresh base = 720Hz, crack = 720 * 0.75, no combo scaling
+    expect(ctx.oscillators[0].frequency.value).toBeCloseTo(720 * 0.75, 4);
   });
 
   it('plays a sawtooth tone for feature break and a triangle for miss', () => {

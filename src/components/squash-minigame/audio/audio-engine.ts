@@ -13,30 +13,43 @@ export interface AudioEngineDeps {
   now?: (ctx: AudioContext) => number;
 }
 
-const POP_DURATION_S = 0.08;
+const POP_DURATION_S = 0.11;
+const POP_ATTACK_S = 0.014;
 const FEATURE_DURATION_S = 0.25;
 const FEATURE_FREQ = 180;
 const MISS_DURATION_S = 0.1;
 const MISS_FREQ = 110;
 
+/** Log-scaled extra pitch on bug squashes; capped so combo runs stay warm, not piercing. */
+const COMBO_PITCH_LOG_COEFF = 0.03;
+const COMBO_PITCH_MAX = 0.1;
+
+/**
+ * Combo feedback for bug squashes: gentle pitch rise that saturates (log), not a linear run-up
+ * to harsh highs. Exported for unit tests; keep in sync with `playOutcome`.
+ */
+export function bugSquashComboPitchMultiplier(combo: number): number {
+  const c = Math.max(0, combo);
+  return 1 + Math.min(COMBO_PITCH_MAX, COMBO_PITCH_LOG_COEFF * Math.log(1 + c));
+}
+
 /**
  * Phase-specific frequencies and wave shapes for bug squash / crack tones.
  *
- * WHY [descending freq by phase]: fresh bugs are the most valuable (10 pts) so they get the
- * highest, brightest tone. Final-phase bugs use a softer triangle wave at 440Hz to signal
- * that the player waited too long and the reward is diminished.
+ * WHY [descending freq by phase]: each step is a little lower; all sit in a light mid “chime” band
+ * above muddy bass, with sine only so the stroke stays soft and unabrasive.
  */
 const PHASE_TONE: Record<BugPhase, { freq: number; type: OscillatorType; peakGain: number }> = {
-  fresh:  { freq: 880, type: 'square',   peakGain: 0.30 },
-  middle: { freq: 660, type: 'square',   peakGain: 0.25 },
-  final:  { freq: 440, type: 'triangle', peakGain: 0.20 },
+  fresh:  { freq: 720, type: 'sine', peakGain: 0.19 },
+  middle: { freq: 600, type: 'sine', peakGain: 0.18 },
+  final:  { freq: 500, type: 'sine', peakGain: 0.16 },
 };
 
 interface ToneSpec {
   freq: number;
   durationS: number;
   type: OscillatorType;
-  /** Combo pitch multiplier per spec: `1 + comboCount * 0.05`. Only the bug pop scales by combo. */
+  /** When true, frequency is scaled by `bugSquashComboPitchMultiplier(combo)` (log + cap). */
   scaleByCombo: boolean;
   peakGain: number;
 }
@@ -85,9 +98,8 @@ function specForOutcome(outcome: ClickOutcome): ToneSpec | null {
 }
 
 /**
- * Produces short procedurally generated tones for each click outcome. Bug squash pops scale up
- * in pitch with the combo counter (`1 + combo * 0.05`) per spec, capped to a 4x ceiling so a
- * fifty plus combo does not reach the Nyquist limit and squeak.
+ * Produces short procedurally generated tones for each click outcome. Bug squash pops use a
+ * small, log-saturated pitch lift on combo so long streaks still feel “fuller” without getting shrill.
  *
  * WHY [lazy AudioContext]: browsers block AudioContext construction until a user gesture. The
  * factory is invoked from inside `playOutcome`, so the first click is the trigger.
@@ -124,14 +136,14 @@ export function createAudioEngine(deps: AudioEngineDeps = {}): AudioEngine {
       if (!audio) return;
 
       const startAt = now(audio);
-      const comboMultiplier = spec.scaleByCombo ? Math.min(4, 1 + combo * 0.05) : 1;
+      const comboMultiplier = spec.scaleByCombo ? bugSquashComboPitchMultiplier(combo) : 1;
 
       const osc = audio.createOscillator();
       const gain = audio.createGain();
       osc.type = spec.type;
       osc.frequency.value = spec.freq * comboMultiplier;
       gain.gain.setValueAtTime(0, startAt);
-      gain.gain.linearRampToValueAtTime(spec.peakGain, startAt + 0.005);
+      gain.gain.linearRampToValueAtTime(spec.peakGain, startAt + POP_ATTACK_S);
       gain.gain.exponentialRampToValueAtTime(0.0001, startAt + spec.durationS);
       osc.connect(gain);
       gain.connect(audio.destination);

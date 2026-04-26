@@ -21,9 +21,8 @@ export const POINTS_PER_FEATURE = -20;
  * Cap on the combo multiplier applied to per-hit base points (`points = base * min(cap, combo)`).
  *
  * WHY [cap]: without one, a 50-combo run pays 50x base — old high scores become trivially
- * unreachable and HUD numbers explode. Cap aligns with the existing audio pitch ceiling concept
- * (audio caps at 4x via `1 + combo * 0.05`, asymptote at 60), but is intentionally higher so the
- * scoring reward outpaces the audio sweetener.
+ * unreachable and HUD numbers explode. The audio layer uses a separate, gentle log-capped pitch
+ * sweetener on bug squashes; scoring is intentionally more generous than that ear candy.
  */
 export const COMBO_SCORE_MULTIPLIER_CAP = 10;
 
