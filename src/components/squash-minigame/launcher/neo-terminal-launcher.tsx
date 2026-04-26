@@ -89,7 +89,7 @@ export function NeoTerminalLauncher({
               )}
             >
               <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold uppercase tracking-wider text-primary group-hover:text-primary-content">
+                <span className="font-mono text-xs font-bold uppercase tracking-wider text-primary">
                   {meta.label}
                 </span>
                 {isLast && (
