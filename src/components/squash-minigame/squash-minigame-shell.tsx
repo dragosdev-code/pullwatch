@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import type { MinigameSessionCheckpoint } from '@common/types';
 import { createGameStore, type GameStore } from './game-store';
 import { createGameLoop, type GameLoop } from './game-loop';
+import { buildCheckpointFromState } from './build-checkpoint';
 import type { FinishedRoundSummary, GameMode } from './game-types';
 import { GameStoreProvider } from './context/game-store-context';
 import { SquashMinigameBody } from './components/squash-minigame-body';
@@ -33,6 +35,20 @@ export interface SquashMinigameProps {
   audioOptions?: UseAudioEffectsOptions;
   /** Disable the FCT canvas overlay. Tests omit this to keep happy dom canvas mocks tiny. */
   disableFctOverlay?: boolean;
+  /**
+   * When set, the shell resumes from this checkpoint instead of starting a fresh round.
+   * The checkpoint is consumed once; subsequent replays start fresh.
+   */
+  checkpoint?: MinigameSessionCheckpoint | null;
+  /**
+   * Called on unmount if the game is mid-round (`playing`). The provider persists the
+   * returned checkpoint to chrome.storage.local so the next popup open can resume.
+   */
+  onSaveCheckpoint?: (cp: MinigameSessionCheckpoint) => void;
+  /**
+   * Called when the round finishes normally so the checkpoint is cleared from storage.
+   */
+  onClearCheckpoint?: () => void;
 }
 
 const defaultCreateStore = () => createGameStore();
@@ -61,13 +77,24 @@ export function SquashMinigame({
   createLoopFn = defaultCreateLoop,
   audioOptions,
   disableFctOverlay = false,
+  checkpoint = null,
+  onSaveCheckpoint,
+  onClearCheckpoint,
 }: SquashMinigameProps) {
   const [store, setStore] = useState<GameStore | null>(null);
   const [replayToken, setReplayToken] = useState(0);
   const createStoreRef = useRef(createStoreFn);
   const createLoopRef = useRef(createLoopFn);
+  const onSaveCheckpointRef = useRef(onSaveCheckpoint);
+  const onClearCheckpointRef = useRef(onClearCheckpoint);
   createStoreRef.current = createStoreFn;
   createLoopRef.current = createLoopFn;
+  onSaveCheckpointRef.current = onSaveCheckpoint;
+  onClearCheckpointRef.current = onClearCheckpoint;
+
+  /** Consumed once on the first mount when a checkpoint is provided. */
+  const checkpointRef = useRef(checkpoint);
+  const checkpointConsumedRef = useRef(false);
 
   useEffect(() => {
     const buildStore = createStoreRef.current;
@@ -76,11 +103,57 @@ export function SquashMinigame({
     const nextLoop = buildLoop(nextStore);
     setStore(nextStore);
 
-    nextStore.getState().startGame(mode, performance.now());
+    const cp = checkpointRef.current;
+    if (cp && !checkpointConsumedRef.current) {
+      checkpointConsumedRef.current = true;
+      nextStore.getState().resumeFromCheckpoint(cp, performance.now());
+    } else {
+      nextStore.getState().startGame(mode, performance.now());
+    }
     nextLoop.start();
 
+    /**
+     * WHY [periodic save, not just unmount]: `chrome.storage.local.set` is async. When the
+     * popup closes abruptly (user clicks outside, presses Escape), the JS context is destroyed
+     * before the effect cleanup's async write can complete. By saving every 3 seconds, storage
+     * always has a recent checkpoint regardless of how the popup exits.
+     *
+     * The 3s cadence is a balance: frequent enough that losing at most 3s of progress is
+     * acceptable, rare enough that it doesn't hammer chrome.storage during gameplay.
+     */
+    const CHECKPOINT_SAVE_INTERVAL_MS = 3_000;
+    const saveInterval = setInterval(() => {
+      const state = nextStore.getState();
+      if (state.status === 'playing') {
+        const snap = buildCheckpointFromState(state, Date.now());
+        if (snap) {
+          onSaveCheckpointRef.current?.(snap);
+        }
+      }
+    }, CHECKPOINT_SAVE_INTERVAL_MS);
+
+    /**
+     * WHY [clear on finish]: when the round ends normally, remove the checkpoint so the next
+     * popup open doesn't show the paused overlay for a completed game.
+     */
+    const unsubscribe = nextStore.subscribe((state) => {
+      if (state.status === 'finished') {
+        onClearCheckpointRef.current?.();
+      }
+    });
+
     return () => {
+      clearInterval(saveInterval);
+      unsubscribe();
       nextLoop.stop();
+      // Best-effort last-second save (may not complete if popup is closing).
+      const state = nextStore.getState();
+      if (state.status === 'playing') {
+        const snap = buildCheckpointFromState(state, Date.now());
+        if (snap) {
+          onSaveCheckpointRef.current?.(snap);
+        }
+      }
       nextStore.getState().reset();
     };
   }, [mode, replayToken]);

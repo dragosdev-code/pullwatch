@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import type { MinigameSessionCheckpoint } from '@common/types';
 import type { FinishedRoundSummary, GameMode } from './game-types';
 import { applyPopupSizePresetToDocument, usePopupSize } from '@src/hooks/use-popup-size';
 import {
@@ -18,10 +19,16 @@ import {
 import { useRecordRoundResult } from './hooks/use-record-round-result';
 import { ensureCompleteMinigameStats } from './storage/minigame-stats-defaults';
 import { readMinigameStats, writeMinigameStats } from './storage/minigame-stats-storage';
+import {
+  clearSessionCheckpoint,
+  readSessionCheckpoint,
+  writeSessionCheckpoint,
+} from './storage/session-checkpoint-storage';
 import { applyMinigameSessionPopupDimensions } from './minigame-popup-session-size';
 import { SquashQuickStartBoard } from './quick-start/squash-quick-start-board';
 import { SquashMinigameLoadingScreen } from './squash-minigame-loading-screen';
 import { SquashMinigameLazy } from './squash-minigame.lazy';
+import { PausedOverlay } from './components/paused-overlay';
 import {
   popupResizeFallbackTimeoutMs,
   waitForPopupShellResizeComplete,
@@ -32,8 +39,10 @@ type SessionState =
   /** Same warm-up as `loading` (spinner + resize + shell chunk) before first-time quick start. */
   | { stage: 'intro_loading' }
   | { stage: 'intro' }
-  | { stage: 'loading'; mode: GameMode }
-  | { stage: 'game'; mode: GameMode }
+  | { stage: 'loading'; mode: GameMode; checkpoint?: MinigameSessionCheckpoint }
+  | { stage: 'game'; mode: GameMode; checkpoint?: MinigameSessionCheckpoint }
+  /** Popup re-opened with a saved checkpoint; PausedOverlay shown with Resume / Discard. */
+  | { stage: 'paused'; checkpoint: MinigameSessionCheckpoint }
   | { stage: 'closing' };
 
 export type SquashMinigameExperienceValue = UseMinigameDiscoveryResult & {
@@ -185,7 +194,7 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
       if (cancelled) return;
       setSession((prev) => {
         if (!prev || prev.stage !== 'loading' || prev.mode !== mode) return prev;
-        return { stage: 'game', mode };
+        return { stage: 'game', mode, checkpoint: prev.checkpoint };
       });
     });
 
@@ -193,6 +202,52 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
       cancelled = true;
     };
   }, [loadingToken]);
+
+  // ── Checkpoint hydration on mount ───────────────────────────────────────────
+  /**
+   * WHY [mount-only]: this runs once when the provider mounts (popup open). If a checkpoint
+   * exists, we show the paused overlay instead of the normal PR list. If the user explicitly
+   * opened a game via a launcher, that takes precedence (`session !== null` guard).
+   */
+  const [checkpointChecked, setCheckpointChecked] = useState(false);
+  useEffect(() => {
+    if (checkpointChecked) return;
+    let cancelled = false;
+    void readSessionCheckpoint().then((cp) => {
+      if (cancelled) return;
+      setCheckpointChecked(true);
+      if (cp && cp.timeRemainingMs > 0) {
+        setSession((prev) => {
+          // Don't overwrite an active session the user launched explicitly.
+          if (prev !== null) return prev;
+          return { stage: 'paused', checkpoint: cp };
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkpointChecked]);
+
+  const handleResume = useCallback(() => {
+    setSession((prev) => {
+      if (!prev || prev.stage !== 'paused') return prev;
+      return { stage: 'loading', mode: prev.checkpoint.mode, checkpoint: prev.checkpoint };
+    });
+  }, []);
+
+  const handleDiscard = useCallback(() => {
+    void clearSessionCheckpoint();
+    setSession(null);
+  }, []);
+
+  const handleSaveCheckpoint = useCallback((cp: MinigameSessionCheckpoint) => {
+    void writeSessionCheckpoint(cp);
+  }, []);
+
+  const handleClearCheckpoint = useCallback(() => {
+    void clearSessionCheckpoint();
+  }, []);
 
   useEffect(() => {
     if (!session || session.stage !== 'closing') return;
@@ -253,6 +308,13 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
             }}
           />
         ) : null}
+        {session.stage === 'paused' ? (
+          <PausedOverlay
+            checkpoint={session.checkpoint}
+            onResume={handleResume}
+            onDiscard={handleDiscard}
+          />
+        ) : null}
         {session.stage === 'loading' ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <SquashMinigameLoadingScreen />
@@ -273,6 +335,9 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
                 onExit={closeSquashGame}
                 onFinish={handleFinish}
                 onChangeMode={handleGameChangeMode}
+                checkpoint={session.checkpoint}
+                onSaveCheckpoint={handleSaveCheckpoint}
+                onClearCheckpoint={handleClearCheckpoint}
               />
             </div>
           </Suspense>

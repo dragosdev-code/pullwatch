@@ -96,6 +96,8 @@ export const DEV_TEST_AREA_ENABLE_DELAY_MS = 5000;
 
 /** Easter egg minigame stats blob (popup open count, discovery flag, scores). Local storage. */
 export const STORAGE_KEY_MINIGAME_STATS = 'minigame_stats';
+/** In-flight game checkpoint for pause/resume across popup close. Separate key from stats so corruption in one doesn't block the other. */
+export const STORAGE_KEY_MINIGAME_SESSION_CHECKPOINT = 'minigame_session_checkpoint';
 /** Popup opens required to flip {@link MinigameStats.hasDiscovered}. */
 export const MINIGAME_DISCOVERY_THRESHOLD = 42;
 

@@ -190,6 +190,27 @@ export interface MinigameStats {
   modes: Record<GameMode, MinigameModeStats>;
 }
 
+/**
+ * Serializable snapshot of an in-flight game session, persisted to chrome.storage.local so a
+ * popup close mid-round does not lose progress.
+ *
+ * WHY [wall-clock `savedAt`]: on resume, `savedAt` lets the store compute how long the popup
+ * was closed so it can subtract that dead time from `elapsedMs` rather than pretending the
+ * player was idle the whole time. `timeRemainingMs` is the authoritative remaining time.
+ */
+export interface MinigameSessionCheckpoint {
+  mode: GameMode;
+  score: number;
+  combo: number;
+  highestCombo: number;
+  bugsSquashed: number;
+  featuresBroken: number;
+  elapsedMs: number;
+  timeRemainingMs: number;
+  gridSize: number;
+  savedAt: number;
+}
+
 /** Request-style runtime message (`payload`; used by popup, background, offscreen). */
 export type RuntimeRequestMessage<T = unknown> = {
   action: RequestRuntimeAction;

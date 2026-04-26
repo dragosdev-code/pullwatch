@@ -17,6 +17,7 @@ import type {
   LastClick,
   Target,
 } from './game-types';
+import type { MinigameSessionCheckpoint } from '@common/types';
 
 export interface GameState {
   mode: GameMode;
@@ -59,6 +60,12 @@ export interface GameState {
 
 export interface GameActions {
   startGame(mode: GameMode, now: number): void;
+  /**
+   * Restore a round from a persisted checkpoint. Rebuilds timer and counters but does NOT
+   * restore individual targets (they would be stale). The normal spawn cadence fills the grid
+   * naturally on the next tick.
+   */
+  resumeFromCheckpoint(checkpoint: MinigameSessionCheckpoint, now: number): void;
   endGame(): void;
   reset(): void;
   tick(now: number): void;
@@ -196,6 +203,41 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
         lastClick: null,
         hitStopUntil: 0,
         shakeUntil: 0,
+      });
+    },
+
+    /**
+     * Restore from a checkpoint saved by the experience provider on popup close.
+     *
+     * WHY [no target restore]: persisting each target's spawn/despawn times would be fragile
+     * (they reference `performance.now()` which resets across popup opens). Starting with an
+     * empty grid and letting the spawn cadence fill it naturally is safer and feels seamless
+     * since the first bug spawns within `spawnIntervalMs`.
+     */
+    resumeFromCheckpoint(checkpoint, now) {
+      const config = MODE_CONFIGS[checkpoint.mode];
+      recentlyDespawned.clear();
+      set({
+        mode: checkpoint.mode,
+        status: 'playing',
+        config,
+        gridSize: checkpoint.gridSize,
+        activeTargets: new Array(checkpoint.gridSize ** 2).fill(null),
+        score: checkpoint.score,
+        combo: checkpoint.combo,
+        highestCombo: checkpoint.highestCombo,
+        bugsSquashed: checkpoint.bugsSquashed,
+        featuresBroken: checkpoint.featuresBroken,
+        startedAt: now - checkpoint.elapsedMs,
+        elapsedMs: checkpoint.elapsedMs,
+        timeRemainingMs: checkpoint.timeRemainingMs,
+        hitStopUntil: 0,
+        shakeUntil: 0,
+        nextBugSpawnAt: now + config.spawnIntervalMs,
+        nextFeatureSpawnAt: now + config.featureSpawnIntervalMs,
+        lastClick: null,
+        roundId: getNextSessionRoundId(),
+        nextClickId: 0,
       });
     },
 
