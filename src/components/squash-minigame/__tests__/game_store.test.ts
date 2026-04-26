@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createGameStore } from '../game-store';
+import { createGameStore, __resetSessionRoundIdForTests } from '../game-store';
 import {
   FEATURE_SPAWN_PROBABILITY,
   HIT_STOP_MS,
@@ -9,6 +9,10 @@ import {
   SCREEN_SHAKE_MS,
 } from '../game-config';
 import type { Target } from '../game-types';
+
+beforeEach(() => {
+  __resetSessionRoundIdForTests();
+});
 
 function buildStore(
   opts: {
@@ -53,6 +57,7 @@ describe('startGame', () => {
     const s = store.getState();
     expect(s.status).toBe('playing');
     expect(s.mode).toBe('standard');
+    expect(s.roundId).toBe(1);
     expect(s.gridSize).toBe(3);
     expect(s.activeTargets).toHaveLength(9);
     expect(s.timeRemainingMs).toBe(30_000);
@@ -222,10 +227,37 @@ describe('tick advancing the simulation', () => {
   });
 });
 
+describe('endGame', () => {
+  it('sets time remaining to zero and matches elapsed to the implied clock from the timer', () => {
+    const { store } = buildStore();
+    store.getState().startGame('standard', 0);
+    store.setState({ timeRemainingMs: 20_000, elapsedMs: 10_000 });
+    store.getState().endGame();
+    const s = store.getState();
+    expect(s.status).toBe('finished');
+    expect(s.timeRemainingMs).toBe(0);
+    expect(s.elapsedMs).toBe(10_000);
+    expect(s.lastClick).toBeNull();
+  });
+
+  it('is a no op when not playing', () => {
+    const { store } = buildStore();
+    store.getState().endGame();
+    expect(store.getState().status).toBe('idle');
+  });
+});
+
 describe('clickCell scoring and combo behavior', () => {
   it('returns noop when the game is not playing', () => {
     const { store } = buildStore();
     expect(store.getState().clickCell(0, 0)).toEqual({ kind: 'noop' });
+  });
+
+  it('returns noop for out of range cell indices', () => {
+    const { store } = buildStore();
+    store.getState().startGame('standard', 0);
+    expect(store.getState().clickCell(-1, 0)).toEqual({ kind: 'noop' });
+    expect(store.getState().clickCell(9, 0)).toEqual({ kind: 'noop' });
   });
 
   it('squashes a bug for plus ten points and increments the combo', () => {

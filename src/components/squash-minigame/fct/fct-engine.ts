@@ -5,6 +5,8 @@ export interface FctParticle {
   text: string;
   color: string;
   cellIndex: number;
+  /** Row/col mapping uses this N so FCT does not jump when the grid grows mid-particle. */
+  layoutGridSize: number;
   spawnedAt: number;
   lifetimeMs: number;
 }
@@ -44,7 +46,12 @@ export function createFctEngine() {
   let nextId = 0;
 
   return {
-    spawn(outcome: ClickOutcome, cellIndex: number, now: number): FctParticle | null {
+    spawn(
+      outcome: ClickOutcome,
+      cellIndex: number,
+      now: number,
+      layoutGridSize: number
+    ): FctParticle | null {
       const desc = describeOutcome(outcome);
       if (!desc) return null;
       nextId += 1;
@@ -53,6 +60,7 @@ export function createFctEngine() {
         text: desc.text,
         color: desc.color,
         cellIndex,
+        layoutGridSize,
         spawnedAt: now,
         lifetimeMs: FCT_LIFETIME_MS,
       };

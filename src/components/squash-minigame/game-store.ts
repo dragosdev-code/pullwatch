@@ -32,6 +32,9 @@ export interface GameState {
   nextSpawnAt: number;
   /** Most recent click outcome, kept for the canvas overlay to consume in Phase 4. */
   lastClick: LastClick | null;
+  /** Monotonic per `startGame`, used to dedupe onFinish and stats in React StrictMode. */
+  roundId: number;
+  nextClickId: number;
 }
 
 export interface GameActions {
@@ -47,6 +50,18 @@ export type GameStore = StoreApi<GameState & GameActions>;
 export interface GameStoreDeps {
   random?: () => number;
   generateId?: () => string;
+}
+
+let nextSessionRoundId = 0;
+
+function getNextSessionRoundId(): number {
+  nextSessionRoundId += 1;
+  return nextSessionRoundId;
+}
+
+/** Test only: reset so each test file can assert predictable `roundId` from the first `startGame`. */
+export function __resetSessionRoundIdForTests(): void {
+  nextSessionRoundId = 0;
 }
 
 let fallbackIdCounter = 0;
@@ -76,6 +91,8 @@ function buildIdleState(): GameState {
     shakeUntil: 0,
     nextSpawnAt: 0,
     lastClick: null,
+    roundId: 0,
+    nextClickId: 0,
   };
 }
 
@@ -117,14 +134,23 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
         shakeUntil: 0,
         nextSpawnAt: now + config.spawnIntervalMs,
         lastClick: null,
+        roundId: getNextSessionRoundId(),
+        nextClickId: 0,
       });
     },
 
     endGame() {
       const s = get();
+      if (s.status !== 'playing') return;
+      const elapsedMs = Math.max(0, s.config.durationMs - s.timeRemainingMs);
       set({
         status: 'finished',
         activeTargets: new Array(s.activeTargets.length).fill(null),
+        elapsedMs: Math.min(s.config.durationMs, elapsedMs),
+        timeRemainingMs: 0,
+        lastClick: null,
+        hitStopUntil: 0,
+        shakeUntil: 0,
       });
     },
 
@@ -219,15 +245,22 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
       if (s.status !== 'playing') {
         return { kind: 'noop' };
       }
+      if (cellIndex < 0 || cellIndex >= s.activeTargets.length) {
+        return { kind: 'noop' };
+      }
 
       const target = s.activeTargets[cellIndex] ?? null;
 
       if (target === null) {
         const outcome: ClickOutcome = { kind: 'miss' };
-        set({
-          combo: 0,
-          shakeUntil: now + SCREEN_SHAKE_MS,
-          lastClick: { outcome, cellIndex, at: now },
+        set((state) => {
+          const id = state.nextClickId;
+          return {
+            combo: 0,
+            shakeUntil: now + SCREEN_SHAKE_MS,
+            lastClick: { id, outcome, cellIndex, at: now },
+            nextClickId: id + 1,
+          };
         });
         return outcome;
       }
@@ -239,13 +272,17 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
           kind: 'feature_broken',
           points: POINTS_PER_FEATURE,
         };
-        set({
-          activeTargets: next,
-          score: s.score + POINTS_PER_FEATURE,
-          combo: 0,
-          featuresBroken: s.featuresBroken + 1,
-          shakeUntil: now + SCREEN_SHAKE_MS,
-          lastClick: { outcome, cellIndex, at: now },
+        set((state) => {
+          const id = state.nextClickId;
+          return {
+            activeTargets: next,
+            score: s.score + POINTS_PER_FEATURE,
+            combo: 0,
+            featuresBroken: s.featuresBroken + 1,
+            shakeUntil: now + SCREEN_SHAKE_MS,
+            lastClick: { id, outcome, cellIndex, at: now },
+            nextClickId: id + 1,
+          };
         });
         return outcome;
       }
@@ -255,10 +292,14 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
         const next = s.activeTargets.slice();
         next[cellIndex] = { ...target, damageStage: target.damageStage + 1 };
         const outcome: ClickOutcome = { kind: 'bug_cracked', combo: s.combo };
-        set({
-          activeTargets: next,
-          hitStopUntil: now + HIT_STOP_MS,
-          lastClick: { outcome, cellIndex, at: now },
+        set((state) => {
+          const id = state.nextClickId;
+          return {
+            activeTargets: next,
+            hitStopUntil: now + HIT_STOP_MS,
+            lastClick: { id, outcome, cellIndex, at: now },
+            nextClickId: id + 1,
+          };
         });
         return outcome;
       }
@@ -271,14 +312,18 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
         points: POINTS_PER_BUG,
         combo: newCombo,
       };
-      set({
-        activeTargets: next,
-        score: s.score + POINTS_PER_BUG,
-        combo: newCombo,
-        highestCombo: Math.max(s.highestCombo, newCombo),
-        bugsSquashed: s.bugsSquashed + 1,
-        hitStopUntil: now + HIT_STOP_MS,
-        lastClick: { outcome, cellIndex, at: now },
+      set((state) => {
+        const id = state.nextClickId;
+        return {
+          activeTargets: next,
+          score: s.score + POINTS_PER_BUG,
+          combo: newCombo,
+          highestCombo: Math.max(s.highestCombo, newCombo),
+          bugsSquashed: s.bugsSquashed + 1,
+          hitStopUntil: now + HIT_STOP_MS,
+          lastClick: { id, outcome, cellIndex, at: now },
+          nextClickId: id + 1,
+        };
       });
       return outcome;
     },

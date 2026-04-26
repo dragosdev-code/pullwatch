@@ -29,6 +29,8 @@ export type ClickOutcome =
   | { kind: 'noop' };
 
 export interface LastClick {
+  /** Monotonically increasing within a play session; consumers dedupe FCT and audio on this, not on `at`. */
+  id: number;
   outcome: ClickOutcome;
   cellIndex: number;
   at: number;

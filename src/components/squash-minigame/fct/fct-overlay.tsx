@@ -18,15 +18,17 @@ function drawParticle(
   ctx: CanvasRenderingContext2D,
   particle: FctParticle,
   now: number,
-  cellWidth: number,
-  cellHeight: number,
-  gridSize: number
+  canvasWidth: number,
+  canvasHeight: number
 ) {
+  const g = particle.layoutGridSize;
+  const cellWidth = canvasWidth / g;
+  const cellHeight = canvasHeight / g;
   const elapsed = now - particle.spawnedAt;
   const progress = Math.min(1, Math.max(0, elapsed / particle.lifetimeMs));
   const eased = easeOutCubic(progress);
-  const row = Math.floor(particle.cellIndex / gridSize);
-  const col = particle.cellIndex % gridSize;
+  const row = Math.floor(particle.cellIndex / g);
+  const col = particle.cellIndex % g;
   const x = (col + 0.5) * cellWidth;
   const baseY = (row + 0.5) * cellHeight;
   const y = baseY - eased * cellHeight * 0.6;
@@ -62,12 +64,12 @@ export function FctOverlay({
   }
 
   useEffect(() => {
-    let lastClickAt = store.getState().lastClick?.at ?? -1;
+    let lastClickId = store.getState().lastClick?.id ?? -1;
     const unsubscribe = store.subscribe((state) => {
       const click = state.lastClick;
-      if (!click || click.at === lastClickAt) return;
-      lastClickAt = click.at;
-      engineRef.current?.spawn(click.outcome, click.cellIndex, click.at);
+      if (!click || click.id === lastClickId) return;
+      lastClickId = click.id;
+      engineRef.current?.spawn(click.outcome, click.cellIndex, click.at, state.gridSize);
     });
     return unsubscribe;
   }, [store]);
@@ -84,12 +86,9 @@ export function FctOverlay({
       if (!e) return;
       const t = now();
       const snapshot = e.snapshot(t);
-      const { gridSize } = store.getState();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const cellWidth = canvas.width / gridSize;
-      const cellHeight = canvas.height / gridSize;
       for (const particle of snapshot.particles) {
-        drawParticle(ctx, particle, t, cellWidth, cellHeight, gridSize);
+        drawParticle(ctx, particle, t, canvas.width, canvas.height);
       }
       handle = requestFrame(draw);
     };

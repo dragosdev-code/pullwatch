@@ -38,10 +38,12 @@ describe('useAudioEffects', () => {
       store.setState({
         combo: 3,
         lastClick: {
+          id: 0,
           outcome: { kind: 'bug_squashed', points: 10, combo: 3 },
           cellIndex: 0,
           at: 100,
         },
+        nextClickId: 1,
       });
     });
 
@@ -59,10 +61,12 @@ describe('useAudioEffects', () => {
       store.setState({
         combo: 5,
         lastClick: {
+          id: 0,
           outcome: { kind: 'feature_broken', points: -20 },
           cellIndex: 0,
           at: 200,
         },
+        nextClickId: 1,
       });
     });
 
@@ -76,15 +80,16 @@ describe('useAudioEffects', () => {
     renderHook(() => useAudioEffects({ engine }), { wrapper: wrap(store) });
 
     const click = {
+      id: 0,
       outcome: { kind: 'miss' as const },
       cellIndex: 0,
       at: 50,
     };
     act(() => {
-      store.setState({ lastClick: click });
+      store.setState({ lastClick: click, nextClickId: 1 });
     });
     act(() => {
-      store.setState({ lastClick: click });
+      store.setState({ lastClick: click, nextClickId: 1 });
     });
 
     expect(engine.playSpy).toHaveBeenCalledTimes(1);

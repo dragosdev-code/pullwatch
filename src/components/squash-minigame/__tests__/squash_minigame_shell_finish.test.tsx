@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, act } from '@testing-library/react';
-import { SquashMinigame } from '../squash-minigame-shell';
-import { createGameStore } from '../game-store';
+import { SquashMinigame, __resetLastFinishNotificationForTests } from '../squash-minigame-shell';
+import { createGameStore, __resetSessionRoundIdForTests } from '../game-store';
 import type { GameLoop } from '../game-loop';
 
 function noopLoop(): GameLoop {
@@ -14,6 +14,8 @@ function noopLoop(): GameLoop {
 
 beforeEach(() => {
   vi.spyOn(performance, 'now').mockReturnValue(1_000);
+  __resetSessionRoundIdForTests();
+  __resetLastFinishNotificationForTests();
 });
 
 afterEach(() => {
@@ -48,6 +50,7 @@ describe('SquashMinigame onFinish reporter', () => {
     expect(onFinish).toHaveBeenCalledTimes(1);
     expect(onFinish).toHaveBeenCalledWith({
       mode: 'standard',
+      roundId: 1,
       score: 110,
       highestCombo: 6,
       bugsSquashed: 11,

@@ -1,6 +1,11 @@
 import type { GameMode, MinigameStats } from '@common/types';
 
 export interface RoundResult {
+  /**
+   * Unique for each `startGame` in the session. Deduplication for `useRecordRoundResult` and
+   * `onFinish` uses this; it is not persisted into MinigameStats.
+   */
+  roundId: number;
   mode: GameMode;
   score: number;
   highestCombo: number;

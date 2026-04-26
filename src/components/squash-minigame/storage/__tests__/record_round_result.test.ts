@@ -6,6 +6,7 @@ describe('applyRoundResultToStats', () => {
   it('records the first play for a mode and bumps overall counters', () => {
     const start = ensureCompleteMinigameStats(undefined);
     const next = applyRoundResultToStats(start, {
+      roundId: 1,
       mode: 'standard',
       score: 50,
       highestCombo: 4,
@@ -29,6 +30,7 @@ describe('applyRoundResultToStats', () => {
       },
     } as never);
     const next = applyRoundResultToStats(start, {
+      roundId: 1,
       mode: 'standard',
       score: 80,
       highestCombo: 9,
@@ -44,6 +46,7 @@ describe('applyRoundResultToStats', () => {
   it('only mutates the matching mode bucket', () => {
     const start = ensureCompleteMinigameStats(undefined);
     const next = applyRoundResultToStats(start, {
+      roundId: 1,
       mode: 'fridayDeploy',
       score: 200,
       highestCombo: 12,
@@ -60,6 +63,7 @@ describe('applyRoundResultToStats', () => {
   it('floors negative durations to zero before adding to total time', () => {
     const start = ensureCompleteMinigameStats(undefined);
     const next = applyRoundResultToStats(start, {
+      roundId: 1,
       mode: 'standard',
       score: 0,
       highestCombo: 0,

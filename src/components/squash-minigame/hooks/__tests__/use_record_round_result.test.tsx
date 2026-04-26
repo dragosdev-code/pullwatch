@@ -9,13 +9,17 @@ vi.mock('../../storage/minigame-stats-storage', () => ({
   writeMinigameStats: writeMock,
 }));
 
-import { useRecordRoundResult } from '../use-record-round-result';
+import {
+  useRecordRoundResult,
+  __resetRoundResultPersistingForTests,
+} from '../use-record-round-result';
 import { ensureCompleteMinigameStats } from '../../storage/minigame-stats-defaults';
 
 beforeEach(() => {
   readMock.mockReset();
   writeMock.mockReset();
   writeMock.mockResolvedValue(undefined);
+  __resetRoundResultPersistingForTests();
 });
 
 describe('useRecordRoundResult', () => {
@@ -24,17 +28,15 @@ describe('useRecordRoundResult', () => {
     const { result } = renderHook(() => useRecordRoundResult());
 
     await act(async () => {
-      await result.current(
-        {
-          mode: 'standard',
-          score: 50,
-          highestCombo: 3,
-          bugsSquashed: 5,
-          featuresBroken: 0,
-          durationSeconds: 30,
-        },
-        'r1'
-      );
+      await result.current({
+        roundId: 1,
+        mode: 'standard',
+        score: 50,
+        highestCombo: 3,
+        bugsSquashed: 5,
+        featuresBroken: 0,
+        durationSeconds: 30,
+      });
     });
 
     expect(readMock).toHaveBeenCalledTimes(1);
@@ -49,22 +51,20 @@ describe('useRecordRoundResult', () => {
     readMock.mockRejectedValueOnce(new Error('quota'));
     const { result } = renderHook(() => useRecordRoundResult());
     await expect(
-      result.current(
-        {
-          mode: 'standard',
-          score: 0,
-          highestCombo: 0,
-          bugsSquashed: 0,
-          featuresBroken: 0,
-          durationSeconds: 0,
-        },
-        'r2'
-      )
+      result.current({
+        roundId: 2,
+        mode: 'standard',
+        score: 0,
+        highestCombo: 0,
+        bugsSquashed: 0,
+        featuresBroken: 0,
+        durationSeconds: 0,
+      })
     ).resolves.toBeUndefined();
     expect(writeMock).not.toHaveBeenCalled();
   });
 
-  it('skips a duplicate concurrent invocation with the same key', async () => {
+  it('skips a duplicate concurrent invocation with the same roundId', async () => {
     let resolveRead: ((v: unknown) => void) | null = null;
     readMock.mockImplementation(
       () =>
@@ -78,32 +78,28 @@ describe('useRecordRoundResult', () => {
     let secondDone = false;
     await act(async () => {
       const p1 = result
-        .current(
-          {
-            mode: 'standard',
-            score: 0,
-            highestCombo: 0,
-            bugsSquashed: 0,
-            featuresBroken: 0,
-            durationSeconds: 0,
-          },
-          'dupe'
-        )
+        .current({
+          roundId: 3,
+          mode: 'standard',
+          score: 0,
+          highestCombo: 0,
+          bugsSquashed: 0,
+          featuresBroken: 0,
+          durationSeconds: 0,
+        })
         .then(() => {
           firstDone = true;
         });
       const p2 = result
-        .current(
-          {
-            mode: 'standard',
-            score: 0,
-            highestCombo: 0,
-            bugsSquashed: 0,
-            featuresBroken: 0,
-            durationSeconds: 0,
-          },
-          'dupe'
-        )
+        .current({
+          roundId: 3,
+          mode: 'standard',
+          score: 0,
+          highestCombo: 0,
+          bugsSquashed: 0,
+          featuresBroken: 0,
+          durationSeconds: 0,
+        })
         .then(() => {
           secondDone = true;
         });

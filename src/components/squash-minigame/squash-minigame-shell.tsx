@@ -13,6 +13,7 @@ import { useScreenShake } from './hooks/use-screen-shake';
 
 export interface FinishedRoundSummary {
   mode: GameMode;
+  roundId: number;
   score: number;
   highestCombo: number;
   bugsSquashed: number;
@@ -31,7 +32,10 @@ export interface SquashMinigameProps {
   onFinish?: (summary: FinishedRoundSummary) => void;
   /**
    * Hooks for tests. Production callers omit these and the shell builds a real store and a real
-   * RAF backed loop.
+   * RAF backed loop. The shell keeps the latest function in a ref and only re-runs the session
+   * `mode` so inline lambdas on each parent render do not remount the loop in a tight loop. For
+   * `mode`-stable injects, keep referential stability with `useCallback` or a module singleton if
+   * you need the factory identity to change without a mode change.
    */
   createStoreFn?: () => GameStore;
   createLoopFn?: (store: GameStore) => GameLoop;
@@ -43,6 +47,14 @@ export interface SquashMinigameProps {
 const defaultCreateStore = () => createGameStore();
 const defaultCreateLoop = (store: GameStore) => createGameLoop(store);
 
+/** Survives React 18 dev StrictMode subtree remounts; paired with `store.roundId` from `startGame`. */
+let lastNotifiedFinishRoundId: number | null = null;
+
+/** Test only. */
+export function __resetLastFinishNotificationForTests(): void {
+  lastNotifiedFinishRoundId = null;
+}
+
 /**
  * Owns one game session: builds the vanilla store, drives the RAF loop, and renders the board.
  *
@@ -50,8 +62,9 @@ const defaultCreateLoop = (store: GameStore) => createGameLoop(store);
  * disposes the previous store/loop and rebuilds. Phase 5 launchers always pass a fresh `mode`
  * per attempt, so this is the natural reset trigger.
  *
- * WHY [stable factory defaults]: the factories live at module scope so the effect dependency
- * array does not churn on every render and re mount the loop infinitely.
+ * WHY [ref factories + mode only in deps]: keeps the default factories from churning the effect
+ * and avoids a parent render loop when the caller's inject lambdas are not referentially stable.
+ * The ref always points at the latest inject so a mode change still uses the current factory.
  */
 export function SquashMinigame({
   mode,
@@ -63,10 +76,16 @@ export function SquashMinigame({
   disableFctOverlay = false,
 }: SquashMinigameProps) {
   const [store, setStore] = useState<GameStore | null>(null);
+  const createStoreRef = useRef(createStoreFn);
+  const createLoopRef = useRef(createLoopFn);
+  createStoreRef.current = createStoreFn;
+  createLoopRef.current = createLoopFn;
 
   useEffect(() => {
-    const nextStore = createStoreFn();
-    const nextLoop = createLoopFn(nextStore);
+    const buildStore = createStoreRef.current;
+    const buildLoop = createLoopRef.current;
+    const nextStore = buildStore();
+    const nextLoop = buildLoop(nextStore);
     setStore(nextStore);
 
     nextStore.getState().startGame(mode, performance.now());
@@ -76,7 +95,7 @@ export function SquashMinigame({
       nextLoop.stop();
       nextStore.getState().reset();
     };
-  }, [mode, createStoreFn, createLoopFn]);
+  }, [mode]);
 
   if (!store) {
     return (
@@ -135,9 +154,8 @@ function SquashMinigameBody({
 }
 
 /**
- * Fires `onFinish` exactly once per session when the store flips to `finished`. Captures the
- * summary stats at the transition so a subsequent reset (Phase 5 launcher returning to the menu)
- * does not zero them out before the launcher reads them.
+ * Fires `onFinish` once per finished `roundId` (survives StrictMode remount). Captures summary
+ * stats at the transition so a subsequent reset does not zero them before the launcher reads them.
  */
 function useFinishedReporter(
   mode: GameMode,
@@ -145,19 +163,19 @@ function useFinishedReporter(
 ) {
   const store = useGameStore();
   const status = useStore(store, (s) => s.status);
-  const reportedRef = useRef(false);
 
   useEffect(() => {
-    if (status !== 'finished') {
-      reportedRef.current = false;
+    if (status !== 'finished' || !onFinish) {
       return;
     }
-    if (reportedRef.current) return;
-    reportedRef.current = true;
-    if (!onFinish) return;
     const s = store.getState();
+    if (s.roundId === lastNotifiedFinishRoundId) {
+      return;
+    }
+    lastNotifiedFinishRoundId = s.roundId;
     onFinish({
       mode,
+      roundId: s.roundId,
       score: s.score,
       highestCombo: s.highestCombo,
       bugsSquashed: s.bugsSquashed,

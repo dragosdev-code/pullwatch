@@ -22,11 +22,11 @@ export function useAudioEffects(options: UseAudioEffectsOptions = {}) {
   }
 
   useEffect(() => {
-    let lastAt = store.getState().lastClick?.at ?? -1;
+    let lastClickId = store.getState().lastClick?.id ?? -1;
     const unsubscribe = store.subscribe((state) => {
       const click = state.lastClick;
-      if (!click || click.at === lastAt) return;
-      lastAt = click.at;
+      if (!click || click.id === lastClickId) return;
+      lastClickId = click.id;
       const combo = click.outcome.kind === 'bug_squashed' ? click.outcome.combo : state.combo;
       engineRef.current?.playOutcome(click.outcome, combo);
     });

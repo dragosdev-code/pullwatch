@@ -13,6 +13,7 @@ vi.mock('../../squash-minigame.lazy', () => ({
     onExit?: () => void;
     onFinish?: (s: {
       mode: string;
+      roundId: number;
       score: number;
       highestCombo: number;
       bugsSquashed: number;
@@ -31,6 +32,7 @@ vi.mock('../../squash-minigame.lazy', () => ({
         onClick={() =>
           onFinish?.({
             mode,
+            roundId: 1,
             score: 70,
             highestCombo: 5,
             bugsSquashed: 7,
