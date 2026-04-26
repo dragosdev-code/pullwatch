@@ -1,6 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import {
   COMBO_SCORE_MULTIPLIER_CAP,
+  DESPAWN_GRACE_MS,
   HIT_STOP_MS,
   MODE_CONFIGS,
   PHASE_BASE_POINTS,
@@ -145,11 +146,20 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
   const random = deps.random ?? Math.random;
   const generateId = deps.generateId ?? defaultIdGenerator;
 
+  /**
+   * WHY [closure-scoped, not in GameState]: `recentlyDespawned` is a transient lookup that only
+   * lives between a despawn tick and the next click handler invocation. Storing a `Map` in zustand
+   * state would break shallow-equality checks and force React re-renders on every tick that
+   * despawns anything. Keeping it in the closure avoids both problems.
+   */
+  const recentlyDespawned = new Map<number, { target: Target; at: number }>();
+
   return createStore<GameState & GameActions>((set, get) => ({
     ...buildIdleState(),
 
     startGame(mode, now) {
       const config = MODE_CONFIGS[mode];
+      recentlyDespawned.clear();
       set({
         mode,
         status: 'playing',
@@ -193,6 +203,23 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
       set(buildIdleState());
     },
 
+    /**
+     * Advance the simulation by one frame.
+     *
+     * WHY [tick ordering — expand → resize → spawn → despawn → finished]:
+     *
+     * 1. **Expansion first** so the grid is sized before anything lands in the new cells.
+     * 2. **Resize buffer** pads `activeTargets` to match the new `gridSize²`.
+     * 3. **Spawn gated on `!grew`**: if the grid just expanded this tick, skip spawning so the
+     *    layout settles (React needs one render to size the new cells) before targets appear.
+     * 4. **Despawn last** (after spawn): a target that expires on this tick is still in the
+     *    array when the spawn gate runs, preserving its cell as occupied. More importantly,
+     *    the target is still visible to any click handler that fires between the previous
+     *    paint and this tick. Despawning moves the target into `recentlyDespawned` so
+     *    `clickCell` can honour it within `DESPAWN_GRACE_MS`.
+     * 5. **Finished check** at the very end so all mutations (including the final despawn
+     *    sweep) are reflected in the committed state.
+     */
     tick(now) {
       const s = get();
       if (s.status !== 'playing') return;
@@ -201,13 +228,17 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
       const elapsedMs = now - s.startedAt;
       const timeRemainingMs = Math.max(0, s.config.durationMs - elapsedMs);
 
-      let gridSize = s.gridSize;
+      // 1. expansion
+      const prevGridSize = s.gridSize;
+      let gridSize = prevGridSize;
       for (const stage of s.config.gridExpansionSchedule) {
         if (timeRemainingMs <= stage.triggerAtRemainingMs && stage.gridSize > gridSize) {
           gridSize = stage.gridSize;
         }
       }
+      const grew = gridSize !== prevGridSize;
 
+      // 2. resize buffer
       let activeTargets = s.activeTargets;
       const desiredCellCount = gridSize ** 2;
       if (desiredCellCount > activeTargets.length) {
@@ -216,63 +247,78 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
         );
       }
 
-      let despawnMutated = false;
-      const afterDespawn = activeTargets.map((target) => {
-        if (target && target.despawnAt <= now) {
-          despawnMutated = true;
-          return null;
-        }
-        return target;
-      });
-      if (despawnMutated) {
-        activeTargets = afterDespawn;
-      }
-
+      // 3. spawn (gated on expansion)
       /**
        * WHY [two independent spawn gates]: bugs and features each run on their own cadence so a
        * hot squash streak (which resets `nextBugSpawnAt` to `now`) does not drag features along.
        * Each gate scans empty cells independently — a bug and a feature may land in the same tick
        * if both timers fire, but they will never fight for the same cell because the second scan
        * sees the first spawn's mutation.
+       *
+       * WHY [skip spawn on grow]: the grid just resized; React needs one render pass to lay out
+       * the new cells before targets appear. Deferring to the next tick avoids visual jank.
        */
       let nextBugSpawnAt = s.nextBugSpawnAt;
       let nextFeatureSpawnAt = s.nextFeatureSpawnAt;
 
-      if (now >= nextBugSpawnAt) {
-        const emptyCells = pickEmptyIndices(activeTargets);
-        if (emptyCells.length > 0) {
-          const cellIndex = pickOne(emptyCells, random);
-          const target: Target = {
-            id: generateId(),
-            kind: 'bug',
-            spawnedAt: now,
-            despawnAt: now + s.config.targetLifetimeMs,
-            damageStage: 0,
-          };
-          activeTargets = activeTargets.slice();
-          activeTargets[cellIndex] = target;
+      if (!grew) {
+        if (now >= nextBugSpawnAt) {
+          const emptyCells = pickEmptyIndices(activeTargets);
+          if (emptyCells.length > 0) {
+            const cellIndex = pickOne(emptyCells, random);
+            const target: Target = {
+              id: generateId(),
+              kind: 'bug',
+              spawnedAt: now,
+              despawnAt: now + s.config.targetLifetimeMs,
+              damageStage: 0,
+            };
+            activeTargets = activeTargets.slice();
+            activeTargets[cellIndex] = target;
+          }
+          nextBugSpawnAt = now + s.config.spawnIntervalMs;
         }
-        nextBugSpawnAt = now + s.config.spawnIntervalMs;
+
+        if (now >= nextFeatureSpawnAt) {
+          const emptyCells = pickEmptyIndices(activeTargets);
+          if (emptyCells.length > 0) {
+            const cellIndex = pickOne(emptyCells, random);
+            const target: Target = {
+              id: generateId(),
+              kind: 'feature',
+              spawnedAt: now,
+              despawnAt: now + s.config.targetLifetimeMs,
+              damageStage: 0,
+            };
+            activeTargets = activeTargets.slice();
+            activeTargets[cellIndex] = target;
+          }
+          nextFeatureSpawnAt = now + s.config.featureSpawnIntervalMs;
+        }
       }
 
-      if (now >= nextFeatureSpawnAt) {
-        const emptyCells = pickEmptyIndices(activeTargets);
-        if (emptyCells.length > 0) {
-          const cellIndex = pickOne(emptyCells, random);
-          const target: Target = {
-            id: generateId(),
-            kind: 'feature',
-            spawnedAt: now,
-            despawnAt: now + s.config.targetLifetimeMs,
-            damageStage: 0,
-          };
-          activeTargets = activeTargets.slice();
-          activeTargets[cellIndex] = target;
+      // 4. despawn (after spawn so same-frame clicks still see target)
+      for (let i = 0; i < activeTargets.length; i += 1) {
+        const target = activeTargets[i];
+        if (target && target.despawnAt <= now) {
+          recentlyDespawned.set(i, { target, at: now });
+          if (activeTargets === s.activeTargets) {
+            activeTargets = activeTargets.slice();
+          }
+          activeTargets[i] = null;
         }
-        nextFeatureSpawnAt = now + s.config.featureSpawnIntervalMs;
       }
 
+      // Evict stale grace entries
+      for (const [idx, entry] of recentlyDespawned) {
+        if (now - entry.at > DESPAWN_GRACE_MS) {
+          recentlyDespawned.delete(idx);
+        }
+      }
+
+      // 5. finished check
       if (timeRemainingMs <= 0) {
+        recentlyDespawned.clear();
         set({
           elapsedMs,
           timeRemainingMs: 0,
@@ -304,7 +350,20 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
         return { kind: 'noop' };
       }
 
-      const target = s.activeTargets[cellIndex] ?? null;
+      let target = s.activeTargets[cellIndex] ?? null;
+
+      /**
+       * WHY [recentlyDespawned fallback]: if the RAF tick despawned a target between the
+       * browser paint and this click handler, the cell reads as `null` even though the player
+       * visually clicked a target. The grace map lets us honour the click within DESPAWN_GRACE_MS.
+       */
+      if (target === null) {
+        const grace = recentlyDespawned.get(cellIndex);
+        if (grace && now - grace.at <= DESPAWN_GRACE_MS) {
+          target = grace.target;
+          recentlyDespawned.delete(cellIndex);
+        }
+      }
 
       if (target === null) {
         const outcome: ClickOutcome = { kind: 'miss' };

@@ -6,6 +6,15 @@ export const HIT_STOP_MS = 50;
 /** Multi directional shake duration applied after a feature break or empty cell miss, per spec. */
 export const SCREEN_SHAKE_MS = 300;
 
+/**
+ * Grace window (ms) for the click-despawn race. If a target despawns in the current tick but a
+ * click arrives within this window, the click still counts against the recently-despawned target.
+ *
+ * WHY [50ms]: one RAF frame at 60fps is ~16ms; 50ms covers three frames worth of input lag plus
+ * pointer event dispatch jitter, without being so long that clearly-stale clicks register.
+ */
+export const DESPAWN_GRACE_MS = 50;
+
 export const POINTS_PER_FEATURE = -20;
 
 /**
