@@ -131,6 +131,13 @@ describe('PRService account swap (silent baseline)', () => {
       } as never,
       rateLimitService: rateLimitStub as never,
       healthStatusService: healthStub as never,
+      gitHubStatusClient: {
+        getStatus: vi.fn().mockResolvedValue({
+          prComponentStatus: 'operational',
+          globalIndicator: 'none',
+          fetchedAt: 0,
+        }),
+      } as never,
     });
   }
 

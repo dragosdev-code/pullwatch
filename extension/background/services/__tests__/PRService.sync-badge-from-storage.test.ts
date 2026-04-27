@@ -58,6 +58,7 @@ describe('PRService.syncBadgeFromStorage', () => {
       } as never,
       rateLimitService: {} as never,
       healthStatusService: {} as never,
+      gitHubStatusClient: {} as never,
     });
   }
 

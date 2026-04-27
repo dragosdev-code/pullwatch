@@ -13,6 +13,7 @@ import { DevTestService } from '../services/DevTestService';
 import { PatternRegistryService } from '../services/PatternRegistryService';
 import { RateLimitService } from '../services/RateLimitService';
 import { HealthStatusService } from '../services/HealthStatusService';
+import { GitHubStatusClient } from '@common/github-status-client';
 import { GITHUB_BASE_URL } from '@common/constants';
 import type { IService } from '../interfaces/IService';
 import type { ServiceMap } from './ServiceMap';
@@ -44,6 +45,10 @@ export class ServiceContainer {
     this.registerService('badgeService', new BadgeService(this.getService('debugService')));
     this.registerService('soundService', new SoundService(this.getService('debugService')));
     this.registerService('healthStatusService', new HealthStatusService());
+    this.registerService(
+      'gitHubStatusClient',
+      new GitHubStatusClient(this.getService('debugService'))
+    );
     this.registerService('eventService', new EventService(this.getService('debugService'), this));
 
     // Initialize business logic services
@@ -84,6 +89,7 @@ export class ServiceContainer {
         badgeService: this.getService('badgeService'),
         rateLimitService: this.getService('rateLimitService'),
         healthStatusService: this.getService('healthStatusService'),
+        gitHubStatusClient: this.getService('gitHubStatusClient'),
       })
     );
 

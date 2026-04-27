@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor, cleanup } from '@testing-library/react';
 import { BROADCAST_ACTION } from '@common/runtime-actions';
-import { STORAGE_KEY_PARSER_BREAKAGE, STORAGE_KEY_GITHUB_OUTAGE } from '@common/constants';
+import {
+  STORAGE_KEY_PARSER_BREAKAGE,
+  STORAGE_KEY_GITHUB_OUTAGE,
+  STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT,
+} from '@common/constants';
 import type { StorageChange } from '@common/chrome-extension-service';
 import { useParserBreakage } from '../use-parser-breakage';
 import { useGitHubOutage } from '../use-github-outage';
@@ -114,35 +118,51 @@ describe('Status banners after a bad sync', () => {
     const { result } = renderHook(() => useGitHubOutage());
 
     await waitFor(() => {
-      expect(result.current).toBe(false);
+      expect(result.current.isActive).toBe(false);
+      expect(result.current.lastUntrustedAttemptAt).toBe(null);
     });
 
     act(() => {
       chromeMocks.fireMessage({ action: BROADCAST_ACTION.parserBreakageDetected });
     });
 
-    expect(result.current).toBe(false);
+    expect(result.current.isActive).toBe(false);
 
     act(() => {
       chromeMocks.fireMessage({ action: BROADCAST_ACTION.githubOutageDetected });
     });
 
     await waitFor(() => {
-      expect(result.current).toBe(true);
+      expect(result.current.isActive).toBe(true);
     });
 
     act(() => {
       chromeMocks.fireMessage({ action: BROADCAST_ACTION.parserBreakageDetected });
     });
 
-    expect(result.current).toBe(true);
+    expect(result.current.isActive).toBe(true);
 
     act(() => {
       chromeMocks.fireMessage({ action: BROADCAST_ACTION.githubOutageCleared });
     });
 
     await waitFor(() => {
-      expect(result.current).toBe(false);
+      expect(result.current.isActive).toBe(false);
+      expect(result.current.lastUntrustedAttemptAt).toBe(null);
+    });
+  });
+
+  it('reads last untrusted fetch time from storage when present', async () => {
+    chromeMocks.storageGet.mockResolvedValue({
+      [STORAGE_KEY_GITHUB_OUTAGE]: { detected: true, timestamp: 1 },
+      [STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT]: 12_000,
+    });
+
+    const { result } = renderHook(() => useGitHubOutage());
+
+    await waitFor(() => {
+      expect(result.current.isActive).toBe(true);
+      expect(result.current.lastUntrustedAttemptAt).toBe(12_000);
     });
   });
 });

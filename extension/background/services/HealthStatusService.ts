@@ -1,7 +1,11 @@
-import type { IHealthStatusService } from '../interfaces/IHealthStatusService';
+import type {
+  GitHubOutageReason,
+  IHealthStatusService,
+} from '../interfaces/IHealthStatusService';
 import {
   STORAGE_KEY_PARSER_BREAKAGE,
   STORAGE_KEY_GITHUB_OUTAGE,
+  STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT,
 } from '@common/constants';
 import { BROADCAST_ACTION } from '@common/runtime-actions';
 import { chromeExtensionService } from '@common/chrome-extension-service';
@@ -15,6 +19,8 @@ import { chromeExtensionService } from '@common/chrome-extension-service';
  *   1. On first error → persist to chrome.storage.local + broadcast "detected"
  *   2. On subsequent errors → no-op (in-memory flag prevents duplicate writes)
  *   3. On recovery (successful fetch) → remove from storage + broadcast "cleared"
+ *      (outage clear also drops {@link STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT} so the popup’s
+ *      “last untrusted attempt” line does not outlive the banner.)
  *
  * Parser breakage and GitHub outage are separate flags because they require
  * different user-facing messaging ("wait it out" vs "extension update incoming")
@@ -54,10 +60,13 @@ export class HealthStatusService implements IHealthStatusService {
     }).catch(() => {});
   }
 
-  async signalGitHubOutage(context: string): Promise<void> {
+  async signalGitHubOutage(
+    context: string,
+    reason: GitHubOutageReason = 'transport'
+  ): Promise<void> {
     if (this.githubOutage) return;
     this.githubOutage = true;
-    const payload = { detected: true, timestamp: Date.now(), context };
+    const payload = { detected: true, timestamp: Date.now(), context, reason };
     await chromeExtensionService.storage.local.set({ [STORAGE_KEY_GITHUB_OUTAGE]: payload });
     chromeExtensionService.runtime.sendMessage({
       action: BROADCAST_ACTION.githubOutageDetected,
@@ -68,7 +77,10 @@ export class HealthStatusService implements IHealthStatusService {
   async clearGitHubOutage(): Promise<void> {
     if (!this.githubOutage) return;
     this.githubOutage = false;
-    await chromeExtensionService.storage.local.remove(STORAGE_KEY_GITHUB_OUTAGE);
+    await chromeExtensionService.storage.local.remove([
+      STORAGE_KEY_GITHUB_OUTAGE,
+      STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT,
+    ]);
     chromeExtensionService.runtime.sendMessage({
       action: BROADCAST_ACTION.githubOutageCleared,
       data: null,

@@ -93,6 +93,13 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
       } as never,
       rateLimitService: rateLimitStub as never,
       healthStatusService: healthStub as never,
+      gitHubStatusClient: {
+        getStatus: vi.fn().mockResolvedValue({
+          prComponentStatus: 'operational',
+          globalIndicator: 'none',
+          fetchedAt: T0,
+        }),
+      } as never,
     });
   }
 

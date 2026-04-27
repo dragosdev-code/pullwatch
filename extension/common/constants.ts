@@ -12,6 +12,15 @@ export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
 export const STORAGE_KEY_PATTERN_REGISTRY = 'parser_pattern_registry';
 export const STORAGE_KEY_PARSER_BREAKAGE = 'parser_breakage';
 export const STORAGE_KEY_GITHUB_OUTAGE = 'github_outage';
+/**
+ * WHY [metadata only]: Set when the outage gate ({@link PRService.isOutageSuspectedEmpty}) declines
+ * to trust an empty fetch. Distinct from {@link STORAGE_KEY_LAST_FETCH} ("last *successful* fetch").
+ * Cleared with the outage flag when `HealthStatusService` clears GitHub outage. The popup’s
+ * `useGitHubOutage` hook reads this for the outage-banner subline (does not overwrite PR arrays).
+ */
+export const STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT = 'last_untrusted_fetch_at';
+/** Cached `summary.json` snapshot from githubstatus.com (TTL {@link GITHUB_STATUS_CACHE_TTL_MS}). */
+export const STORAGE_KEY_GITHUB_STATUS_CACHE = 'github_status_cache';
 export const STORAGE_KEY_ROUTE_HINT = 'pulls_list_route_hint';
 /** Parsed GitHub session login for account-swap detection vs PR cache (see PRService silent baseline). */
 export const STORAGE_KEY_GITHUB_VIEWER_IDENTITY = 'github_viewer_identity';
@@ -63,6 +72,13 @@ export const STORAGE_KEY_LAST_MANUAL_REFRESH_AT = 'last_manual_refresh_at';
 
 // GitHub fetch timeout — guarantees deduplication locks in PRService clear even if GitHub hangs
 export const GITHUB_FETCH_TIMEOUT_MS = 30_000;
+
+// GitHub Status API (https://www.githubstatus.com/api/v2)
+export const GITHUB_STATUS_API_URL = 'https://www.githubstatus.com/api/v2/summary.json';
+export const GITHUB_STATUS_FETCH_TIMEOUT_MS = 3_000;
+export const GITHUB_STATUS_CACHE_TTL_MS = 120_000;
+/** Defensive lookup target — matched case-insensitively against `components[].name` on summary.json. */
+export const GITHUB_PR_COMPONENT_NAME = 'pull requests';
 
 // Rate Limit
 export const STORAGE_KEY_RATE_LIMIT = 'rate_limit_state';

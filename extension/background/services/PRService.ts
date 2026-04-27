@@ -6,6 +6,7 @@ import type { INotificationService } from '../interfaces/INotificationService';
 import type { IBadgeService } from '../interfaces/IBadgeService';
 import type { IRateLimitService } from '../interfaces/IRateLimitService';
 import type { IHealthStatusService } from '../interfaces/IHealthStatusService';
+import type { IGitHubStatusClient } from '../interfaces/IGitHubStatusClient';
 import type { PullRequest } from '@common/types';
 import {
   CACHE_TTL_MS,
@@ -13,10 +14,12 @@ import {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_GITHUB_OUTAGE,
+  STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT,
   STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_PARSER_BREAKAGE,
   STORAGE_KEY_ROUTE_HINT,
 } from '@common/constants';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import {
   RateLimitError,
   ParserBreakageError,
@@ -50,6 +53,7 @@ export class PRService implements IPRService {
   private badgeService: IBadgeService;
   private rateLimitService: IRateLimitService;
   private healthStatusService: IHealthStatusService;
+  private gitHubStatusClient: IGitHubStatusClient;
   private initialized = false;
   /**
    * One entry per list (assigned / merged / authored) while its fetch is in flight.
@@ -74,6 +78,7 @@ export class PRService implements IPRService {
     badgeService: IBadgeService;
     rateLimitService: IRateLimitService;
     healthStatusService: IHealthStatusService;
+    gitHubStatusClient: IGitHubStatusClient;
   }) {
     this.debugService = deps.debugService;
     this.storageService = deps.storageService;
@@ -82,6 +87,7 @@ export class PRService implements IPRService {
     this.badgeService = deps.badgeService;
     this.rateLimitService = deps.rateLimitService;
     this.healthStatusService = deps.healthStatusService;
+    this.gitHubStatusClient = deps.gitHubStatusClient;
   }
 
   async initialize(): Promise<void> {
@@ -321,6 +327,57 @@ export class PRService implements IPRService {
     throw error;
   }
 
+  /**
+   * WHY [empty-only signal]: Partial-read percentage thresholds (e.g. `fresh < oldLength * 0.5`)
+   * misfire on legitimate close-out days; only the empty-vs-non-empty transition is a reliable
+   * proxy for the GitHub-200-with-empty-shell failure mode the gate exists to catch.
+   *
+   * Component-first / global-fallback: an *operational* PR component short-circuits to "trusted"
+   * even when the global indicator is non-none (an unrelated subsystem like Pages firing a global
+   * minor incident must not suppress PR notifications). Only when the PR component lookup yields
+   * `'unknown'` (component renamed by GitHub or status fetch itself failed open) does the global
+   * indicator decide.
+   *
+   * WHY [recovery vs Statuspage]: The first guard (`freshLength !== 0`) skips this entire method.
+   * When github.com returns a non-empty list again, the gate never runs and the usual update path
+   * calls `clearGitHubOutage` — the popup banner clears after a trusted PR-list persist, not because
+   * `summary.json` flipped green first. Live HTML and Statuspage updates can lag each other either
+   * way; this client does not tie banner lifetime to githubstatus.com staying red.
+   */
+  private async isOutageSuspectedEmpty(
+    freshLength: number,
+    oldLength: number
+  ): Promise<boolean> {
+    if (freshLength !== 0) return false;
+    if (oldLength === 0) return false;
+
+    const status = await this.gitHubStatusClient.getStatus();
+    if (status.prComponentStatus === 'operational') return false;
+    if (status.prComponentStatus === 'unknown') {
+      return status.globalIndicator !== 'none' && status.globalIndicator !== 'unknown';
+    }
+    // Remaining values are degraded_performance | partial_outage | major_outage.
+    return true;
+  }
+
+  /**
+   * WHY [outage-gate]: When the gate fires we suppress PR-array persistence too — not just the
+   * notification. Persisting an empty shell would poison `oldPRs` for the next tick and recreate
+   * the storm once GitHub recovers (`comparePRs` would treat every restored PR as new). We persist
+   * only metadata (`STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT` + the outage flag) so the popup can render
+   * "we did check, but didn't trust the result" without losing the last-known-good list.
+   *
+   * If you change this, also check {@link persistAndNotifyAssigned} (the happy-path notify-before-
+   * persist invariant) and {@link HealthStatusService.signalGitHubOutage} (single-flag dedupe so
+   * we keep one banner, not two).
+   */
+  private async persistUntrustedFetchMetadata(context: string): Promise<void> {
+    await chromeExtensionService.storage.local.set({
+      [STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT]: Date.now(),
+    });
+    await this.healthStatusService.signalGitHubOutage(context, 'pr_component_degraded');
+  }
+
   private async doFetchAndUpdateAssignedPRs(
     forceRefresh: boolean,
     bypassCache: boolean
@@ -347,6 +404,21 @@ export class PRService implements IPRService {
       // hint before the reviewed request so the next fetch in this cycle can probe cleanly.
       await delay(REQUEST_DELAY_MS);
       const freshReviewedPRsRaw = await this.gitHubService.fetchReviewedPRs();
+
+      if (
+        await this.isOutageSuspectedEmpty(
+          freshPendingPRsRaw.length + freshReviewedPRsRaw.length,
+          oldPRs.length
+        )
+      ) {
+        this.debugService.warn(
+          `[PRService] Outage gate: empty assigned fetch during PR component degradation — preserving ${oldPRs.length} stored PRs.`
+        );
+        await this.persistUntrustedFetchMetadata(
+          'Empty assigned list during PR component degradation'
+        );
+        return oldPRs;
+      }
 
       if (!accountSwap) {
         ({ accountSwap } = await this.detectAccountSwap('silent assigned baseline'));
@@ -603,6 +675,16 @@ export class PRService implements IPRService {
         `[PRService] Fetched ${freshAuthoredPRsRaw.length} authored PRs from GitHub`
       );
 
+      if (await this.isOutageSuspectedEmpty(freshAuthoredPRsRaw.length, oldPRs.length)) {
+        this.debugService.warn(
+          `[PRService] Outage gate: empty authored fetch during PR component degradation — preserving ${oldPRs.length} stored authored PRs.`
+        );
+        await this.persistUntrustedFetchMetadata(
+          'Empty authored list during PR component degradation'
+        );
+        return oldPRs;
+      }
+
       const { accountSwap } = await this.detectAccountSwap('refreshing authored list baseline');
 
       const freshAuthoredPRs = accountSwap
@@ -667,6 +749,16 @@ export class PRService implements IPRService {
 
       const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
       this.debugService.log(`[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`);
+
+      if (await this.isOutageSuspectedEmpty(freshMergedPRs.length, oldPRs.length)) {
+        this.debugService.warn(
+          `[PRService] Outage gate: empty merged fetch during PR component degradation — preserving ${oldPRs.length} stored merged PRs.`
+        );
+        await this.persistUntrustedFetchMetadata(
+          'Empty merged list during PR component degradation'
+        );
+        return oldPRs;
+      }
 
       const { accountSwap } = await this.detectAccountSwap('silent merged baseline');
 

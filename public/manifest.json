@@ -23,7 +23,8 @@
   "host_permissions": [
     "https://github.com/*",
     "https://avatars.githubusercontent.com/*",
-    "https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*"
+    "https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*",
+    "https://www.githubstatus.com/*"
   ],
   "background": {
     "service_worker": "background.js",
