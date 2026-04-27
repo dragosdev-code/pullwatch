@@ -23,7 +23,7 @@ export const GitHubOutageBanner = () => {
       <ExclamationTriangleIcon className="w-4 h-4 text-warning shrink-0 mt-px" />
       <div className="min-w-0">
         <p className="text-xs font-medium text-base-content leading-snug">
-          GitHub may be degraded — Pullwatch paused notifications
+          GitHub may be degraded. Pullwatch has paused notifications.
         </p>
         <p className="text-[10px] text-base-content/70 leading-snug mt-0.5">
           Showing cached pull requests. GitHub may be slow, rate-limited, or having a partial outage
@@ -40,8 +40,7 @@ export const GitHubOutageBanner = () => {
         {/* WHY [formatLastFetchDetail]: Same relative-time wording as the header tooltip so staleness reads consistently. */}
         {lastUntrustedAttemptAt != null ? (
           <p className="text-[10px] text-base-content/70 leading-snug mt-0.5 tabular-nums">
-            Last check (cached list kept):{' '}
-            {formatLastFetchDetail(lastUntrustedAttemptAt, nowMs)}
+            Last check (cached list kept): {formatLastFetchDetail(lastUntrustedAttemptAt, nowMs)}
           </p>
         ) : null}
       </div>
