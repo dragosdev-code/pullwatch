@@ -15,6 +15,12 @@ export const SCREEN_SHAKE_MS = 300;
  */
 export const DESPAWN_GRACE_MS = 50;
 
+/**
+ * After `status === 'finished'`, primary overlay actions stay hidden this long so spam taps /
+ * synthesized clicks do not hit Try again / Exit immediately.
+ */
+export const FINISHED_OVERLAY_ACTION_DELAY_MS = 1500;
+
 export const POINTS_PER_FEATURE = -20;
 
 /**

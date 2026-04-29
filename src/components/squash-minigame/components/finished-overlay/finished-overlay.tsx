@@ -1,19 +1,15 @@
 import clsx from 'clsx';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
-import type { GameMode } from '../game-types';
-import { useGameStore } from '../context/game-store-context';
-import { formatScore } from '../format-score';
-import { MODE_METADATA } from '../launcher/mode-metadata';
-
-export interface FinishedOverlayProps {
-  /** Current round mode (default selection in picker; same as committed choice triggers replay). */
-  mode: GameMode;
-  onTryAgain: () => void;
-  /** When set, user can open the mode grid and switch without leaving the shell. */
-  onChangeMode?: (mode: GameMode) => void;
-  onExit?: () => void;
-}
+import { animated, config, to, useSpring, useTrail } from '@react-spring/web';
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
+import { useGameStore } from '../../context/game-store-context';
+import { FINISHED_OVERLAY_ACTION_DELAY_MS } from '../../game-config';
+import { formatScore } from '../../format-score';
+import { MODE_METADATA } from '../../launcher/mode-metadata';
+import { FinishActionsReveal } from './finish-actions-reveal';
+import { FinishCooldownIndicator } from './finish-cooldown-indicator';
+import type { FinishedOverlayProps } from './types';
 
 /**
  * End-of-round summary over the board. Try again remounts the session via the shell; another mode
@@ -28,7 +24,52 @@ export function FinishedOverlay({
   const store = useGameStore();
   const status = useStore(store, (s) => s.status);
   const [pickingMode, setPickingMode] = useState(false);
-  const [pickerSelected, setPickerSelected] = useState<GameMode>(mode);
+  const [pickerSelected, setPickerSelected] = useState(mode);
+  const [actionsReady, setActionsReady] = useState(false);
+  const motionOff = usePrefersReducedMotion();
+
+  useEffect(() => {
+    if (status !== 'finished') {
+      setActionsReady(false);
+      return;
+    }
+    setActionsReady(false);
+    const id = window.setTimeout(() => {
+      setActionsReady(true);
+    }, FINISHED_OVERLAY_ACTION_DELAY_MS);
+    return () => window.clearTimeout(id);
+  }, [status]);
+
+  const backdropSpring = useSpring({
+    from: { opacity: 0 },
+    to: { opacity: 1 },
+    config: { tension: 220, friction: 36 },
+    immediate: motionOff,
+  });
+
+  const cardSpring = useSpring({
+    from: { opacity: 0, y: 28, scale: 0.92 },
+    to: { opacity: 1, y: 0, scale: 1 },
+    delay: motionOff ? 0 : 40,
+    config: config.gentle,
+    immediate: motionOff,
+  });
+
+  const titleSpring = useSpring({
+    from: { opacity: 0, y: 8 },
+    to: { opacity: 1, y: 0 },
+    delay: motionOff ? 0 : 120,
+    config: { tension: 260, friction: 28 },
+    immediate: motionOff,
+  });
+
+  const statSprings = useTrail(4, {
+    from: { opacity: 0, x: -10 },
+    to: { opacity: 1, x: 0 },
+    delay: motionOff ? 0 : 160,
+    config: { tension: 280, friction: 26 },
+    immediate: motionOff,
+  });
 
   if (status !== 'finished') return null;
 
@@ -49,13 +90,33 @@ export function FinishedOverlay({
     }
   };
 
+  const statLines: Array<{
+    testId:
+      | 'squash-finished-score'
+      | 'squash-finished-combo'
+      | 'squash-finished-bugs'
+      | 'squash-finished-features';
+    text: string;
+    ariaLabel?: string;
+  }> = [
+    {
+      testId: 'squash-finished-score',
+      ariaLabel: `final score ${score}`,
+      text: `final score ${formatScore(score)}`,
+    },
+    { testId: 'squash-finished-combo', text: `best combo x${highestCombo}` },
+    { testId: 'squash-finished-bugs', text: `bugs ${bugsSquashed}` },
+    { testId: 'squash-finished-features', text: `features ${featuresBroken}` },
+  ];
+
   return (
-    <div
+    <animated.div
       data-testid="squash-finished-overlay"
       className="absolute inset-0 z-50 flex items-center justify-center bg-base-300/55 p-4 backdrop-blur-[3px]"
+      style={{ opacity: backdropSpring.opacity }}
       role="presentation"
     >
-      <div
+      <animated.div
         className={clsx(
           'w-full rounded-2xl border border-base-content/10 bg-base-100/85 text-center shadow-2xl shadow-base-300/40',
           pickingMode
@@ -64,7 +125,15 @@ export function FinishedOverlay({
         )}
         role="dialog"
         aria-modal="true"
+        aria-busy={!pickingMode && !actionsReady}
         aria-labelledby={pickingMode ? 'squash-finished-mode-title' : 'squash-finished-title'}
+        style={{
+          opacity: cardSpring.opacity,
+          transform: to(
+            [cardSpring.y, cardSpring.scale],
+            (y, s) => `translateY(${y}px) scale(${s})`
+          ),
+        }}
       >
         {pickingMode ? (
           <>
@@ -124,51 +193,47 @@ export function FinishedOverlay({
           </>
         ) : (
           <>
-            <h3
+            <animated.h3
               id="squash-finished-title"
               className="mb-3 text-sm font-bold uppercase tracking-wide text-base-content"
+              style={{
+                opacity: titleSpring.opacity,
+                transform: titleSpring.y.to((y) => `translateY(${y}px)`),
+              }}
             >
               round over
-            </h3>
+            </animated.h3>
             <ul className="mb-5 space-y-1 text-xs text-base-content/90">
-              <li data-testid="squash-finished-score" aria-label={`final score ${score}`}>final score {formatScore(score)}</li>
-              <li data-testid="squash-finished-combo">best combo x{highestCombo}</li>
-              <li data-testid="squash-finished-bugs">bugs {bugsSquashed}</li>
-              <li data-testid="squash-finished-features">features {featuresBroken}</li>
+              {statLines.map((line, i) => (
+                <animated.li
+                  key={line.testId}
+                  data-testid={line.testId}
+                  {...(line.ariaLabel ? { 'aria-label': line.ariaLabel } : {})}
+                  style={{
+                    opacity: statSprings[i]?.opacity,
+                    transform: statSprings[i]?.x.to((x) => `translateX(${x}px)`),
+                  }}
+                >
+                  {line.text}
+                </animated.li>
+              ))}
             </ul>
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                data-testid="squash-finished-try-again"
-                onClick={onTryAgain}
-                className="btn btn-primary btn-sm w-full font-semibold uppercase tracking-wide"
-              >
-                Try again
-              </button>
-              {onChangeMode ? (
-                <button
-                  type="button"
-                  data-testid="squash-finished-change-mode"
-                  onClick={openModePicker}
-                  className="btn btn-outline btn-sm w-full font-semibold uppercase tracking-wide"
-                >
-                  Another mode
-                </button>
-              ) : null}
-              {onExit ? (
-                <button
-                  type="button"
-                  data-testid="squash-finished-exit"
-                  onClick={onExit}
-                  className="btn btn-ghost btn-sm w-full font-semibold uppercase tracking-wide text-base-content/80"
-                >
-                  Exit minigame
-                </button>
-              ) : null}
-            </div>
+            {actionsReady ? (
+              <FinishActionsReveal
+                motionOff={motionOff}
+                onTryAgain={onTryAgain}
+                onChangeMode={onChangeMode}
+                onExit={onExit}
+                openModePicker={openModePicker}
+              />
+            ) : (
+              <div data-testid="squash-finished-actions-pending">
+                <FinishCooldownIndicator motionOff={motionOff} delayMs={FINISHED_OVERLAY_ACTION_DELAY_MS} />
+              </div>
+            )}
           </>
         )}
-      </div>
-    </div>
+      </animated.div>
+    </animated.div>
   );
 }
