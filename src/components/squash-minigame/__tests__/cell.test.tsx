@@ -122,6 +122,35 @@ describe('Cell', () => {
     expect(spy).toHaveBeenCalledWith(4, 5_000);
   });
 
+  it('invokes clickCell once on primary pointerDown then pointerUp', () => {
+    const store = buildStore();
+    store.getState().startGame('standard', 0);
+    placeTarget(store, 4, makeBug());
+    const spy = vi.spyOn(store.getState(), 'clickCell');
+    render(
+      <GameStoreProvider store={store}>
+        <Cell index={4} />
+      </GameStoreProvider>
+    );
+    const cell = screen.getByTestId('squash-cell-4');
+    fireEvent.pointerDown(cell, {
+      pointerId: 1,
+      button: 0,
+      buttons: 1,
+      isPrimary: true,
+      pointerType: 'mouse',
+    });
+    fireEvent.pointerUp(cell, {
+      pointerId: 1,
+      button: 0,
+      buttons: 0,
+      isPrimary: true,
+      pointerType: 'mouse',
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(4, 5_000);
+  });
+
   it('does not re render when an unrelated cell slot mutates', () => {
     const store = buildStore();
     store.getState().startGame('standard', 0);

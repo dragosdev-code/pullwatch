@@ -33,13 +33,15 @@ Both pull from the same store. The choice is about whether you want to participa
 
 ### Atomic selectors with `useStore`
 
-The cell component is the canonical example ([`components/cell.tsx`](../components/cell.tsx#L42-L48)):
+The cell component is the canonical example ([`components/cell/squash-cell.tsx`](../components/cell/squash-cell.tsx#L20-L30)):
 
 ```ts
 const store = useGameStore();
 const target = useStore(store, (s) => s.activeTargets[index] ?? null);
 const targetLifetimeMs = useStore(store, (s) => s.config.targetLifetimeMs);
 ```
+
+Inputs call `clickCell` from primary-button `pointerup` (after `setPointerCapture` on `pointerdown` so a slightly sliding tap still counts) and from `click` for keyboard activation; a trailing synthetic `click` after `pointerup` is deduped.
 
 Each `useStore` call subscribes to **one primitive slice**. Sibling cells subscribe to different indices, so a spawn into cell 4 only re-renders cell 4 — the other eight cells see no work because their selector results are identical-by-`Object.is` to the previous tick.
 

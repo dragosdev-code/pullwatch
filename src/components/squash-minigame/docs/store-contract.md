@@ -35,7 +35,7 @@ type GameStore = StoreApi<GameState & GameActions>;
 | `endGame()`                             | External (e.g. test harness, future "give up" button) | No-op unless `status === 'playing'`; clears the grid, flips status to `'finished'`        |
 | `reset()`                               | Shell cleanup                                         | Wipes back to `buildIdleState()` so the next session starts cold                          |
 | `tick(now)`                             | Loop                                                  | Single owner of phase ordering — see [simulation-invariants.md](simulation-invariants.md) |
-| `clickCell(cellIndex, now)`             | `Cell` component, on pointer click                    | Returns the `ClickOutcome` synchronously and updates `lastClick`                          |
+| `clickCell(cellIndex, now)`             | `Cell`, primary `pointerup` (after capture) or `click` (keyboard) | Returns the `ClickOutcome` synchronously and updates `lastClick`                          |
 
 ## What lives in the closure, not in state
 
@@ -87,4 +87,4 @@ There is also a test-only escape hatch: [`__resetSessionRoundIdForTests`](../gam
 
 The simulation core treats `activeTargets` and `LastClick` as **immutable replacements**. Every action that modifies the grid clones the array (`activeTargets.slice()`) before mutating ([`game-store.ts`](../game-store.ts#L367), [L391](../game-store.ts#L391), [L406](../game-store.ts#L406)). [`game-tick.ts`](../game-tick.ts#L114-L115) follows the same rule, copy-on-write keyed off the original buffer reference so spawn and despawn share at most one clone per tick.
 
-This matters because [Cell](../components/cell.tsx#L42-L48) subscribes via `useStore(store, s => s.activeTargets[index])` with the default `Object.is` equality. A mutation in place would skip the re-render; an immutable replacement triggers it. If you add a new mutator, follow the slice-then-set pattern.
+This matters because [Cell](../components/cell/squash-cell.tsx#L21-L24) subscribes via `useStore(store, s => s.activeTargets[index])` with the default `Object.is` equality. A mutation in place would skip the re-render; an immutable replacement triggers it. If you add a new mutator, follow the slice-then-set pattern.

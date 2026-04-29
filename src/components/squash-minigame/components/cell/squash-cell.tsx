@@ -1,52 +1,33 @@
-import { memo, useCallback } from 'react';
+import { memo } from 'react';
 import { useStore } from 'zustand';
 import clsx from 'clsx';
-import { useGameStore } from '../context/game-store-context';
-import { computeBugPhase } from '../game-phase';
-import type { BugPhase, Target } from '../game-types';
-
-export interface CellProps {
-  index: number;
-}
-
-function getCellLabel(target: Target | null): string {
-  if (target === null) return '';
-  if (target.kind === 'feature') return 'feature';
-  if (target.damageStage > 0) return 'cracked bug';
-  return 'bug';
-}
-
-function getCellGlyph(target: Target | null): string {
-  if (target === null) return '';
-  if (target.kind === 'feature') return 'feat';
-  return 'bug';
-}
-
-/**
- * Map a bug's lifetime phase to a DaisyUI `bg-warning` opacity tier.
- *
- * WHY [three tiers]: the phase is a visual cue that aligns with the scoring system —
- * fresh (10pt) is brightest, final (2pt) is dimmest, nudging the player to click sooner.
- */
-const PHASE_BG: Record<BugPhase, string> = {
-  fresh: 'bg-warning',
-  middle: 'bg-warning/65',
-  final: 'bg-warning/35',
-};
+import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
+import { useGameStore } from '../../context/game-store-context';
+import { computeBugPhase } from '../../game-phase';
+import type { BugPhase } from '../../game-types';
+import { PHASE_BG, getCellGlyph, getCellLabel } from './cell-display';
+import { useSquashCellActivation } from './hooks/use-squash-cell-activation';
+import { SquashCellGlyph } from './squash-cell-glyph';
+import type { CellProps } from './types';
 
 /**
  * Single grid cell. Subscribes only to its own slot in `activeTargets` so siblings do not
- * re render on every spawn or click. `useStore(store, selector)` uses Object.is by default,
+ * re-render on every spawn or click. `useStore(store, selector)` uses Object.is by default,
  * which matches the store's immutable replacement strategy (`activeTargets.slice()` on writes).
+ *
+ * Interaction + tap feedback live in {@link useSquashCellActivation}.
  */
-function CellInner({ index }: CellProps) {
+function SquashCellInner({ index }: CellProps) {
   const store = useGameStore();
   const target = useStore(store, (s) => s.activeTargets[index] ?? null);
   const targetLifetimeMs = useStore(store, (s) => s.config.targetLifetimeMs);
+  const reducedMotion = usePrefersReducedMotion();
 
-  const handleClick = useCallback(() => {
-    store.getState().clickCell(index, performance.now());
-  }, [store, index]);
+  const activation = useSquashCellActivation({
+    store,
+    cellIndex: index,
+    reducedMotion,
+  });
 
   const isBug = target?.kind === 'bug';
   const isCracked = isBug && target.damageStage > 0;
@@ -64,24 +45,29 @@ function CellInner({ index }: CellProps) {
 
   return (
     <button
+      ref={activation.buttonRef}
       type="button"
       data-testid={`squash-cell-${index}`}
       data-target-kind={target?.kind ?? 'empty'}
       data-target-damage={target?.damageStage ?? 0}
       data-target-phase={phase ?? 'none'}
       aria-label={`grid cell ${index} ${getCellLabel(target)}`.trim()}
-      onClick={handleClick}
+      onPointerDown={activation.onPointerDown}
+      onPointerUp={activation.onPointerUp}
+      onPointerCancel={activation.onPointerCancel}
+      onKeyDown={activation.onKeyDown}
+      onClick={activation.onClick}
       className={clsx(
-        'relative flex aspect-square select-none items-center justify-center rounded-md border border-base-300 text-xs font-semibold uppercase tracking-wide transition',
+        'relative flex aspect-square transform-gpu touch-manipulation select-none items-center justify-center rounded-md border border-base-300 text-xs font-semibold uppercase tracking-wide transition-colors',
         target === null && 'bg-base-200 text-base-content/40',
         isBug && !isCracked && phase && `${PHASE_BG[phase]} text-warning-content`,
         isCracked && phase && `${PHASE_BG[phase]} text-warning-content ring-1 ring-warning-content/30`,
         isFeature && 'bg-error text-error-content'
       )}
     >
-      <span aria-hidden>{getCellGlyph(target)}</span>
+      <SquashCellGlyph ref={activation.glyphRef} glyphText={getCellGlyph(target)} />
     </button>
   );
 }
 
-export const Cell = memo(CellInner);
+export const SquashCell = memo(SquashCellInner);
