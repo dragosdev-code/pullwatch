@@ -147,6 +147,8 @@ Then in Chrome: open `chrome://extensions`, enable **Developer mode**, click **L
 - `npm run test:remote-patterns` validates the production `patterns.json` against the schema. There are also `:staging`, `:production`, and `:production:parity` variants.
 - `npm run lint` runs oxlint.
 
+Squash minigame architecture and simulation contracts: [`src/components/squash-minigame/docs/README.md`](src/components/squash-minigame/docs/README.md).
+
 ## Issues and feedback
 
 Pullwatch is a personal project that I build and maintain on my own, so I am not accepting code contributions for the moment. That said, bug reports and feature ideas are very welcome and genuinely useful.
