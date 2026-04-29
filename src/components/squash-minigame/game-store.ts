@@ -10,6 +10,13 @@ import {
   type ModeConfig,
 } from './game-config';
 import { computeBugPhase } from './game-phase';
+import {
+  applyDespawnsForTick,
+  computeExpansionResult,
+  evictExpiredGraceEntries,
+  resizeTargetBuffer,
+  runSpawnForTick,
+} from './game-tick';
 import type {
   ClickOutcome,
   GameMode,
@@ -96,20 +103,6 @@ let fallbackIdCounter = 0;
 function defaultIdGenerator(): string {
   fallbackIdCounter += 1;
   return `target_${fallbackIdCounter}`;
-}
-
-/** Indices of `null` slots in the target grid. */
-function pickEmptyIndices(targets: (Target | null)[]): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < targets.length; i += 1) {
-    if (targets[i] === null) out.push(i);
-  }
-  return out;
-}
-
-/** Select one index from `indices` using the injected `random` source. */
-function pickOne(indices: number[], random: () => number): number {
-  return indices[Math.min(indices.length - 1, Math.floor(random() * indices.length))];
 }
 
 function buildIdleState(): GameState {
@@ -246,7 +239,10 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
     },
 
     /**
-     * Advance the simulation by one frame.
+     * Advance the simulation by one frame. This function is the SINGLE owner of end-to-end tick
+     * ordering: each step lives in `./game-tick.ts` as a typed helper, and this orchestrator
+     * sequences them and commits the result. Do not split phase ownership across multiple
+     * top-level mutators — it would let phases reorder.
      *
      * WHY [tick ordering — expand → resize → spawn → despawn → finished]:
      *
@@ -254,6 +250,8 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
      * 2. **Resize buffer** pads `activeTargets` to match the new `gridSize²`.
      * 3. **Spawn gated on `!grew`**: if the grid just expanded this tick, skip spawning so the
      *    layout settles (React needs one render to size the new cells) before targets appear.
+     *    Bug and feature timers are independent; each is consumed when it fires even if no empty
+     *    cell is available, so a full grid does not stack pending spawns.
      * 4. **Despawn last** (after spawn): a target that expires on this tick is still in the
      *    array when the spawn gate runs, preserving its cell as occupied. More importantly,
      *    the target is still visible to any click handler that fires between the previous
@@ -271,92 +269,36 @@ export function createGameStore(deps: GameStoreDeps = {}): GameStore {
       const timeRemainingMs = Math.max(0, s.config.durationMs - elapsedMs);
 
       // 1. expansion
-      const prevGridSize = s.gridSize;
-      let gridSize = prevGridSize;
-      for (const stage of s.config.gridExpansionSchedule) {
-        if (timeRemainingMs <= stage.triggerAtRemainingMs && stage.gridSize > gridSize) {
-          gridSize = stage.gridSize;
-        }
-      }
-      const grew = gridSize !== prevGridSize;
+      const { gridSize, grew } = computeExpansionResult(s.gridSize, s.config, timeRemainingMs);
 
-      // 2. resize buffer
-      let activeTargets = s.activeTargets;
-      const desiredCellCount = gridSize ** 2;
-      if (desiredCellCount > activeTargets.length) {
-        activeTargets = activeTargets.concat(
-          new Array(desiredCellCount - activeTargets.length).fill(null)
-        );
-      }
+      // 2. resize buffer (returns same ref when no growth needed; despawn relies on identity)
+      const resizedTargets = resizeTargetBuffer(s.activeTargets, gridSize);
 
-      // 3. spawn (gated on expansion)
-      /**
-       * WHY [two independent spawn gates]: bugs and features each run on their own cadence so a
-       * hot squash streak (which resets `nextBugSpawnAt` to `now`) does not drag features along.
-       * Each gate scans empty cells independently — a bug and a feature may land in the same tick
-       * if both timers fire, but they will never fight for the same cell because the second scan
-       * sees the first spawn's mutation.
-       *
-       * WHY [skip spawn on grow]: the grid just resized; React needs one render pass to lay out
-       * the new cells before targets appear. Deferring to the next tick avoids visual jank.
-       */
-      let nextBugSpawnAt = s.nextBugSpawnAt;
-      let nextFeatureSpawnAt = s.nextFeatureSpawnAt;
+      // 3. spawn (skipped on grow tick; each timer consumed when it fires)
+      const spawnResult = runSpawnForTick({
+        grew,
+        now,
+        config: s.config,
+        activeTargets: resizedTargets,
+        nextBugSpawnAt: s.nextBugSpawnAt,
+        nextFeatureSpawnAt: s.nextFeatureSpawnAt,
+        random,
+        generateId,
+      });
 
-      if (!grew) {
-        if (now >= nextBugSpawnAt) {
-          const emptyCells = pickEmptyIndices(activeTargets);
-          if (emptyCells.length > 0) {
-            const cellIndex = pickOne(emptyCells, random);
-            const target: Target = {
-              id: generateId(),
-              kind: 'bug',
-              spawnedAt: now,
-              despawnAt: now + s.config.targetLifetimeMs,
-              damageStage: 0,
-            };
-            activeTargets = activeTargets.slice();
-            activeTargets[cellIndex] = target;
-          }
-          nextBugSpawnAt = now + s.config.spawnIntervalMs;
-        }
+      // 4. despawn (after spawn so same-frame clicks still see expiring targets)
+      const { activeTargets } = applyDespawnsForTick({
+        activeTargets: spawnResult.activeTargets,
+        originalRef: s.activeTargets,
+        now,
+        recentlyDespawned,
+      });
 
-        if (now >= nextFeatureSpawnAt) {
-          const emptyCells = pickEmptyIndices(activeTargets);
-          if (emptyCells.length > 0) {
-            const cellIndex = pickOne(emptyCells, random);
-            const target: Target = {
-              id: generateId(),
-              kind: 'feature',
-              spawnedAt: now,
-              despawnAt: now + s.config.targetLifetimeMs,
-              damageStage: 0,
-            };
-            activeTargets = activeTargets.slice();
-            activeTargets[cellIndex] = target;
-          }
-          nextFeatureSpawnAt = now + s.config.featureSpawnIntervalMs;
-        }
-      }
+      // 4b. evict stale grace entries (mutates closure-scoped map)
+      evictExpiredGraceEntries(recentlyDespawned, now);
 
-      // 4. despawn (after spawn so same-frame clicks still see target)
-      for (let i = 0; i < activeTargets.length; i += 1) {
-        const target = activeTargets[i];
-        if (target && target.despawnAt <= now) {
-          recentlyDespawned.set(i, { target, at: now });
-          if (activeTargets === s.activeTargets) {
-            activeTargets = activeTargets.slice();
-          }
-          activeTargets[i] = null;
-        }
-      }
-
-      // Evict stale grace entries
-      for (const [idx, entry] of recentlyDespawned) {
-        if (now - entry.at > DESPAWN_GRACE_MS) {
-          recentlyDespawned.delete(idx);
-        }
-      }
+      const nextBugSpawnAt = spawnResult.nextBugSpawnAt;
+      const nextFeatureSpawnAt = spawnResult.nextFeatureSpawnAt;
 
       // 5. finished check
       if (timeRemainingMs <= 0) {
