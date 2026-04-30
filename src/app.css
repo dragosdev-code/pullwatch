@@ -119,6 +119,46 @@ html.pw-booting .pw-popup-shell {
   min-height: 0;
 }
 
+/* Dev-only: simulate Chrome's extension popup chrome on a desktop browser tab so the
+   minigame's popup-resize transitions are observable. Toggled by DevExtensionSimulator
+   under `import.meta.env.DEV && !isExtensionContext()`; never present in prod builds. */
+html.pw-dev-popup-sim {
+  width: 100%;
+  height: 100vh;
+  background: #1a1a1a;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+}
+html.pw-dev-popup-sim body {
+  width: var(--pw-popup-width);
+  min-width: var(--pw-popup-width);
+  max-width: var(--pw-popup-width);
+  height: var(--pw-popup-height);
+  min-height: var(--pw-popup-height);
+  max-height: var(--pw-popup-height);
+  margin-top: 32px;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  /* Make body the containing block for `position: fixed` descendants (e.g. the minigame
+     overlay portal) so fixed-inset-0 resolves to the simulated popup box, not the viewport. */
+  contain: paint;
+  transition:
+    width var(--pw-popup-resize-duration) var(--pw-popup-resize-easing),
+    height var(--pw-popup-resize-duration) var(--pw-popup-resize-easing),
+    min-width var(--pw-popup-resize-duration) var(--pw-popup-resize-easing),
+    min-height var(--pw-popup-resize-duration) var(--pw-popup-resize-easing),
+    max-width var(--pw-popup-resize-duration) var(--pw-popup-resize-easing),
+    max-height var(--pw-popup-resize-duration) var(--pw-popup-resize-easing);
+}
+@media (prefers-reduced-motion: reduce) {
+  html.pw-dev-popup-sim body {
+    transition: none;
+  }
+}
+
 :where(
   :root:has(
     .modal-open,

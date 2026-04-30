@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { Header } from '@src/components/header';
 import { Tabs } from '@src/components/ui/tabs/tabs';
 import { TabPanel } from '@src/components/ui/tabs/tab-panel';
@@ -22,6 +22,10 @@ import { ParserBreakageBanner } from '@src/components/parser-breakage-banner';
 import { GitHubOutageBanner } from '@src/components/github-outage-banner';
 import { SquashMinigameExperienceProvider } from '@src/components/squash-minigame/squash-minigame-experience-provider';
 import { TAB_IDS } from '@src/constants/tabs';
+
+const DevExtensionSimulator = import.meta.env.DEV
+  ? lazy(() => import('./dev/dev-extension-simulator'))
+  : null;
 
 const AppShell = () => {
   const error = useGlobalError();
@@ -114,6 +118,11 @@ const AppShell = () => {
 const App = () => (
   <OnboardingGate>
     <SquashMinigameExperienceProvider>
+      {DevExtensionSimulator && (
+        <Suspense fallback={null}>
+          <DevExtensionSimulator />
+        </Suspense>
+      )}
       <AppShell />
     </SquashMinigameExperienceProvider>
   </OnboardingGate>

@@ -20,4 +20,16 @@
   var root = document.documentElement;
   root.style.setProperty('--pw-popup-width', preset.width + 'px');
   root.style.setProperty('--pw-popup-height', preset.height + 'px');
+
+  // Dev-only popup simulation: when this document is loaded outside a Chrome extension
+  // context (plain `vite dev` tab), pin html/body to the popup box so the first paint
+  // is already centered. In a real extension popup `chrome.runtime.sendMessage` exists,
+  // so the class is skipped and production styling is untouched.
+  var inExtension =
+    typeof chrome !== 'undefined' &&
+    chrome.runtime &&
+    typeof chrome.runtime.sendMessage === 'function';
+  if (!inExtension) {
+    root.classList.add('pw-dev-popup-sim');
+  }
 })();
