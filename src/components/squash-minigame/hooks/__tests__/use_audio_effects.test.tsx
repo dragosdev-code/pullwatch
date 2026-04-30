@@ -33,7 +33,7 @@ describe('useAudioEffects', () => {
     store.getState().startGame('standard', 0);
     const engine = buildEngineStub();
 
-    renderHook(() => useAudioEffects({ engine }), { wrapper: wrap(store) });
+    renderHook(() => useAudioEffects(engine), { wrapper: wrap(store) });
 
     act(() => {
       store.setState({
@@ -73,7 +73,7 @@ describe('useAudioEffects', () => {
     const store = createGameStore();
     store.getState().startGame('standard', 0);
     const engine = buildEngineStub();
-    renderHook(() => useAudioEffects({ engine }), { wrapper: wrap(store) });
+    renderHook(() => useAudioEffects(engine), { wrapper: wrap(store) });
 
     act(() => {
       store.setState({
@@ -95,7 +95,7 @@ describe('useAudioEffects', () => {
     const store = createGameStore();
     store.getState().startGame('standard', 0);
     const engine = buildEngineStub();
-    renderHook(() => useAudioEffects({ engine }), { wrapper: wrap(store) });
+    renderHook(() => useAudioEffects(engine), { wrapper: wrap(store) });
 
     const click = {
       id: 0,
@@ -113,12 +113,31 @@ describe('useAudioEffects', () => {
     expect(engine.playSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('closes the engine on unmount', () => {
+  it('unsubscribes on unmount and stops responding to new clicks', () => {
     const store = createGameStore();
     store.getState().startGame('standard', 0);
     const engine = buildEngineStub();
-    const view = renderHook(() => useAudioEffects({ engine }), { wrapper: wrap(store) });
+    const view = renderHook(() => useAudioEffects(engine), { wrapper: wrap(store) });
+
     view.unmount();
-    expect(engine.closeSpy).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      store.setState({
+        lastClick: { id: 99, outcome: { kind: 'miss' }, cellIndex: 0, at: 0 },
+        nextClickId: 100,
+      });
+    });
+
+    expect(engine.playSpy).not.toHaveBeenCalled();
+    // Hook no longer owns engine lifecycle; the body that constructed the engine closes it.
+    expect(engine.closeSpy).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no engine is provided', () => {
+    const store = createGameStore();
+    store.getState().startGame('standard', 0);
+    expect(() => {
+      renderHook(() => useAudioEffects(null), { wrapper: wrap(store) });
+    }).not.toThrow();
   });
 });

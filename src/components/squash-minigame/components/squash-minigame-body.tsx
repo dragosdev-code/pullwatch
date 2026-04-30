@@ -1,14 +1,11 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import type { FinishedRoundSummary, GameMode } from '../game-types';
 import { GameBoard } from './game-board';
 import { FinishedOverlay } from './finished-overlay';
 import { Hud } from './hud';
 import { FctOverlay } from '../fct/fct-overlay';
-import {
-  createAudioEngine,
-  type AudioEngine,
-} from '../audio/audio-engine';
+import { createAudioEngine, type AudioEngine } from '../audio/audio-engine';
 import { useAudioEffects, type UseAudioEffectsOptions } from '../hooks/use-audio-effects';
 import { useFinishedReporter } from '../hooks/use-finished-reporter';
 import { useRoundEndAudio } from '../hooks/use-round-end-audio';
@@ -37,17 +34,32 @@ export function SquashMinigameBody({
   disableFctOverlay,
 }: SquashMinigameBodyProps) {
   /**
-   * WHY [shared engineRef]: both `useAudioEffects` (click tones) and `useRoundEndAudio`
-   * (round-end cue) need access to the same AudioEngine instance so they share a single
-   * AudioContext. We create it once here and pass it down to both hooks.
+   * WHY [engine via state + effect lifecycle]: both `useAudioEffects` (click tones) and
+   * `useRoundEndAudio` (round-end cue) need the same `AudioEngine` so they share one
+   * `AudioContext`. Creating the engine inside an effect (not at render-time) makes the
+   * StrictMode mount → cleanup → mount cycle re-create the engine cleanly, and tracks
+   * lifetime to a single owner. Storing it in state (not a ref) so the consumer hooks
+   * resubscribe with the new engine on the StrictMode remount instead of holding a stale
+   * reference.
    */
-  const engineRef = useRef<AudioEngine | null>(null);
-  if (!engineRef.current) {
-    engineRef.current = audioOptions?.engine ?? createAudioEngine(audioOptions?.engineDeps);
-  }
+  const injectedEngine = audioOptions?.engine ?? null;
+  const engineDeps = audioOptions?.engineDeps;
+  const [engine, setEngine] = useState<AudioEngine | null>(injectedEngine);
 
-  useAudioEffects({ ...audioOptions, engine: engineRef.current });
-  useRoundEndAudio(engineRef.current);
+  useEffect(() => {
+    if (injectedEngine) {
+      setEngine(injectedEngine);
+      return;
+    }
+    const created = createAudioEngine(engineDeps);
+    setEngine(created);
+    return () => {
+      created.close();
+    };
+  }, [injectedEngine, engineDeps]);
+
+  useAudioEffects(engine);
+  useRoundEndAudio(engine);
   useFinishedReporter(mode, onFinish);
   const isShaking = useScreenShake();
   const playgroundRef = useRef<HTMLDivElement>(null);
