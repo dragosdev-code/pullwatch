@@ -8,6 +8,28 @@ import { ParserBreakageError } from '@common/errors';
  * itself contains zero hardcoded selectors.
  */
 export class GitHubHTMLParser {
+  private static extractIsoTimestamp(
+    elementHtml: string,
+    patterns: CompiledPatterns
+  ): { createdAt: string; eventAt?: string; timestampParseFailed: boolean } {
+    const fallbackCreatedAt = new Date().toISOString();
+    try {
+      for (const p of patterns.timestamp) {
+        const match = elementHtml.match(p.compiled);
+        const raw = match?.[p.captureGroups!.datetime];
+        if (!raw) continue;
+        const timestamp = Date.parse(raw);
+        if (Number.isFinite(timestamp)) {
+          return { createdAt: raw, eventAt: raw, timestampParseFailed: false };
+        }
+        return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
+      }
+    } catch {
+      return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
+    }
+    return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
+  }
+
   /**
    * Returns `true` when the HTML looks like a valid GitHub search-results
    * page — even if that page contains zero results (e.g. the user genuinely
@@ -150,15 +172,9 @@ export class GitHubHTMLParser {
       author = [{ login: authorLogin }];
     }
 
-    // ── Creation Time ────────────────────────────────────────────────
-    let createdAt = new Date().toISOString();
-    for (const p of patterns.timestamp) {
-      const match = elementHtml.match(p.compiled);
-      if (match?.[p.captureGroups!.datetime]) {
-        createdAt = match[p.captureGroups!.datetime];
-        break;
-      }
-    }
+    // WHY [DOM contract]: GitHub's row timestamp is frontend markup, not an API. Keep failures
+    // scoped to this row so a missing `<relative-time datetime>` cannot crash the alarm wave.
+    const timestamp = GitHubHTMLParser.extractIsoTimestamp(elementHtml, patterns);
 
     // ── PR Type (draft / open / merged) ──────────────────────────────
     const prType = GitHubHTMLParser.detectPRType(elementHtml, patterns);
@@ -170,7 +186,10 @@ export class GitHubHTMLParser {
       number,
       repoName,
       author,
-      createdAt,
+      createdAt: timestamp.createdAt,
+      eventAt: timestamp.eventAt,
+      eventAtKind: 'unknown',
+      timestampParseFailed: timestamp.timestampParseFailed,
       type: prType,
       isNew: false,
     };

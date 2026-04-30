@@ -72,6 +72,7 @@ describe('PRService outage gate', () => {
   let signalGitHubOutage: Mock;
   let clearGitHubOutage: Mock;
   let storedByKey: Record<string, StoredPRData | null>;
+  let chromeStorageByKey: Record<string, unknown>;
 
   const debugService = {
     log: vi.fn(),
@@ -127,8 +128,17 @@ describe('PRService outage gate', () => {
     vi.useFakeTimers();
     vi.setSystemTime(T0);
     vi.clearAllMocks();
-    storageGet.mockReset().mockResolvedValue({});
-    storageSet.mockReset().mockResolvedValue(undefined);
+    chromeStorageByKey = {};
+    storageGet.mockReset().mockImplementation(async (key?: string | string[]) => {
+      if (typeof key === 'string') return { [key]: chromeStorageByKey[key] };
+      if (Array.isArray(key)) {
+        return Object.fromEntries(key.map((k) => [k, chromeStorageByKey[k]]));
+      }
+      return { ...chromeStorageByKey };
+    });
+    storageSet.mockReset().mockImplementation(async (items: Record<string, unknown>) => {
+      Object.assign(chromeStorageByKey, items);
+    });
     storageRemove.mockReset().mockResolvedValue(undefined);
 
     storedByKey = {
@@ -194,7 +204,7 @@ describe('PRService outage gate', () => {
     expect(setLastFetchTime).not.toHaveBeenCalled();
     expect(setPRCountBadge).not.toHaveBeenCalled();
     expect(signalGitHubOutage).toHaveBeenCalledWith(
-      expect.stringContaining('Empty assigned list'),
+      expect.stringContaining('Suspicious assigned list'),
       'pr_component_degraded'
     );
     expect(storageSet).toHaveBeenCalledWith({
@@ -215,7 +225,7 @@ describe('PRService outage gate', () => {
     expect(showMergedPRNotifications).not.toHaveBeenCalled();
     expect(setStoredPRs).not.toHaveBeenCalled();
     expect(signalGitHubOutage).toHaveBeenCalledWith(
-      expect.stringContaining('Empty merged list'),
+      expect.stringContaining('Suspicious merged list'),
       'pr_component_degraded'
     );
     expect(storageSet).toHaveBeenCalledWith({
@@ -223,17 +233,22 @@ describe('PRService outage gate', () => {
     });
   });
 
-  it('3. legitimate empty (healthy): empty fresh + non-empty stored + operational → flow proceeds, persist happens, clearGitHubOutage called', async () => {
+  it('3. suspicious empty (healthy): empty fresh + non-empty stored + operational → preserves stored baseline', async () => {
     getStatus.mockResolvedValue(snapshot('operational', 'none'));
     fetchMergedPRs.mockResolvedValue([]);
+    const oldPRs = storedByKey[STORAGE_KEY_MERGED_PRS]!.prs;
 
     const pr = makeService();
-    await pr.updateMergedPRs(false, true);
+    const out = await pr.updateMergedPRs(false, true);
 
+    expect(out).toBe(oldPRs);
     expect(showMergedPRNotifications).not.toHaveBeenCalled();
-    expect(setStoredPRs).toHaveBeenCalledWith(STORAGE_KEY_MERGED_PRS, []);
-    expect(clearGitHubOutage).toHaveBeenCalled();
-    expect(signalGitHubOutage).not.toHaveBeenCalled();
+    expect(setStoredPRs).not.toHaveBeenCalled();
+    expect(clearGitHubOutage).not.toHaveBeenCalled();
+    expect(signalGitHubOutage).toHaveBeenCalledWith(
+      expect.stringContaining('Suspicious merged list'),
+      'pr_component_degraded'
+    );
   });
 
   it('4. recovery on next tick: tick1 storm leaves storage intact; tick2 healthy + fresh non-empty fires only the new PR', async () => {
@@ -264,15 +279,17 @@ describe('PRService outage gate', () => {
     expect(notifiedPRs[0]!.id).toBe('m-new');
   });
 
-  it('5. fail-OPEN: status returns unknown → gate inactive, normal compare runs', async () => {
+  it('5. fail-safe: status returns unknown but empty transition still preserves baseline', async () => {
     getStatus.mockResolvedValue(snapshot('unknown', 'unknown'));
     fetchMergedPRs.mockResolvedValue([]);
+    const oldPRs = storedByKey[STORAGE_KEY_MERGED_PRS]!.prs;
 
     const pr = makeService();
-    await pr.updateMergedPRs(false, true);
+    const out = await pr.updateMergedPRs(false, true);
 
-    expect(setStoredPRs).toHaveBeenCalledWith(STORAGE_KEY_MERGED_PRS, []);
-    expect(signalGitHubOutage).not.toHaveBeenCalled();
+    expect(out).toBe(oldPRs);
+    expect(setStoredPRs).not.toHaveBeenCalled();
+    expect(signalGitHubOutage).toHaveBeenCalled();
   });
 
   it('6. cold start: stored empty + fresh empty + degraded status → gate inactive (oldLength === 0)', async () => {
@@ -306,8 +323,8 @@ describe('PRService outage gate', () => {
   it('8. manual refresh + healthy + fresh non-empty: gate inactive, line-449 notify-skip still fires', async () => {
     getStatus.mockResolvedValue(snapshot('operational'));
     fetchAssignedPRs.mockResolvedValue([
+      ...storedByKey[STORAGE_KEY_ASSIGNED_PRS]!.prs,
       makePR({ id: 'fresh-1', url: 'https://github.com/o/r/pull/901' }),
-      makePR({ id: 'fresh-2', url: 'https://github.com/o/r/pull/902' }),
     ]);
 
     const pr = makeService();
@@ -320,15 +337,15 @@ describe('PRService outage gate', () => {
     expect(signalGitHubOutage).not.toHaveBeenCalled();
   });
 
-  it('9. global non-none + PR component operational: gate does NOT fire (component-primary)', async () => {
+  it('9. global non-none + PR component operational: empty transition still preserves baseline', async () => {
     getStatus.mockResolvedValue(snapshot('operational', 'critical'));
     fetchMergedPRs.mockResolvedValue([]);
 
     const pr = makeService();
     await pr.updateMergedPRs(false, true);
 
-    expect(signalGitHubOutage).not.toHaveBeenCalled();
-    expect(setStoredPRs).toHaveBeenCalledWith(STORAGE_KEY_MERGED_PRS, []);
+    expect(signalGitHubOutage).toHaveBeenCalled();
+    expect(setStoredPRs).not.toHaveBeenCalled();
   });
 
   it('10. global non-none + PR component unknown: gate fires via fallback', async () => {
@@ -342,7 +359,7 @@ describe('PRService outage gate', () => {
     expect(setStoredPRs).not.toHaveBeenCalled();
   });
 
-  it('11. smaller-but-non-empty fresh (10 stored, 3 fresh, partial_outage): gate does NOT fire (no percentage-drop policy)', async () => {
+  it('11. smaller-but-non-empty fresh (10 stored, 3 fresh, partial_outage): trust gate preserves baseline', async () => {
     getStatus.mockResolvedValue(snapshot('partial_outage'));
     storedByKey[STORAGE_KEY_MERGED_PRS] = {
       prs: Array.from({ length: 10 }, (_, i) =>
@@ -365,8 +382,8 @@ describe('PRService outage gate', () => {
     const pr = makeService();
     await pr.updateMergedPRs(false, true);
 
-    expect(signalGitHubOutage).not.toHaveBeenCalled();
-    expect(setStoredPRs).toHaveBeenCalled();
+    expect(signalGitHubOutage).toHaveBeenCalled();
+    expect(setStoredPRs).not.toHaveBeenCalled();
   });
 
   it('12. authored gate: empty fresh + non-empty stored + degraded → no persist, metadata written', async () => {
@@ -380,8 +397,89 @@ describe('PRService outage gate', () => {
     expect(out).toBe(oldPRs);
     expect(setStoredPRs).not.toHaveBeenCalled();
     expect(signalGitHubOutage).toHaveBeenCalledWith(
-      expect.stringContaining('Empty authored list'),
+      expect.stringContaining('Suspicious authored list'),
       'pr_component_degraded'
+    );
+  });
+
+  it('13. limbo: one trusted missing poll retains merged baseline without false recovery notification', async () => {
+    getStatus.mockResolvedValue(snapshot('operational'));
+    const oldPRs = Array.from({ length: 4 }, (_, i) =>
+      makePR({
+        id: `m-${i}`,
+        url: `https://github.com/o/r/pull/${100 + i}`,
+        type: 'merged',
+        eventAt: '2026-04-27T11:55:00.000Z',
+      })
+    );
+    storedByKey[STORAGE_KEY_MERGED_PRS] = { prs: oldPRs, timestamp: T0 };
+    fetchMergedPRs.mockResolvedValueOnce(oldPRs.slice(0, 3));
+
+    const pr = makeService();
+    await pr.updateMergedPRs(false, true);
+
+    const persistedAfterMiss = setStoredPRs.mock.calls.at(-1)![1] as PullRequest[];
+    expect(persistedAfterMiss.map((p) => p.id)).toContain('m-3');
+    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+
+    vi.setSystemTime(T0 + 60_000);
+    setStoredPRs.mockClear();
+    fetchMergedPRs.mockResolvedValueOnce(oldPRs);
+    await pr.updateMergedPRs(false, true);
+
+    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    const persistedAfterRecovery = setStoredPRs.mock.calls.at(-1)![1] as PullRequest[];
+    expect(persistedAfterRecovery).toHaveLength(4);
+  });
+
+  it('14. timestamp validation: stale merged candidate is persisted without notification', async () => {
+    getStatus.mockResolvedValue(snapshot('operational'));
+    storedByKey[STORAGE_KEY_MERGED_PRS] = {
+      prs: [makePR({ id: 'm-old', url: 'https://github.com/o/r/pull/100', type: 'merged' })],
+      timestamp: T0,
+    };
+    const staleNew = makePR({
+      id: 'm-stale',
+      url: 'https://github.com/o/r/pull/101',
+      type: 'merged',
+      eventAt: '2026-04-27T10:00:00.000Z',
+    });
+    fetchMergedPRs.mockResolvedValue([storedByKey[STORAGE_KEY_MERGED_PRS]!.prs[0]!, staleNew]);
+
+    const pr = makeService();
+    await pr.updateMergedPRs(false, true);
+
+    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(setStoredPRs).toHaveBeenCalledWith(
+      STORAGE_KEY_MERGED_PRS,
+      expect.arrayContaining([expect.objectContaining({ id: 'm-stale' })])
+    );
+  });
+
+  it('15. timestamp validation: unknown timestamp during degraded status is quarantined from notifications', async () => {
+    getStatus.mockResolvedValue(snapshot('degraded_performance'));
+    storedByKey[STORAGE_KEY_MERGED_PRS] = {
+      prs: [makePR({ id: 'm-old', url: 'https://github.com/o/r/pull/100', type: 'merged' })],
+      timestamp: T0,
+    };
+    const unknownTime = makePR({
+      id: 'm-unknown-time',
+      url: 'https://github.com/o/r/pull/102',
+      type: 'merged',
+      timestampParseFailed: true,
+    });
+    fetchMergedPRs.mockResolvedValue([
+      storedByKey[STORAGE_KEY_MERGED_PRS]!.prs[0]!,
+      unknownTime,
+    ]);
+
+    const pr = makeService();
+    await pr.updateMergedPRs(false, true);
+
+    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(setStoredPRs).toHaveBeenCalledWith(
+      STORAGE_KEY_MERGED_PRS,
+      expect.arrayContaining([expect.objectContaining({ id: 'm-unknown-time' })])
     );
   });
 });

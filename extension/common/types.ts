@@ -78,6 +78,15 @@ export interface PullRequest {
   author: PullRequestAuthor[];
   createdAt?: string; // ISO date string
   updatedAt?: string; // ISO date string
+  /**
+   * Timestamp used for notification freshness checks. HTML parsers only set this when the DOM
+   * exposes a valid ISO datetime; `createdAt` may still fall back to "now" for legacy UI sorting.
+   */
+  eventAt?: string;
+  /** Source semantics for `eventAt`; merged-list rows may only expose a generic list timestamp. */
+  eventAtKind?: 'created' | 'updated' | 'merged' | 'unknown';
+  /** True when the row parsed but its DOM timestamp was missing or malformed. */
+  timestampParseFailed?: boolean;
   labels?: string[];
   isNew?: boolean; // Helper flag for notifications
   html_url?: string; // This is often the same as url, from GitHub API

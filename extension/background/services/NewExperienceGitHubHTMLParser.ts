@@ -28,6 +28,28 @@ import { ParserBreakageError } from '@common/errors';
  * appear on full-page responses.
  */
 export class NewExperienceGitHubHTMLParser {
+  private static extractIsoTimestamp(
+    rowHtml: string,
+    ne: CompiledNewExperiencePatterns
+  ): { createdAt: string; eventAt?: string; timestampParseFailed: boolean } {
+    const fallbackCreatedAt = new Date().toISOString();
+    try {
+      for (const p of ne.timestamp) {
+        const match = rowHtml.match(p.compiled);
+        const raw = match?.[p.captureGroups!.datetime];
+        if (!raw) continue;
+        const timestamp = Date.parse(raw);
+        if (Number.isFinite(timestamp)) {
+          return { createdAt: raw, eventAt: raw, timestampParseFailed: false };
+        }
+        return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
+      }
+    } catch {
+      return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
+    }
+    return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
+  }
+
   /**
    * Attempts to parse PR data from the new-experience HTML.
    *
@@ -191,15 +213,9 @@ export class NewExperienceGitHubHTMLParser {
       (ag.loginAlt ? authorMatch?.[ag.loginAlt]?.trim() : undefined);
     const authorLogin = authorLoginRaw || 'Unknown Author';
 
-    // ── Timestamp ────────────────────────────────────────────────────
-    let createdAt = new Date().toISOString();
-    for (const p of ne.timestamp) {
-      const match = rowHtml.match(p.compiled);
-      if (match?.[p.captureGroups!.datetime]) {
-        createdAt = match[p.captureGroups!.datetime];
-        break;
-      }
-    }
+    // WHY [DOM contract]: GitHub can change list markup without changing the underlying PR state.
+    // Timestamp extraction is isolated so one malformed row becomes "unknown freshness", not a crash.
+    const timestamp = NewExperienceGitHubHTMLParser.extractIsoTimestamp(rowHtml, ne);
 
     // ── PR Type ──────────────────────────────────────────────────────
     const prType = NewExperienceGitHubHTMLParser.detectPRType(rowHtml, ne.prType);
@@ -211,7 +227,10 @@ export class NewExperienceGitHubHTMLParser {
       number,
       repoName,
       author: [{ login: authorLogin }],
-      createdAt,
+      createdAt: timestamp.createdAt,
+      eventAt: timestamp.eventAt,
+      eventAtKind: 'unknown',
+      timestampParseFailed: timestamp.timestampParseFailed,
       type: prType,
       isNew: false,
     };

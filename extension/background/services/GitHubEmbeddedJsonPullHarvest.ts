@@ -20,6 +20,12 @@ interface EmbeddedPullEntry {
   title?: string;
 }
 
+function normalizeIsoTimestamp(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? value : undefined;
+}
+
 /**
  * Regex targeting the SSR data blob that GitHub's new React-based pulls
  * dashboard injects into the initial HTML response.
@@ -137,6 +143,10 @@ export class GitHubEmbeddedJsonPullHarvest {
 
     const authorLogin = entry.author?.displayLogin ?? 'Unknown Author';
 
+    const createdAt = normalizeIsoTimestamp(entry.createdAt);
+    const updatedAt = normalizeIsoTimestamp(entry.updatedAt);
+    const eventAt = updatedAt ?? createdAt;
+
     return {
       id: permalink,
       url: permalink,
@@ -145,8 +155,11 @@ export class GitHubEmbeddedJsonPullHarvest {
       number: entry.number ?? null,
       repoName: entry.repoNameWithOwner ?? 'Unknown Repo',
       author: [{ login: authorLogin }],
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
+      createdAt: createdAt ?? new Date().toISOString(),
+      updatedAt,
+      eventAt,
+      eventAtKind: updatedAt ? 'updated' : createdAt ? 'created' : 'unknown',
+      timestampParseFailed: !eventAt,
       type: GitHubEmbeddedJsonPullHarvest.resolvePRType(entry),
       isNew: false,
     };

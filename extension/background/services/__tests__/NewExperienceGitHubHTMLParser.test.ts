@@ -92,4 +92,40 @@ describe('NewExperienceGitHubHTMLParser', () => {
     expect(prs).toHaveLength(1);
     expect(prs![0].author[0].login).toBe('legacy-user');
   });
+
+  it('keeps a row when relative-time datetime is missing and marks timestamp freshness unknown', () => {
+    const html = `
+      <li class="PullsListItem-module__listItem__abc">
+        <a data-testid="listitem-title-link" href="/owner/repo/pull/42">Fix things</a>
+        <button type="button" data-testid="author-filter-link">alice-writer</button>
+        <span>opened </span>
+        <relative-time></relative-time>
+        <span aria-label="Open"></span>
+      </li>
+    `;
+    const patterns = compiledWithNePatch({});
+    const prs = NewExperienceGitHubHTMLParser.parseFromHTML(html, baseURL, patterns);
+
+    expect(prs).toHaveLength(1);
+    expect(prs![0].timestampParseFailed).toBe(true);
+    expect(prs![0].eventAt).toBeUndefined();
+  });
+
+  it('keeps a row when relative-time datetime is malformed and marks timestamp freshness unknown', () => {
+    const html = `
+      <li class="PullsListItem-module__listItem__abc">
+        <a data-testid="listitem-title-link" href="/owner/repo/pull/42">Fix things</a>
+        <button type="button" data-testid="author-filter-link">alice-writer</button>
+        <span>opened </span>
+        <relative-time datetime="not-a-date"></relative-time>
+        <span aria-label="Open"></span>
+      </li>
+    `;
+    const patterns = compiledWithNePatch({});
+    const prs = NewExperienceGitHubHTMLParser.parseFromHTML(html, baseURL, patterns);
+
+    expect(prs).toHaveLength(1);
+    expect(prs![0].timestampParseFailed).toBe(true);
+    expect(prs![0].eventAt).toBeUndefined();
+  });
 });

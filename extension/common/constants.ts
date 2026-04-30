@@ -19,6 +19,11 @@ export const STORAGE_KEY_GITHUB_OUTAGE = 'github_outage';
  * `useGitHubOutage` hook reads this for the outage-banner subline (does not overwrite PR arrays).
  */
 export const STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT = 'last_untrusted_fetch_at';
+/**
+ * Trust metadata for PR-list polling. Stores limbo rows and last trusted counts separately from
+ * `StoredPRs` so suspicious successful reads cannot overwrite last-known-good PR arrays.
+ */
+export const STORAGE_KEY_PR_LIST_TRUST = 'pr_list_trust_state';
 /** Cached `summary.json` snapshot from githubstatus.com (TTL {@link GITHUB_STATUS_CACHE_TTL_MS}). */
 export const STORAGE_KEY_GITHUB_STATUS_CACHE = 'github_status_cache';
 export const STORAGE_KEY_ROUTE_HINT = 'pulls_list_route_hint';

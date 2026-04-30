@@ -31,6 +31,7 @@ export class NotificationService implements INotificationService {
   // can recover it without relying on a Map or any global variable.
   private static readonly NOTIFICATION_DELIMITER = '|';
   private static readonly NOTIFICATION_PREFIX = 'pr-alert';
+  private static readonly NOTIFICATION_BATCH_PREFIX = 'pr-alert-batch';
 
   private debugService: IDebugService;
   private storageService: IStorageService;
@@ -118,7 +119,7 @@ export class NotificationService implements INotificationService {
         `[NotificationService] Showing assigned PR notifications for ${filteredPRs.length} PR(s)`
       );
 
-      // Show visual notifications for each PR
+      // Show visual notifications for the filtered PR set
       await this.showPRNotificationsInternal(filteredPRs, 'assigned');
 
       // Play sound based on assigned sound setting
@@ -150,7 +151,7 @@ export class NotificationService implements INotificationService {
         `[NotificationService] Showing merged PR notifications for ${prsArray.length} PR(s)`
       );
 
-      // Show visual notifications for each PR with merged-specific title
+      // Show visual notifications for merged PRs
       await this.showPRNotificationsInternal(prsArray, 'merged');
 
       // Play sound based on merged sound setting
@@ -286,6 +287,11 @@ export class NotificationService implements INotificationService {
     prs: PullRequest[],
     category: 'assigned' | 'merged'
   ): Promise<void> {
+    if (prs.length > 1) {
+      await this.showSummaryNotification(prs, category);
+      return;
+    }
+
     const isMerged = category === 'merged';
     const localIconUrl = getNotificationIconUrl();
 
@@ -326,6 +332,39 @@ export class NotificationService implements INotificationService {
     }
   }
 
+  private async showSummaryNotification(
+    prs: PullRequest[],
+    category: 'assigned' | 'merged'
+  ): Promise<void> {
+    const isMerged = category === 'merged';
+    const localIconUrl = getNotificationIconUrl();
+    const visibleTitles = prs.slice(0, 3).map((pr) => `- ${pr.title}`);
+    const hiddenCount = prs.length - visibleTitles.length;
+    const suffix = hiddenCount > 0 ? `\n+${hiddenCount} more` : '';
+    const d = NotificationService.NOTIFICATION_DELIMITER;
+    const notificationId = `${NotificationService.NOTIFICATION_BATCH_PREFIX}${d}${category}${d}${Date.now()}`;
+
+    // WHY [attention budget]: A polling recovery can surface many valid events at once. Keep the
+    // event detail in one native row so the user gets signal without a wall of OS interruptions.
+    await this.createNotification(
+      {
+        type: 'basic',
+        iconUrl: localIconUrl,
+        title: isMerged ? `${prs.length} PRs were merged` : `${prs.length} new PR review requests`,
+        message: `${visibleTitles.join('\n')}${suffix}`,
+        contextMessage: isMerged ? 'Pullwatch merged PR summary' : 'Pullwatch review request summary',
+        requireInteraction: false,
+        silent: true,
+        priority: 2,
+      },
+      notificationId
+    );
+
+    this.debugService.log(
+      `[NotificationService] Summary notification shown for ${prs.length} ${category} PR(s)`
+    );
+  }
+
   /**
    * Plays notification sound for a specific category.
    */
@@ -353,6 +392,15 @@ export class NotificationService implements INotificationService {
   private static parseNotificationId(notificationId: string): { category: string; url: string } | null {
     const d = NotificationService.NOTIFICATION_DELIMITER;
     const prefix = NotificationService.NOTIFICATION_PREFIX;
+    const batchPrefix = NotificationService.NOTIFICATION_BATCH_PREFIX;
+    if (notificationId.startsWith(`${batchPrefix}${d}`)) {
+      const firstPipe = notificationId.indexOf(d);
+      const secondPipe = notificationId.indexOf(d, firstPipe + 1);
+      if (secondPipe === -1) return null;
+      const category = notificationId.substring(firstPipe + 1, secondPipe);
+      return { category, url: chromeExtensionService.runtime.getURL('index.html') };
+    }
+
     if (!notificationId.startsWith(`${prefix}${d}`)) return null;
 
     const firstPipe = notificationId.indexOf(d);

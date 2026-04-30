@@ -35,6 +35,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
   let notificationsCreate: ReturnType<typeof vi.fn>;
   let notificationsGetAll: ReturnType<typeof vi.fn>;
   let getPermissionLevel: ReturnType<typeof vi.fn>;
+  let tabsCreate: ReturnType<typeof vi.fn>;
 
   function settingsWithPreviewEnabled(patch: Partial<ExtensionSettings> = {}): ExtensionSettings {
     return {
@@ -52,6 +53,7 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     notificationsCreate = vi.fn().mockImplementation((_id: string) => Promise.resolve(_id));
     notificationsGetAll = vi.fn().mockResolvedValue({});
     getPermissionLevel = vi.fn().mockResolvedValue('granted');
+    tabsCreate = vi.fn().mockResolvedValue({});
 
     globalThis.chrome = {
       runtime: {
@@ -62,6 +64,9 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
         create: notificationsCreate,
         getAll: notificationsGetAll,
         getPermissionLevel,
+      },
+      tabs: {
+        create: tabsCreate,
       },
     } as unknown as (typeof globalThis)['chrome'];
 
@@ -171,6 +176,45 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     expect(notificationsCreate).toHaveBeenCalledTimes(1);
     const id = notificationsCreate.mock.calls[0][0] as string;
     expect(id).toBe(`pr-alert|assigned|${pr.url}`);
+  });
+
+  it('batches multiple assigned PRs into one summary notification', async () => {
+    const svc = makeService(
+      settingsWithPreviewEnabled({
+        assigned: {
+          ...DEFAULT_EXTENSION_SETTINGS.assigned,
+          notificationsEnabled: true,
+          notifyOnDrafts: false,
+          showDraftsInList: true,
+        },
+      })
+    );
+
+    await svc.showAssignedPRNotifications([
+      openPr({ id: 'o1', title: 'First PR', url: 'https://github.com/o/r/pull/1' }),
+      openPr({ id: 'o2', title: 'Second PR', url: 'https://github.com/o/r/pull/2' }),
+    ]);
+
+    expect(notificationsCreate).toHaveBeenCalledTimes(1);
+    const id = notificationsCreate.mock.calls[0][0] as string;
+    const options = notificationsCreate.mock.calls[0][1] as NotificationCreateOptions;
+    expect(id).toMatch(/^pr-alert-batch\|assigned\|\d+$/);
+    expect(options.title).toBe('2 new PR review requests');
+    expect(options.message).toContain('First PR');
+    expect(options.message).toContain('Second PR');
+    expect(playSound).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the extension dashboard when a batch notification is clicked', async () => {
+    const svc = makeService(settingsWithPreviewEnabled());
+
+    await svc.handleNotificationClick('pr-alert-batch|merged|123');
+
+    expect(tabsCreate).toHaveBeenCalledWith({
+      url: 'chrome-extension://test/index.html',
+      active: true,
+    });
+    expect(notificationsClear).toHaveBeenCalledWith('pr-alert-batch|merged|123');
   });
 
   it('throws CHROME_DENIED and never calls create when getPermissionLevel returns denied', async () => {
