@@ -7,11 +7,9 @@ import type { IBadgeService } from '../interfaces/IBadgeService';
 import type { IRateLimitService } from '../interfaces/IRateLimitService';
 import type { IHealthStatusService } from '../interfaces/IHealthStatusService';
 import type { IGitHubStatusClient } from '../interfaces/IGitHubStatusClient';
-import type { GitHubStatusSnapshot } from '../interfaces/IGitHubStatusClient';
 import type { PullRequest } from '@common/types';
 import {
   CACHE_TTL_MS,
-  FETCH_INTERVAL_MS,
   REQUEST_DELAY_MS,
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
@@ -19,83 +17,23 @@ import {
   STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT,
   STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_PARSER_BREAKAGE,
-  STORAGE_KEY_PR_LIST_TRUST,
   STORAGE_KEY_ROUTE_HINT,
 } from '@common/constants';
 import { chromeExtensionService } from '@common/chrome-extension-service';
-import {
-  RateLimitError,
-  ParserBreakageError,
-  GitHubOutageError,
-  isGitHubWebSessionAuthError,
-} from '@common/errors';
-import { isOfflineError } from '@common/network-utils';
 import { delay } from '@common/utils';
-
-/**
- * WHY [invariant]: One place for “which pending assigned PRs count toward the badge” —
- * same draft filter as {@link PRService.mergeAndFilterAssignedPRs} so storage-backed badge
- * updates and {@link PRService.persistAndNotifyAssigned} always agree.
- */
-function filterPendingAssignedByDraftSetting(
-  pendingPRs: PullRequest[],
-  showDraftsInList: boolean
-): PullRequest[] {
-  return showDraftsInList ? pendingPRs : pendingPRs.filter((pr) => pr.type !== 'draft');
-}
-
-type ListKind = 'assigned' | 'merged' | 'authored';
-
-interface LimboEntry {
-  pr: PullRequest;
-  firstSeenAt: number;
-  lastSeenAt: number;
-  missCount: number;
-}
-
-interface ListTrustBucket {
-  limboByKey?: Record<string, LimboEntry>;
-  lastTrustedAt?: number;
-  lastTrustedCount?: number;
-  lastSuspiciousAt?: number;
-  lastReasons?: string[];
-}
-
-interface PRListTrustState {
-  lists?: Partial<Record<ListKind, ListTrustBucket>>;
-}
-
-interface ListTrustAssessment {
-  suspicious: boolean;
-  reasons: string[];
-  status: GitHubStatusSnapshot;
-  missConfirmationsRequired: number;
-}
-
-function getPrKey(pr: PullRequest): string {
-  return pr.id || pr.url;
-}
-
-function getMissingPRs(oldPRs: PullRequest[], freshPRs: PullRequest[]): PullRequest[] {
-  const freshKeys = new Set(freshPRs.map(getPrKey));
-  return oldPRs.filter((pr) => !freshKeys.has(getPrKey(pr)));
-}
-
-function isProblematicPRStatus(status: GitHubStatusSnapshot): boolean {
-  if (status.prComponentStatus === 'operational') return false;
-  if (status.prComponentStatus === 'unknown') {
-    return status.globalIndicator !== 'none' && status.globalIndicator !== 'unknown';
-  }
-  return true;
-}
-
-function parseEventTimestampMs(pr: PullRequest): number | null {
-  if (pr.timestampParseFailed) return null;
-  const value = pr.eventAt ?? pr.updatedAt ?? pr.createdAt;
-  if (!value) return null;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
+import {
+  comparePullRequestLists,
+  filterPendingAssignedByDraftSetting,
+  getPrKey,
+  mergeAndFilterAssignedPRs,
+} from '@background/utils/pull-request-list-utils';
+import {
+  MergedLimboPromoter,
+  MergedNotificationEligibility,
+  PrListTrustAssessor,
+  PrListTrustStore,
+} from '@background/domain/pr-list-trust';
+import { PrFetchErrorHandler } from '@background/domain/PrFetchErrorHandler';
 
 /**
  * PRService handles pull request management and coordination between services.
@@ -110,6 +48,10 @@ export class PRService implements IPRService {
   private rateLimitService: IRateLimitService;
   private healthStatusService: IHealthStatusService;
   private gitHubStatusClient: IGitHubStatusClient;
+  private trustAssessor: PrListTrustAssessor;
+  private limboPromoter: MergedLimboPromoter;
+  private mergedNotificationEligibility: MergedNotificationEligibility;
+  private fetchErrorHandler: PrFetchErrorHandler;
   private initialized = false;
   /**
    * One entry per list (assigned / merged / authored) while its fetch is in flight.
@@ -144,6 +86,16 @@ export class PRService implements IPRService {
     this.rateLimitService = deps.rateLimitService;
     this.healthStatusService = deps.healthStatusService;
     this.gitHubStatusClient = deps.gitHubStatusClient;
+    const trustStore = new PrListTrustStore(this.storageService, this.debugService);
+    this.trustAssessor = new PrListTrustAssessor(this.gitHubStatusClient);
+    this.limboPromoter = new MergedLimboPromoter(trustStore);
+    this.mergedNotificationEligibility = new MergedNotificationEligibility(this.debugService);
+    this.fetchErrorHandler = new PrFetchErrorHandler(
+      this.debugService,
+      this.badgeService,
+      this.healthStatusService,
+      this.rateLimitService
+    );
   }
 
   async initialize(): Promise<void> {
@@ -262,22 +214,6 @@ export class PRService implements IPRService {
     );
   }
 
-  /** Missing GitHub cookie session is normal; do not log it as a service fault. */
-  private logPrFetchFailure(label: string, error: unknown): void {
-    if (isGitHubWebSessionAuthError(error)) {
-      this.debugService.warn(
-        `[PRService] ${label} — GitHub not signed in (expected until user logs in on github.com):`,
-        error instanceof Error ? error.message : error
-      );
-      return;
-    }
-    // WHY [silent]: Aligns with GitHubService — transient fetch transport after wake, not a PR pipeline bug.
-    if (isOfflineError(error)) {
-      return;
-    }
-    this.debugService.error(`[PRService] ${label}:`, error);
-  }
-
   /**
    * WHY [single gate]: Assigned, merged, and authored share one TTL on the `StoredPRs` envelope
    * (`lastUpdated` surfaced as `timestamp` by {@link IStorageService.getStoredPRs}). Callers pass
@@ -340,112 +276,6 @@ export class PRService implements IPRService {
   }
 
   /**
-   * Centralizes the domain-error taxonomy shared by every list fetch: parser breakage and GitHub
-   * outage recover by returning the stale list and signaling health; rate-limit records the hit
-   * then re-throws; anything else logs and re-throws.
-   *
-   * WHY [badge only for assigned]: The toolbar badge reflects the user's pending review count,
-   * which lives in the assigned list. Merged and authored errors must NOT paint the error badge —
-   * an outage while fetching a secondary list would otherwise hide a healthy assigned count.
-   */
-  private async handleDomainFetchError(
-    error: unknown,
-    params: {
-      listKind: 'assigned' | 'merged' | 'authored';
-      oldPRs: PullRequest[];
-      updateBadgeOnError: boolean;
-      transportErrorLabel: string;
-    }
-  ): Promise<PullRequest[]> {
-    const { listKind, oldPRs, updateBadgeOnError, transportErrorLabel } = params;
-
-    if (error instanceof ParserBreakageError) {
-      this.debugService.warn(
-        `[PRService] ${error.message} — preserving ${oldPRs.length} stored ${listKind} PRs.`
-      );
-      if (updateBadgeOnError) await this.badgeService.setErrorBadge();
-      await this.healthStatusService.signalParserBreakage(error.message);
-      return oldPRs;
-    }
-    if (error instanceof GitHubOutageError) {
-      this.debugService.warn(
-        `[PRService] ${error.message} — preserving ${oldPRs.length} stored ${listKind} PRs.`
-      );
-      if (updateBadgeOnError) await this.badgeService.setErrorBadge();
-      await this.healthStatusService.signalGitHubOutage(error.message);
-      return oldPRs;
-    }
-    if (error instanceof RateLimitError) {
-      this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
-    }
-    this.logPrFetchFailure(transportErrorLabel, error);
-    if (updateBadgeOnError) await this.badgeService.setErrorBadge();
-    throw error;
-  }
-
-  /**
-   * Scores a successful GitHub PR-list fetch before it is allowed to replace the stored baseline.
-   *
-   * WHY [trusted read boundary]: GitHub can return HTTP 200 and parseable HTML while the search-backed
-   * PR list is incomplete. Treating that response as authoritative would shrink `StoredPRs`; when the
-   * missing rows reappear, `comparePRs` would classify them as new and fan out false notifications.
-   * Suspicious reads therefore update only trust/limbo metadata via `recordSuspiciousFetch`, leaving
-   * the last-known-good list intact.
-   *
-   * WHY [Statuspage as multiplier]: `summary.json` is not lifecycle authority. A green status page can
-   * lag a local anomaly, and a red status page can lag recovery. The PR component status only changes
-   * the strictness of local count checks: operational tolerates small natural list churn, degraded
-   * states distrust smaller drops, and unknown status still quarantines large local anomalies.
-   *
-   * WHY [limbo confirmations]: Legitimate PR-list shrinkage should eventually converge, but not from
-   * a single observation. Callers use `missConfirmationsRequired` to keep missing rows in limbo for
-   * multiple trusted polls before pruning them from storage.
-   */
-  private async assessListTrust(
-    oldPRs: PullRequest[],
-    freshPRs: PullRequest[]
-  ): Promise<ListTrustAssessment> {
-    const status = await this.gitHubStatusClient.getStatus();
-    const missingPRs = getMissingPRs(oldPRs, freshPRs);
-    const reasons: string[] = [];
-
-    if (oldPRs.length > 0 && freshPRs.length === 0) {
-      reasons.push('empty_after_non_empty');
-    }
-
-    const dropRatio = oldPRs.length > 0 ? missingPRs.length / oldPRs.length : 0;
-    const problematicStatus = isProblematicPRStatus(status);
-    const operationalDropThreshold = Math.max(2, Math.ceil(oldPRs.length * 0.25));
-    const degradedDropThreshold = Math.max(2, Math.ceil(oldPRs.length * 0.15));
-
-    if (missingPRs.length > 0 && status.prComponentStatus === 'operational') {
-      if (oldPRs.length >= 5 && missingPRs.length >= operationalDropThreshold) {
-        reasons.push(`partial_drop_operational:${missingPRs.length}/${oldPRs.length}`);
-      }
-    } else if (missingPRs.length > 0 && problematicStatus) {
-      if (
-        status.prComponentStatus === 'partial_outage' ||
-        status.prComponentStatus === 'major_outage' ||
-        missingPRs.length >= degradedDropThreshold ||
-        dropRatio >= 0.15
-      ) {
-        reasons.push(`partial_drop_degraded:${missingPRs.length}/${oldPRs.length}`);
-      }
-    } else if (missingPRs.length > 0 && status.prComponentStatus === 'unknown') {
-      if (oldPRs.length >= 5 && missingPRs.length >= operationalDropThreshold) {
-        reasons.push(`partial_drop_unknown_status:${missingPRs.length}/${oldPRs.length}`);
-      }
-    }
-
-    return {
-      suspicious: reasons.length > 0,
-      reasons,
-      status,
-      missConfirmationsRequired: problematicStatus ? 3 : 2,
-    };
-  }
-
-  /**
    * WHY [outage-gate]: When the gate fires we suppress PR-array persistence too — not just the
    * notification. Persisting an empty shell would poison `oldPRs` for the next tick and recreate
    * the storm once GitHub recovers (`comparePRs` would treat every restored PR as new). We persist
@@ -461,151 +291,6 @@ export class PRService implements IPRService {
       [STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT]: Date.now(),
     });
     await this.healthStatusService.signalGitHubOutage(context, 'pr_component_degraded');
-  }
-
-  private async readTrustState(): Promise<PRListTrustState> {
-    try {
-      const data = await chromeExtensionService.storage.local.get(STORAGE_KEY_PR_LIST_TRUST);
-      const state = data[STORAGE_KEY_PR_LIST_TRUST];
-      if (!state || typeof state !== 'object') return {};
-      return state as PRListTrustState;
-    } catch {
-      return {};
-    }
-  }
-
-  private async writeTrustState(state: PRListTrustState): Promise<void> {
-    try {
-      await chromeExtensionService.storage.local.set({ [STORAGE_KEY_PR_LIST_TRUST]: state });
-    } catch (error) {
-      this.debugService.warn('[PRService] Failed to persist PR list trust metadata.', error);
-    }
-  }
-
-  private async recordSuspiciousFetch(
-    listKind: ListKind,
-    reasons: string[],
-    oldPRs: PullRequest[],
-    freshPRs: PullRequest[]
-  ): Promise<void> {
-    const now = Date.now();
-    const missingEntries = getMissingPRs(oldPRs, freshPRs);
-    const state = await this.readTrustState();
-    const lists = { ...(state.lists ?? {}) };
-    const current = lists[listKind] ?? {};
-    const limboByKey = { ...(current.limboByKey ?? {}) };
-
-    for (const pr of missingEntries) {
-      const key = getPrKey(pr);
-      const existing = limboByKey[key];
-      limboByKey[key] = {
-        pr: { ...pr, isNew: false },
-        firstSeenAt: existing?.firstSeenAt ?? now,
-        lastSeenAt: now,
-        missCount: (existing?.missCount ?? 0) + 1,
-      };
-    }
-
-    lists[listKind] = {
-      ...current,
-      limboByKey,
-      lastSuspiciousAt: now,
-      lastReasons: reasons,
-    };
-    await this.writeTrustState({ ...state, lists });
-  }
-
-  private async promoteTrustedMergedList(
-    oldPRs: PullRequest[],
-    freshPRs: PullRequest[],
-    missConfirmationsRequired: number
-  ): Promise<PullRequest[]> {
-    const now = Date.now();
-    const state = await this.readTrustState();
-    const lists = { ...(state.lists ?? {}) };
-    const current = lists.merged ?? {};
-    const limboByKey = { ...(current.limboByKey ?? {}) };
-    const freshKeys = new Set(freshPRs.map(getPrKey));
-    const promoted = [...freshPRs];
-
-    for (const pr of oldPRs) {
-      const key = getPrKey(pr);
-      if (freshKeys.has(key)) {
-        delete limboByKey[key];
-        continue;
-      }
-
-      const existing = limboByKey[key];
-      const next: LimboEntry = {
-        pr: { ...pr, isNew: false },
-        firstSeenAt: existing?.firstSeenAt ?? now,
-        lastSeenAt: now,
-        missCount: (existing?.missCount ?? 0) + 1,
-      };
-
-      if (next.missCount < missConfirmationsRequired) {
-        limboByKey[key] = next;
-        promoted.push(next.pr);
-      } else {
-        delete limboByKey[key];
-      }
-    }
-
-    lists.merged = {
-      ...current,
-      limboByKey,
-      lastTrustedAt: now,
-      lastTrustedCount: promoted.length,
-      lastReasons: [],
-    };
-    await this.writeTrustState({ ...state, lists });
-
-    return promoted.sort(
-      (a, b) => (parseEventTimestampMs(b) ?? 0) - (parseEventTimestampMs(a) ?? 0)
-    );
-  }
-
-  private async recordTrustedFetch(listKind: ListKind, count: number): Promise<void> {
-    const state = await this.readTrustState();
-    const lists = { ...(state.lists ?? {}) };
-    const current = lists[listKind] ?? {};
-    lists[listKind] = {
-      ...current,
-      lastTrustedAt: Date.now(),
-      lastTrustedCount: count,
-      lastReasons: [],
-    };
-    await this.writeTrustState({ ...state, lists });
-  }
-
-  private filterFreshMergedNotificationCandidates(
-    candidates: PullRequest[],
-    lastTrustedAt: number | undefined,
-    status: GitHubStatusSnapshot
-  ): PullRequest[] {
-    if (!lastTrustedAt) return candidates;
-    const freshnessFloor = lastTrustedAt - FETCH_INTERVAL_MS;
-    const strictUnknownTimestamp = isProblematicPRStatus(status);
-
-    return candidates.filter((pr) => {
-      const eventAt = parseEventTimestampMs(pr);
-      if (eventAt === null) {
-        if (strictUnknownTimestamp) {
-          this.debugService.warn(
-            `[PRService] Suppressing merged notification with unknown event timestamp: ${pr.title}`
-          );
-          return false;
-        }
-        return true;
-      }
-      if (eventAt < freshnessFloor) {
-        this.debugService.warn(
-          `[PRService] Suppressing stale merged notification: ${pr.title} (${new Date(eventAt).toISOString()})`
-        );
-        return false;
-      }
-      return true;
-    });
   }
 
   private async doFetchAndUpdateAssignedPRs(
@@ -635,7 +320,7 @@ export class PRService implements IPRService {
       await delay(REQUEST_DELAY_MS);
       const freshReviewedPRsRaw = await this.gitHubService.fetchReviewedPRs();
 
-      const assignedTrust = await this.assessListTrust(
+      const assignedTrust = await this.trustAssessor.assess(
         oldPRs,
         [...freshPendingPRsRaw, ...freshReviewedPRsRaw]
       );
@@ -643,7 +328,7 @@ export class PRService implements IPRService {
         this.debugService.warn(
           `[PRService] Trust gate: suspicious assigned fetch (${assignedTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored PRs.`
         );
-        await this.recordSuspiciousFetch(
+        await this.limboPromoter.recordSuspiciousFetch(
           'assigned',
           assignedTrust.reasons,
           oldPRs,
@@ -661,7 +346,7 @@ export class PRService implements IPRService {
 
       const oldPendingForCompare = accountSwap ? [] : oldPendingPRs;
 
-      let { allPRs, filteredPending, newPRs } = this.mergeAndFilterAssignedPRs(
+      let { allPRs, filteredPending, newPRs } = mergeAndFilterAssignedPRs(
         oldPendingForCompare,
         freshPendingPRsRaw,
         freshReviewedPRsRaw,
@@ -678,7 +363,7 @@ export class PRService implements IPRService {
       }
 
       await this.persistAndNotifyAssigned(allPRs, filteredPending.length, newPRs, forceRefresh);
-      await this.recordTrustedFetch('assigned', allPRs.length);
+      await this.limboPromoter.recordTrustedFetch('assigned', allPRs.length);
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
@@ -688,52 +373,13 @@ export class PRService implements IPRService {
     } catch (error) {
       // WHY [updateBadgeOnError: true]: Assigned owns the toolbar count; outage / parser / transport
       // failures must paint the error badge so the icon matches the stale list we hand back.
-      return this.handleDomainFetchError(error, {
+      return this.fetchErrorHandler.handle(error, {
         listKind: 'assigned',
         oldPRs,
         updateBadgeOnError: true,
         transportErrorLabel: 'Error fetching and updating PRs',
       });
     }
-  }
-
-  /**
-   * Compares old pending PRs against fresh data, deduplicates reviewed PRs,
-   * and applies draft filtering based on user settings.
-   */
-  private mergeAndFilterAssignedPRs(
-    oldPendingPRs: PullRequest[],
-    freshPendingRaw: PullRequest[],
-    freshReviewedRaw: PullRequest[],
-    showDrafts: boolean
-  ): { allPRs: PullRequest[]; filteredPending: PullRequest[]; newPRs: PullRequest[] } {
-    const freshPending = freshPendingRaw.map((pr) => ({
-      ...pr,
-      reviewStatus: 'pending' as const,
-    }));
-
-    const { newPRs, allPRsWithStatus: pendingPRsWithStatus } = this.comparePRs(
-      oldPendingPRs,
-      freshPending
-    );
-
-    const pendingIds = new Set(pendingPRsWithStatus.map((pr) => pr.id || pr.url));
-    const freshReviewed = freshReviewedRaw
-      .filter((pr) => !pendingIds.has(pr.id || pr.url))
-      .filter((pr) => pr.type !== 'merged')
-      .map((pr): PullRequest => ({ ...pr, reviewStatus: 'reviewed' as const, isNew: false }));
-
-    const filteredPending = filterPendingAssignedByDraftSetting(pendingPRsWithStatus, showDrafts);
-
-    const filteredReviewed = showDrafts
-      ? freshReviewed
-      : freshReviewed.filter((pr) => pr.type !== 'draft');
-
-    return {
-      allPRs: [...filteredPending, ...filteredReviewed],
-      filteredPending,
-      newPRs,
-    };
   }
 
   /**
@@ -784,42 +430,15 @@ export class PRService implements IPRService {
     allPRsWithStatus: PullRequest[];
   } {
     this.debugService.log('[PRService] Comparing PR lists...');
+    const { newPRs, allPRsWithStatus, removedPRs } = comparePullRequestLists(oldPRs, freshPRs);
 
-    // Create a map of old PRs for efficient lookup
-    const oldPRMap = new Map<string, PullRequest>();
-    oldPRs.forEach((pr) => {
-      // Use ID as primary key, fallback to URL if ID is not available
-      const key = pr.id || pr.url;
-      oldPRMap.set(key, pr);
-    });
+    for (const pr of newPRs) {
+      this.debugService.log(`[PRService] New PR detected: ${pr.title} (${getPrKey(pr)})`);
+    }
+    for (const pr of allPRsWithStatus.filter((pr) => !pr.isNew)) {
+      this.debugService.log(`[PRService] Existing PR: ${pr.title} (${getPrKey(pr)})`);
+    }
 
-    const newPRs: PullRequest[] = [];
-    const allPRsWithStatus: PullRequest[] = [];
-
-    // Process each fresh PR
-    freshPRs.forEach((freshPR) => {
-      const key = freshPR.id || freshPR.url;
-      const existingPR = oldPRMap.get(key);
-
-      const reviewStatus = freshPR.reviewStatus ?? 'pending';
-
-      if (!existingPR) {
-        // This is a new PR - mark it as new and add to new PRs list
-        this.debugService.log(`[PRService] New PR detected: ${freshPR.title} (${key})`);
-        const newPR = { ...freshPR, isNew: true, reviewStatus };
-        newPRs.push(newPR);
-        allPRsWithStatus.push(newPR);
-      } else {
-        // This PR already existed - preserve it but mark as not new
-        const existingPRUpdated = { ...freshPR, isNew: false, reviewStatus };
-        allPRsWithStatus.push(existingPRUpdated);
-        this.debugService.log(`[PRService] Existing PR: ${freshPR.title} (${key})`);
-      }
-    });
-
-    // Log what PRs were removed (for debugging, but don't notify about removals)
-    const freshPRKeys = new Set(freshPRs.map((pr) => pr.id || pr.url));
-    const removedPRs = oldPRs.filter((pr) => !freshPRKeys.has(pr.id || pr.url));
     if (removedPRs.length > 0) {
       this.debugService.log(
         `[PRService] PRs no longer present (${removedPRs.length}):`,
@@ -911,12 +530,17 @@ export class PRService implements IPRService {
         `[PRService] Fetched ${freshAuthoredPRsRaw.length} authored PRs from GitHub`
       );
 
-      const authoredTrust = await this.assessListTrust(oldPRs, freshAuthoredPRsRaw);
+      const authoredTrust = await this.trustAssessor.assess(oldPRs, freshAuthoredPRsRaw);
       if (authoredTrust.suspicious) {
         this.debugService.warn(
           `[PRService] Trust gate: suspicious authored fetch (${authoredTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored authored PRs.`
         );
-        await this.recordSuspiciousFetch('authored', authoredTrust.reasons, oldPRs, freshAuthoredPRsRaw);
+        await this.limboPromoter.recordSuspiciousFetch(
+          'authored',
+          authoredTrust.reasons,
+          oldPRs,
+          freshAuthoredPRsRaw
+        );
         await this.persistUntrustedFetchMetadata(
           `Suspicious authored list: ${authoredTrust.reasons.join(', ')}`
         );
@@ -930,7 +554,7 @@ export class PRService implements IPRService {
         : freshAuthoredPRsRaw;
 
       await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, freshAuthoredPRs);
-      await this.recordTrustedFetch('authored', freshAuthoredPRs.length);
+      await this.limboPromoter.recordTrustedFetch('authored', freshAuthoredPRs.length);
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
@@ -942,7 +566,7 @@ export class PRService implements IPRService {
     } catch (error) {
       // WHY [updateBadgeOnError: false]: Authored is a secondary list — its failures must not
       // blow away a healthy assigned badge count.
-      return this.handleDomainFetchError(error, {
+      return this.fetchErrorHandler.handle(error, {
         listKind: 'authored',
         oldPRs,
         updateBadgeOnError: false,
@@ -989,12 +613,17 @@ export class PRService implements IPRService {
       const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
       this.debugService.log(`[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`);
 
-      const mergedTrust = await this.assessListTrust(oldPRs, freshMergedPRs);
+      const mergedTrust = await this.trustAssessor.assess(oldPRs, freshMergedPRs);
       if (mergedTrust.suspicious) {
         this.debugService.warn(
           `[PRService] Trust gate: suspicious merged fetch (${mergedTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored merged PRs.`
         );
-        await this.recordSuspiciousFetch('merged', mergedTrust.reasons, oldPRs, freshMergedPRs);
+        await this.limboPromoter.recordSuspiciousFetch(
+          'merged',
+          mergedTrust.reasons,
+          oldPRs,
+          freshMergedPRs
+        );
         await this.persistUntrustedFetchMetadata(
           `Suspicious merged list: ${mergedTrust.reasons.join(', ')}`
         );
@@ -1003,7 +632,7 @@ export class PRService implements IPRService {
 
       const { accountSwap } = await this.detectAccountSwap('silent merged baseline');
 
-      const trustedMergedPRs = await this.promoteTrustedMergedList(
+      const trustedMergedPRs = await this.limboPromoter.promoteTrustedMergedList(
         oldPRs,
         freshMergedPRs,
         mergedTrust.missConfirmationsRequired
@@ -1019,7 +648,7 @@ export class PRService implements IPRService {
         newPRs = [];
         mergedPRsWithStatus = mergedPRsWithStatus.map((pr) => ({ ...pr, isNew: false }));
       }
-      newPRs = this.filterFreshMergedNotificationCandidates(
+      newPRs = this.mergedNotificationEligibility.filterFreshCandidates(
         newPRs,
         storedData?.timestamp,
         mergedTrust.status
@@ -1053,7 +682,7 @@ export class PRService implements IPRService {
     } catch (error) {
       // WHY [updateBadgeOnError: false]: Merged is a secondary list — its failures must not
       // blow away a healthy assigned badge count.
-      return this.handleDomainFetchError(error, {
+      return this.fetchErrorHandler.handle(error, {
         listKind: 'merged',
         oldPRs,
         updateBadgeOnError: false,

@@ -1,6 +1,11 @@
 import type { PullRequest, PullRequestAuthor } from '@common/types';
 import type { CompiledPatterns } from '@common/pattern-types';
 import { ParserBreakageError } from '@common/errors';
+import {
+  extractIsoTimestampFromPatterns,
+  sortPullRequestsByEventTime,
+} from '@common/pull-request-timestamp';
+import { detectPRTypeFromEntries, extractBalancedBlocks } from '@background/utils/github-parser-utils';
 
 /**
  * Pure static utility for parsing GitHub PR listing pages.
@@ -8,28 +13,6 @@ import { ParserBreakageError } from '@common/errors';
  * itself contains zero hardcoded selectors.
  */
 export class GitHubHTMLParser {
-  private static extractIsoTimestamp(
-    elementHtml: string,
-    patterns: CompiledPatterns
-  ): { createdAt: string; eventAt?: string; timestampParseFailed: boolean } {
-    const fallbackCreatedAt = new Date().toISOString();
-    try {
-      for (const p of patterns.timestamp) {
-        const match = elementHtml.match(p.compiled);
-        const raw = match?.[p.captureGroups!.datetime];
-        if (!raw) continue;
-        const timestamp = Date.parse(raw);
-        if (Number.isFinite(timestamp)) {
-          return { createdAt: raw, eventAt: raw, timestampParseFailed: false };
-        }
-        return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
-      }
-    } catch {
-      return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
-    }
-    return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
-  }
-
   /**
    * Returns `true` when the HTML looks like a valid GitHub search-results
    * page — even if that page contains zero results (e.g. the user genuinely
@@ -67,7 +50,7 @@ export class GitHubHTMLParser {
     // ── Try each PR row selector in priority order ───────────────────
     for (const selector of patterns.prRowSelectors) {
       if (selector.type === 'balanced-div') {
-        const blocks = GitHubHTMLParser.extractBalancedDivBlocks(html, selector.compiled);
+        const blocks = extractBalancedBlocks(html, selector.compiled, 'div');
         if (blocks.length > 0) {
           prElements = blocks.map((block) => {
             const synthetic = [block] as unknown as RegExpMatchArray;
@@ -103,10 +86,7 @@ export class GitHubHTMLParser {
       }
     }
 
-    prs.sort(
-      (a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime()
-    );
-    return prs;
+    return sortPullRequestsByEventTime(prs);
   }
 
   /**
@@ -174,10 +154,10 @@ export class GitHubHTMLParser {
 
     // WHY [DOM contract]: GitHub's row timestamp is frontend markup, not an API. Keep failures
     // scoped to this row so a missing `<relative-time datetime>` cannot crash the alarm wave.
-    const timestamp = GitHubHTMLParser.extractIsoTimestamp(elementHtml, patterns);
+    const timestamp = extractIsoTimestampFromPatterns(elementHtml, patterns.timestamp);
 
     // ── PR Type (draft / open / merged) ──────────────────────────────
-    const prType = GitHubHTMLParser.detectPRType(elementHtml, patterns);
+    const prType = detectPRTypeFromEntries(elementHtml, patterns.prType);
 
     return {
       id: url,
@@ -193,43 +173,6 @@ export class GitHubHTMLParser {
       type: prType,
       isNew: false,
     };
-  }
-
-  /**
-   * Returns full HTML for each balanced-div block whose opening tag matches
-   * {@link openingPattern}. Balances nested &lt;div&gt; tags so we capture
-   * the complete subtree instead of stopping at the first inner close tag.
-   */
-  private static extractBalancedDivBlocks(html: string, openingPattern: RegExp): string[] {
-    const blocks: string[] = [];
-    openingPattern.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = openingPattern.exec(html)) !== null) {
-      const start = m.index;
-      let i = m.index + m[0].length;
-      let depth = 1;
-      while (i < html.length && depth > 0) {
-        const tail = html.slice(i);
-        const openMatch = tail.match(/<div\b/i);
-        const closeMatch = tail.match(/<\/div>/i);
-        const openIdx = openMatch?.index ?? -1;
-        const closeIdx = closeMatch?.index ?? -1;
-        if (closeIdx === -1) break;
-        if (openIdx !== -1 && openIdx < closeIdx) {
-          depth++;
-          const tagStart = i + openIdx;
-          const gt = html.indexOf('>', tagStart);
-          i = gt === -1 ? i + openIdx + 4 : gt + 1;
-        } else {
-          depth--;
-          i = i + closeIdx + 6;
-        }
-      }
-      if (depth === 0) {
-        blocks.push(html.slice(start, i));
-      }
-    }
-    return blocks;
   }
 
   /**
@@ -307,15 +250,5 @@ export class GitHubHTMLParser {
     const avatarUrl = imgMatch?.[av.avatarImg.captureGroups!.src]?.replace(/&amp;/g, '&');
 
     return avatarUrl ? { login, avatarUrl } : { login };
-  }
-
-  private static detectPRType(
-    html: string,
-    patterns: CompiledPatterns,
-  ): 'draft' | 'open' | 'merged' {
-    for (const entry of patterns.prType) {
-      if (entry.compiled.test(html)) return entry.type;
-    }
-    return 'open';
   }
 }

@@ -1,4 +1,8 @@
 import type { PullRequest } from '@common/types';
+import {
+  normalizeIsoTimestamp,
+  sortPullRequestsByEventTime,
+} from '@common/pull-request-timestamp';
 
 /**
  * Shape of a single PR entry inside GitHub's embedded dashboard JSON.
@@ -18,12 +22,6 @@ interface EmbeddedPullEntry {
   repoNameWithOwner?: string;
   state?: string;
   title?: string;
-}
-
-function normalizeIsoTimestamp(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? value : undefined;
 }
 
 /**
@@ -74,11 +72,7 @@ export class GitHubEmbeddedJsonPullHarvest {
       .map((entry) => GitHubEmbeddedJsonPullHarvest.mapToPullRequest(entry))
       .filter((pr): pr is PullRequest => pr !== null);
 
-    prs.sort(
-      (a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime(),
-    );
-
-    return prs;
+    return sortPullRequestsByEventTime(prs);
   }
 
   /**

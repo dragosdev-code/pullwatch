@@ -3,9 +3,13 @@ import type {
   CompiledPatterns,
   CompiledNewExperiencePatterns,
   CompiledPattern,
-  CompiledPatternTypeEntry,
 } from '@common/pattern-types';
 import { ParserBreakageError } from '@common/errors';
+import {
+  extractIsoTimestampFromPatterns,
+  sortPullRequestsByEventTime,
+} from '@common/pull-request-timestamp';
+import { detectPRTypeFromEntries, extractBalancedBlocks } from '@background/utils/github-parser-utils';
 
 /**
  * Pure static utility for parsing GitHub's **new** React-based global pulls
@@ -28,28 +32,6 @@ import { ParserBreakageError } from '@common/errors';
  * appear on full-page responses.
  */
 export class NewExperienceGitHubHTMLParser {
-  private static extractIsoTimestamp(
-    rowHtml: string,
-    ne: CompiledNewExperiencePatterns
-  ): { createdAt: string; eventAt?: string; timestampParseFailed: boolean } {
-    const fallbackCreatedAt = new Date().toISOString();
-    try {
-      for (const p of ne.timestamp) {
-        const match = rowHtml.match(p.compiled);
-        const raw = match?.[p.captureGroups!.datetime];
-        if (!raw) continue;
-        const timestamp = Date.parse(raw);
-        if (Number.isFinite(timestamp)) {
-          return { createdAt: raw, eventAt: raw, timestampParseFailed: false };
-        }
-        return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
-      }
-    } catch {
-      return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
-    }
-    return { createdAt: fallbackCreatedAt, timestampParseFailed: true };
-  }
-
   /**
    * Attempts to parse PR data from the new-experience HTML.
    *
@@ -73,10 +55,7 @@ export class NewExperienceGitHubHTMLParser {
 
     if (!ne.pageMarker.compiled.test(html)) return null;
 
-    const rows = NewExperienceGitHubHTMLParser.extractBalancedLiBlocks(
-      html,
-      ne.rowSelector.compiled,
-    );
+    const rows = extractBalancedBlocks(html, ne.rowSelector.compiled, 'li');
 
     const prs: PullRequest[] = [];
     for (const row of rows) {
@@ -97,11 +76,7 @@ export class NewExperienceGitHubHTMLParser {
       throw new ParserBreakageError('NewExperience row selectors broken');
     }
 
-    prs.sort(
-      (a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime(),
-    );
-
-    return prs;
+    return sortPullRequestsByEventTime(prs);
   }
 
   /**
@@ -122,50 +97,6 @@ export class NewExperienceGitHubHTMLParser {
     } finally {
       re.lastIndex = savedLast;
     }
-  }
-
-  /**
-   * Balanced tag extraction for `<li>` elements. Same algorithm as
-   * `GitHubHTMLParser.extractBalancedDivBlocks` but tracking
-   * `<li>` / `</li>` depth so the complete subtree of each PR row is
-   * captured even when inner lists or nested `<li>` elements exist.
-   */
-  private static extractBalancedLiBlocks(html: string, openingPattern: RegExp): string[] {
-    const blocks: string[] = [];
-    openingPattern.lastIndex = 0;
-    let m: RegExpExecArray | null;
-
-    while ((m = openingPattern.exec(html)) !== null) {
-      const start = m.index;
-      let i = m.index + m[0].length;
-      let depth = 1;
-
-      while (i < html.length && depth > 0) {
-        const tail = html.slice(i);
-        const openMatch = tail.match(/<li\b/i);
-        const closeMatch = tail.match(/<\/li>/i);
-        const openIdx = openMatch?.index ?? -1;
-        const closeIdx = closeMatch?.index ?? -1;
-
-        if (closeIdx === -1) break;
-
-        if (openIdx !== -1 && openIdx < closeIdx) {
-          depth++;
-          const tagStart = i + openIdx;
-          const gt = html.indexOf('>', tagStart);
-          i = gt === -1 ? i + openIdx + 3 : gt + 1;
-        } else {
-          depth--;
-          i = i + closeIdx + 5; // '</li>'.length === 5
-        }
-      }
-
-      if (depth === 0) {
-        blocks.push(html.slice(start, i));
-      }
-    }
-
-    return blocks;
   }
 
   /**
@@ -215,10 +146,10 @@ export class NewExperienceGitHubHTMLParser {
 
     // WHY [DOM contract]: GitHub can change list markup without changing the underlying PR state.
     // Timestamp extraction is isolated so one malformed row becomes "unknown freshness", not a crash.
-    const timestamp = NewExperienceGitHubHTMLParser.extractIsoTimestamp(rowHtml, ne);
+    const timestamp = extractIsoTimestampFromPatterns(rowHtml, ne.timestamp);
 
     // ── PR Type ──────────────────────────────────────────────────────
-    const prType = NewExperienceGitHubHTMLParser.detectPRType(rowHtml, ne.prType);
+    const prType = detectPRTypeFromEntries(rowHtml, ne.prType);
 
     return {
       id: url,
@@ -245,14 +176,4 @@ export class NewExperienceGitHubHTMLParser {
     return html.replace(/<[^>]*>/g, '').trim().replace(/\s+/g, ' ');
   }
 
-  /** Ordered first-match type detection — mirrors `GitHubHTMLParser.detectPRType`. */
-  private static detectPRType(
-    html: string,
-    prType: CompiledPatternTypeEntry[],
-  ): 'draft' | 'open' | 'merged' {
-    for (const entry of prType) {
-      if (entry.compiled.test(html)) return entry.type;
-    }
-    return 'open';
-  }
 }
