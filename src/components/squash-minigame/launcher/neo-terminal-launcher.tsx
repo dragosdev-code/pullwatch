@@ -4,7 +4,11 @@ import type { MinigameStats } from '@common/types';
 import type { FinishCelebration, FinishedRoundSummary, GameMode } from '../game-types';
 import { SquashMinigameLazy } from '../squash-minigame.lazy';
 import { MODE_METADATA } from './mode-metadata';
-import { useRecordRoundResult, type RecordRoundPersistOutcome } from '../hooks/use-record-round-result';
+import { SettingsModeStatsPanel } from './settings-mode-stats';
+import {
+  useRecordRoundResult,
+  type RecordRoundPersistOutcome,
+} from '../hooks/use-record-round-result';
 
 export interface NeoTerminalLauncherProps {
   stats: MinigameStats;
@@ -78,14 +82,14 @@ export function NeoTerminalLauncher({
   return (
     <div
       data-testid="neo-terminal-menu"
-      className="rounded-xl border border-primary/40 bg-base-100/70 p-4 shadow-[0_0_24px_-12px_var(--color-primary)] backdrop-blur"
+      className="rounded-xl border border-primary/40 bg-base-100/70 p-3 shadow-[0_0_24px_-12px_var(--color-primary)] backdrop-blur"
     >
-      <header className="mb-3 flex items-center justify-between border-b border-primary/30 pb-2 font-mono text-[11px] uppercase tracking-widest text-primary">
+      <header className="mb-2 flex items-center justify-between border-b border-primary/30 pb-1.5 font-mono text-[10px] uppercase tracking-widest text-primary sm:text-[11px]">
         <span>squash the bugs</span>
         <span className="text-accent">v0.42</span>
       </header>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-1.5">
         {MODE_METADATA.map((meta) => {
           const modeStats = stats.modes[meta.mode];
           const isLast = stats.lastPlayedMode === meta.mode;
@@ -98,30 +102,33 @@ export function NeoTerminalLauncher({
                 onRequestPlayMode ? onRequestPlayMode(meta.mode) : setActiveMode(meta.mode)
               }
               className={clsx(
-                'group flex flex-col gap-1 rounded-lg border border-base-300 bg-base-200/60 p-3 text-left transition',
+                'group flex flex-col justify-between gap-0.5 rounded-lg border border-base-300 bg-base-200/60 p-2 text-left transition',
                 'hover:border-primary hover:bg-primary/10 hover:shadow-[0_0_12px_-4px_var(--color-primary)]',
                 isLast && 'border-accent'
               )}
             >
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold uppercase tracking-wider text-primary">
-                  {meta.label}
-                </span>
-                {isLast && (
-                  <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-[9px] uppercase text-accent-content">
-                    last
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-primary sm:text-xs">
+                    {meta.label}
                   </span>
-                )}
+                  {isLast && (
+                    <span className="rounded bg-accent px-1 py-0.5 font-mono text-[8px] uppercase leading-none text-accent-content sm:text-[9px]">
+                      last
+                    </span>
+                  )}
+                </div>
+
+                <p className="line-clamp-2 text-[10px] leading-snug text-base-content/70">
+                  {meta.tagline}
+                </p>
               </div>
-              <p className="text-[11px] text-base-content/70">{meta.tagline}</p>
-              <dl
+              <SettingsModeStatsPanel
                 data-testid={`neo-terminal-stats-${meta.mode}`}
-                className="mt-1 flex gap-3 font-mono text-[10px] uppercase tracking-wide text-base-content/60"
-              >
-                <span>plays {modeStats.playCount}</span>
-                <span>hi {modeStats.highScore}</span>
-                <span>x{modeStats.highestCombo}</span>
-              </dl>
+                playCount={modeStats.playCount}
+                highScore={modeStats.highScore}
+                highestCombo={modeStats.highestCombo}
+              />
             </button>
           );
         })}
@@ -129,7 +136,7 @@ export function NeoTerminalLauncher({
 
       <footer
         data-testid="neo-terminal-overall"
-        className="mt-3 flex justify-between border-t border-primary/30 pt-2 font-mono text-[10px] uppercase tracking-wide text-base-content/60"
+        className="mt-2 flex justify-between border-t border-primary/30 pt-1.5 font-mono text-[9px] uppercase tracking-wide text-base-content/60 sm:text-[10px]"
       >
         <span>bugs {stats.overall.totalBugsSquashed}</span>
         <span>features {stats.overall.totalFeaturesBroken}</span>

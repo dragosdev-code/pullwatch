@@ -1,4 +1,4 @@
-import { SettingsSection } from '../../settings/shared/components/settings-section';
+// import { SettingsSection } from '../../settings/shared/components/settings-section';
 import { useSquashMinigameExperience } from '../squash-minigame-experience-provider';
 import { NeoTerminalLauncher } from './neo-terminal-launcher';
 
@@ -13,9 +13,5 @@ export function SquashMinigameSection() {
   if (!ready || !stats) return null;
   if (!stats.hasDiscovered) return null;
 
-  return (
-    <SettingsSection title="Squash the Bugs">
-      <NeoTerminalLauncher stats={stats} onRequestPlayMode={openSquashGame} />
-    </SettingsSection>
-  );
+  return <NeoTerminalLauncher stats={stats} onRequestPlayMode={openSquashGame} />;
 }

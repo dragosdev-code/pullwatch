@@ -76,9 +76,13 @@ describe('NeoTerminalLauncher menu', () => {
     expect(screen.getByTestId('neo-terminal-mode-scopeCreep')).toBeTruthy();
     expect(screen.getByTestId('neo-terminal-mode-fridayDeploy')).toBeTruthy();
 
-    expect(screen.getByTestId('neo-terminal-stats-fridayDeploy').textContent).toContain('plays 7');
-    expect(screen.getByTestId('neo-terminal-stats-fridayDeploy').textContent).toContain('hi 220');
-    expect(screen.getByTestId('neo-terminal-stats-fridayDeploy').textContent).toContain('x11');
+    const statsPanel = screen.getByTestId('neo-terminal-stats-fridayDeploy');
+    expect(statsPanel.textContent).toContain('220');
+    expect(statsPanel.textContent).toContain('Plays');
+    expect(statsPanel.textContent).toContain('High score');
+    expect(statsPanel.textContent).toContain('Peak combo');
+    expect(statsPanel.textContent).toMatch(/7/);
+    expect(statsPanel.textContent).toContain('×11');
   });
 
   it('renders overall lifetime totals in the footer', () => {
