@@ -9,6 +9,7 @@ import { formatScore } from '../../format-score';
 import { MODE_METADATA } from '../../launcher/mode-metadata';
 import { FinishActionsReveal } from './finish-actions-reveal';
 import { FinishCooldownIndicator } from './finish-cooldown-indicator';
+import { FinishScoreRunway } from './finish-score-runway';
 import type { FinishedOverlayProps } from './types';
 
 /**
@@ -25,6 +26,10 @@ export function FinishedOverlay({
   const store = useGameStore();
   const status = useStore(store, (s) => s.status);
   const roundId = useStore(store, (s) => s.roundId);
+  const score = useStore(store, (s) => s.score);
+  const highestCombo = useStore(store, (s) => s.highestCombo);
+  const bugsSquashed = useStore(store, (s) => s.bugsSquashed);
+  const featuresBroken = useStore(store, (s) => s.featuresBroken);
   const [pickingMode, setPickingMode] = useState(false);
   const [pickerSelected, setPickerSelected] = useState(mode);
   const [actionsReady, setActionsReady] = useState(false);
@@ -65,11 +70,27 @@ export function FinishedOverlay({
     immediate: motionOff,
   });
 
-  const statSprings = useTrail(4, {
+  const statSprings = useTrail(3, {
     from: { opacity: 0, x: -10 },
     to: { opacity: 1, x: 0 },
     delay: motionOff ? 0 : 160,
     config: { tension: 280, friction: 26 },
+    immediate: motionOff,
+  });
+
+  const hasPersistMeta =
+    status === 'finished' &&
+    finishCelebration !== null &&
+    finishCelebration.roundId === roundId;
+
+  const fallbackScoreSpring = useSpring({
+    from: { opacity: 0, y: 4 },
+    to:
+      status === 'finished' && !hasPersistMeta
+        ? { opacity: 1, y: 0 }
+        : { opacity: 0, y: 4 },
+    delay: motionOff ? 0 : 100,
+    config: { tension: 260, friction: 28 },
     immediate: motionOff,
   });
 
@@ -88,8 +109,6 @@ export function FinishedOverlay({
 
   if (status !== 'finished') return null;
 
-  const { score, highestCombo, bugsSquashed, featuresBroken } = store.getState();
-
   const openModePicker = () => {
     setPickerSelected(mode);
     setPickingMode(true);
@@ -106,19 +125,9 @@ export function FinishedOverlay({
   };
 
   const statLines: Array<{
-    testId:
-      | 'squash-finished-score'
-      | 'squash-finished-combo'
-      | 'squash-finished-bugs'
-      | 'squash-finished-features';
+    testId: 'squash-finished-combo' | 'squash-finished-bugs' | 'squash-finished-features';
     text: string;
-    ariaLabel?: string;
   }> = [
-    {
-      testId: 'squash-finished-score',
-      ariaLabel: `final score ${score}`,
-      text: `final score ${formatScore(score)}`,
-    },
     { testId: 'squash-finished-combo', text: `best combo x${highestCombo}` },
     { testId: 'squash-finished-bugs', text: `bugs ${bugsSquashed}` },
     { testId: 'squash-finished-features', text: `features ${featuresBroken}` },
@@ -225,6 +234,26 @@ export function FinishedOverlay({
                 New best score!
               </animated.div>
             ) : null}
+            {hasPersistMeta && finishCelebration ? (
+              <FinishScoreRunway
+                score={score}
+                previousHighScore={finishCelebration.previousHighScore}
+                isNewHighScore={finishCelebration.isNewHighScore}
+                motionOff={motionOff}
+              />
+            ) : (
+              <animated.p
+                data-testid="squash-finished-score"
+                aria-label={`final score ${score}`}
+                className="mb-3 text-xs text-base-content/90"
+                style={{
+                  opacity: fallbackScoreSpring.opacity,
+                  transform: fallbackScoreSpring.y.to((y) => `translateY(${y}px)`),
+                }}
+              >
+                final score {formatScore(score)}
+              </animated.p>
+            )}
             <animated.h3
               id="squash-finished-title"
               className="mb-3 text-sm font-bold uppercase tracking-wide text-base-content"
@@ -240,7 +269,6 @@ export function FinishedOverlay({
                 <animated.li
                   key={line.testId}
                   data-testid={line.testId}
-                  {...(line.ariaLabel ? { 'aria-label': line.ariaLabel } : {})}
                   style={{
                     opacity: statSprings[i]?.opacity,
                     transform: statSprings[i]?.x.to((x) => `translateX(${x}px)`),

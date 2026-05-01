@@ -37,7 +37,7 @@ describe('useRecordRoundResult', () => {
         featuresBroken: 0,
         durationSeconds: 30,
       });
-      expect(meta).toEqual({ isNewHighScore: true });
+      expect(meta).toEqual({ isNewHighScore: true, previousHighScore: 0 });
     });
 
     expect(readMock).toHaveBeenCalledTimes(1);
@@ -65,6 +65,28 @@ describe('useRecordRoundResult', () => {
     });
     expect(meta).toBeUndefined();
     expect(writeMock).not.toHaveBeenCalled();
+  });
+
+  it('returns previous high from the pre-merge stats snapshot', async () => {
+    readMock.mockResolvedValueOnce(
+      ensureCompleteMinigameStats({
+        modes: { standard: { playCount: 2, highScore: 120, highestCombo: 5 } },
+      } as never)
+    );
+    const { result } = renderHook(() => useRecordRoundResult());
+
+    await act(async () => {
+      const meta = await result.current({
+        roundId: 9,
+        mode: 'standard',
+        score: 100,
+        highestCombo: 3,
+        bugsSquashed: 0,
+        featuresBroken: 0,
+        durationSeconds: 10,
+      });
+      expect(meta).toEqual({ isNewHighScore: false, previousHighScore: 120 });
+    });
   });
 
   it('skips a duplicate concurrent invocation with the same roundId', async () => {
@@ -116,7 +138,7 @@ describe('useRecordRoundResult', () => {
 
     expect(firstDone).toBe(true);
     expect(secondDone).toBe(true);
-    expect(firstMeta).toEqual({ isNewHighScore: false });
+    expect(firstMeta).toEqual({ isNewHighScore: false, previousHighScore: 0 });
     expect(secondMeta).toBeUndefined();
     expect(readMock).toHaveBeenCalledTimes(1);
     expect(writeMock).toHaveBeenCalledTimes(1);

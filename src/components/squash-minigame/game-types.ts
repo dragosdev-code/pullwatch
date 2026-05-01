@@ -66,10 +66,11 @@ export interface FinishedRoundSummary {
   durationSeconds: number;
 }
 
-/** Parent-supplied flag so the finished overlay can show a new-best banner for this `roundId`. */
+/** Parent-supplied persist result for this `roundId` (new-best banner + score runway). */
 export interface FinishCelebration {
   roundId: number;
   isNewHighScore: boolean;
+  previousHighScore: number;
 }
 
 export type { GameMode };

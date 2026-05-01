@@ -6,7 +6,7 @@ import {
 } from '../storage/record-round-result';
 import { readMinigameStats, writeMinigameStats } from '../storage/minigame-stats-storage';
 
-export type RecordRoundPersistOutcome = { isNewHighScore: boolean };
+export type RecordRoundPersistOutcome = { isNewHighScore: boolean; previousHighScore: number };
 
 const pendingRoundIds = new Set<number>();
 const completedRoundIds = new Set<number>();
@@ -42,11 +42,12 @@ export function useRecordRoundResult() {
       pendingRoundIds.add(result.roundId);
       try {
         const current = await readMinigameStats();
+        const previousHighScore = current.modes[result.mode].highScore;
         const isNewHighScore = isNewHighScoreForRound(current, result);
         const next = applyRoundResultToStats(current, result);
         await writeMinigameStats(next);
         completedRoundIds.add(result.roundId);
-        return { isNewHighScore };
+        return { isNewHighScore, previousHighScore };
       } catch {
         /* swallow: a failed stats write must not break the launcher UX */
         return undefined;

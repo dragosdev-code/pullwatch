@@ -139,8 +139,12 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
   const handleFinish = useCallback(
     (summary: FinishedRoundSummary) => {
       void recordRound(summary).then((meta) => {
-        if (meta?.isNewHighScore) {
-          setFinishCelebration({ roundId: summary.roundId, isNewHighScore: true });
+        if (meta) {
+          setFinishCelebration({
+            roundId: summary.roundId,
+            isNewHighScore: meta.isNewHighScore,
+            previousHighScore: meta.previousHighScore,
+          });
         }
       });
     },

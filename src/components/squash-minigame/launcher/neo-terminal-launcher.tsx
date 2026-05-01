@@ -4,7 +4,7 @@ import type { MinigameStats } from '@common/types';
 import type { FinishCelebration, FinishedRoundSummary, GameMode } from '../game-types';
 import { SquashMinigameLazy } from '../squash-minigame.lazy';
 import { MODE_METADATA } from './mode-metadata';
-import { useRecordRoundResult } from '../hooks/use-record-round-result';
+import { useRecordRoundResult, type RecordRoundPersistOutcome } from '../hooks/use-record-round-result';
 
 export interface NeoTerminalLauncherProps {
   stats: MinigameStats;
@@ -13,7 +13,7 @@ export interface NeoTerminalLauncherProps {
   /** Test seam: replaces the real recorder so storage IO can be observed without mocks. */
   recordRoundResult?: (
     summary: FinishedRoundSummary
-  ) => Promise<{ isNewHighScore: boolean } | void> | { isNewHighScore: boolean } | void;
+  ) => Promise<RecordRoundPersistOutcome | void> | RecordRoundPersistOutcome | void;
 }
 
 /**
@@ -33,8 +33,12 @@ export function NeoTerminalLauncher({
     (summary: FinishedRoundSummary) => {
       const recorder = recordRoundResult ?? fallbackRecorder;
       void Promise.resolve(recorder(summary)).then((meta) => {
-        if (meta?.isNewHighScore) {
-          setFinishCelebration({ roundId: summary.roundId, isNewHighScore: true });
+        if (meta) {
+          setFinishCelebration({
+            roundId: summary.roundId,
+            isNewHighScore: meta.isNewHighScore,
+            previousHighScore: meta.previousHighScore,
+          });
         }
       });
     },
