@@ -67,6 +67,14 @@ export class PRService implements IPRService {
   private cycleBaselineLogin: string | null = null;
   private cycleBaselineLoaded = false;
   private clearedRouteHintForSwapKey: string | null = null;
+  /**
+   * Lists whose stored PR array was successfully refreshed this cycle. Used by
+   * {@link persistResolvedViewerIdentity} to detect swap-with-partial-refresh: if a list errored
+   * (PrFetchErrorHandler returned `oldPRs` for a `GitHubOutageError` / `ParserBreakageError`) or
+   * never started (TTL cache hit with stale account data), it is absent from this set, so we wipe
+   * its storage to prevent the previous account's PRs from leaking under the new viewer identity.
+   */
+  private cycleListsRefreshed = new Set<'assigned' | 'merged' | 'authored'>();
 
   constructor(deps: {
     debugService: IDebugService;
@@ -120,12 +128,44 @@ export class PRService implements IPRService {
         this.debugService.log('[PRService] Skipping viewer identity persist — no resolved login');
         return;
       }
+
+      // WHY [swap + partial refresh]: A wave can advance the viewer identity even if one list
+      // threw (PrFetchErrorHandler swallows GitHubOutageError / ParserBreakageError and returns
+      // oldPRs). Without this, storage ends up: identity = new account, list = old account's PRs.
+      // Clear any list missing from `cycleListsRefreshed` so the popup never shows cross-account
+      // data. Same-account churn skips this branch (`baselineLogin === login`).
+      const baselineLogin = await this.getCycleBaselineLogin();
+      if (baselineLogin && baselineLogin !== login) {
+        await this.clearUnrefreshedListsAfterSwap(baselineLogin, login);
+      }
+
       await this.storageService.setGitHubViewerIdentity({
         login,
         updatedAt: new Date().toISOString(),
       });
     } finally {
       this.resetSwapCycleState();
+    }
+  }
+
+  private async clearUnrefreshedListsAfterSwap(
+    baselineLogin: string,
+    currentLogin: string
+  ): Promise<void> {
+    const lists: ReadonlyArray<{
+      kind: 'assigned' | 'merged' | 'authored';
+      key: typeof STORAGE_KEY_ASSIGNED_PRS | typeof STORAGE_KEY_MERGED_PRS | typeof STORAGE_KEY_AUTHORED_PRS;
+    }> = [
+      { kind: 'assigned', key: STORAGE_KEY_ASSIGNED_PRS },
+      { kind: 'merged', key: STORAGE_KEY_MERGED_PRS },
+      { kind: 'authored', key: STORAGE_KEY_AUTHORED_PRS },
+    ];
+    for (const { kind, key } of lists) {
+      if (this.cycleListsRefreshed.has(kind)) continue;
+      this.debugService.warn(
+        `[PRService] Account swap (${baselineLogin} → ${currentLogin}) but ${kind} list did not refresh this cycle; clearing stale storage to avoid cross-account data leak.`
+      );
+      await this.storageService.setStoredPRs(key, []);
     }
   }
 
@@ -146,6 +186,7 @@ export class PRService implements IPRService {
     this.cycleBaselineLoaded = false;
     this.cycleBaselineLogin = null;
     this.clearedRouteHintForSwapKey = null;
+    this.cycleListsRefreshed.clear();
   }
 
   /**
@@ -367,6 +408,7 @@ export class PRService implements IPRService {
 
       await this.persistAndNotifyAssigned(allPRs, filteredPending.length, newPRs, forceRefresh);
       await this.limboPromoter.recordTrustedFetch('assigned', allPRs.length);
+      this.cycleListsRefreshed.add('assigned');
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
@@ -567,6 +609,7 @@ export class PRService implements IPRService {
 
       await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, freshAuthoredPRs);
       await this.limboPromoter.recordTrustedFetch('authored', freshAuthoredPRs.length);
+      this.cycleListsRefreshed.add('authored');
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
@@ -687,6 +730,7 @@ export class PRService implements IPRService {
       }
 
       await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, mergedPRsWithStatus);
+      this.cycleListsRefreshed.add('merged');
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
