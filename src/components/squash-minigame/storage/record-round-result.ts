@@ -16,6 +16,14 @@ export interface RoundResult {
 }
 
 /**
+ * True when this round's score strictly exceeds the stored per-mode high for the same read
+ * snapshot used before {@link applyRoundResultToStats} (ties are not "new best").
+ */
+export function isNewHighScoreForRound(stats: MinigameStats, result: RoundResult): boolean {
+  return result.score > stats.modes[result.mode].highScore;
+}
+
+/**
  * Folds a finished round into the stored stats. Pure so callers (the shell, the launcher, and
  * the tests) can compose it without touching storage. Storage IO lives in
  * {@link import('./minigame-stats-storage').writeMinigameStats}.

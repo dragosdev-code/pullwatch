@@ -28,7 +28,7 @@ describe('useRecordRoundResult', () => {
     const { result } = renderHook(() => useRecordRoundResult());
 
     await act(async () => {
-      await result.current({
+      const meta = await result.current({
         roundId: 1,
         mode: 'standard',
         score: 50,
@@ -37,6 +37,7 @@ describe('useRecordRoundResult', () => {
         featuresBroken: 0,
         durationSeconds: 30,
       });
+      expect(meta).toEqual({ isNewHighScore: true });
     });
 
     expect(readMock).toHaveBeenCalledTimes(1);
@@ -50,8 +51,9 @@ describe('useRecordRoundResult', () => {
   it('swallows storage errors so the launcher UI is not broken by a failed write', async () => {
     readMock.mockRejectedValueOnce(new Error('quota'));
     const { result } = renderHook(() => useRecordRoundResult());
-    await expect(
-      result.current({
+    let meta: Awaited<ReturnType<ReturnType<typeof useRecordRoundResult>>> | undefined;
+    await act(async () => {
+      meta = await result.current({
         roundId: 2,
         mode: 'standard',
         score: 0,
@@ -59,8 +61,9 @@ describe('useRecordRoundResult', () => {
         bugsSquashed: 0,
         featuresBroken: 0,
         durationSeconds: 0,
-      })
-    ).resolves.toBeUndefined();
+      });
+    });
+    expect(meta).toBeUndefined();
     expect(writeMock).not.toHaveBeenCalled();
   });
 
@@ -76,6 +79,8 @@ describe('useRecordRoundResult', () => {
 
     let firstDone = false;
     let secondDone = false;
+    let firstMeta: Awaited<ReturnType<ReturnType<typeof useRecordRoundResult>>> | undefined;
+    let secondMeta: Awaited<ReturnType<ReturnType<typeof useRecordRoundResult>>> | undefined;
     await act(async () => {
       const p1 = result
         .current({
@@ -87,7 +92,8 @@ describe('useRecordRoundResult', () => {
           featuresBroken: 0,
           durationSeconds: 0,
         })
-        .then(() => {
+        .then((m) => {
+          firstMeta = m;
           firstDone = true;
         });
       const p2 = result
@@ -100,7 +106,8 @@ describe('useRecordRoundResult', () => {
           featuresBroken: 0,
           durationSeconds: 0,
         })
-        .then(() => {
+        .then((m) => {
+          secondMeta = m;
           secondDone = true;
         });
       resolveRead?.(ensureCompleteMinigameStats(undefined));
@@ -109,6 +116,8 @@ describe('useRecordRoundResult', () => {
 
     expect(firstDone).toBe(true);
     expect(secondDone).toBe(true);
+    expect(firstMeta).toEqual({ isNewHighScore: false });
+    expect(secondMeta).toBeUndefined();
     expect(readMock).toHaveBeenCalledTimes(1);
     expect(writeMock).toHaveBeenCalledTimes(1);
   });

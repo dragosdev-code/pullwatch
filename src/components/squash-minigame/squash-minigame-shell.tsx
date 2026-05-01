@@ -3,7 +3,7 @@ import type { MinigameSessionCheckpoint } from '@common/types';
 import { createGameStore, type GameStore } from './game-store';
 import { createGameLoop, type GameLoop } from './game-loop';
 import { buildCheckpointFromState } from './build-checkpoint';
-import type { FinishedRoundSummary, GameMode } from './game-types';
+import type { FinishCelebration, FinishedRoundSummary, GameMode } from './game-types';
 import { GameStoreProvider } from './context/game-store-context';
 import { SquashMinigameBody } from './components/squash-minigame-body';
 import { SquashShellBooting } from './components/squash-shell-booting';
@@ -23,6 +23,8 @@ export interface SquashMinigameProps {
    * render layer's tests.
    */
   onFinish?: (summary: FinishedRoundSummary) => void;
+  /** When the persisted round beat the prior per-mode high; overlay shows a banner when `roundId` matches. */
+  finishCelebration?: FinishCelebration | null;
   /**
    * Hooks for tests. Production callers omit these and the shell builds a real store and a real
    * RAF backed loop. The shell keeps the latest function in a ref and only re-runs the session
@@ -80,6 +82,7 @@ export function SquashMinigame({
   checkpoint = null,
   onSaveCheckpoint,
   onClearCheckpoint,
+  finishCelebration = null,
 }: SquashMinigameProps) {
   const [store, setStore] = useState<GameStore | null>(null);
   const [replayToken, setReplayToken] = useState(0);
@@ -172,10 +175,11 @@ export function SquashMinigame({
         onTryAgain={() => setReplayToken((n) => n + 1)}
         audioOptions={audioOptions}
         disableFctOverlay={disableFctOverlay}
+        finishCelebration={finishCelebration}
       />
     </GameStoreProvider>
   );
 }
 
-export type { FinishedRoundSummary } from './game-types';
+export type { FinishCelebration, FinishedRoundSummary } from './game-types';
 export { __resetLastFinishNotificationForTests } from './hooks/use-finished-reporter';

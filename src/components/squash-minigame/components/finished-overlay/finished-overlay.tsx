@@ -20,9 +20,11 @@ export function FinishedOverlay({
   onTryAgain,
   onChangeMode,
   onExit,
+  finishCelebration = null,
 }: FinishedOverlayProps) {
   const store = useGameStore();
   const status = useStore(store, (s) => s.status);
+  const roundId = useStore(store, (s) => s.roundId);
   const [pickingMode, setPickingMode] = useState(false);
   const [pickerSelected, setPickerSelected] = useState(mode);
   const [actionsReady, setActionsReady] = useState(false);
@@ -68,6 +70,19 @@ export function FinishedOverlay({
     to: { opacity: 1, x: 0 },
     delay: motionOff ? 0 : 160,
     config: { tension: 280, friction: 26 },
+    immediate: motionOff,
+  });
+
+  const showNewBestBanner =
+    status === 'finished' &&
+    finishCelebration?.isNewHighScore === true &&
+    finishCelebration.roundId === roundId;
+
+  const newBestSpring = useSpring({
+    from: { opacity: 0, scale: 0.96, y: -6 },
+    to: showNewBestBanner ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.96, y: -6 },
+    delay: motionOff ? 0 : 80,
+    config: { tension: 280, friction: 24 },
     immediate: motionOff,
   });
 
@@ -193,6 +208,23 @@ export function FinishedOverlay({
           </>
         ) : (
           <>
+            {showNewBestBanner ? (
+              <animated.div
+                data-testid="squash-finished-new-best-banner"
+                aria-live="polite"
+                role="status"
+                className="mb-3 rounded-lg border border-success/50 bg-linear-to-r from-success/20 via-success/10 to-accent/15 px-3 py-2.5 font-bold uppercase tracking-widest text-success shadow-[0_0_20px_-8px_var(--color-success)] sm:mb-4 sm:px-4 sm:text-sm"
+                style={{
+                  opacity: newBestSpring.opacity,
+                  transform: to(
+                    [newBestSpring.y, newBestSpring.scale],
+                    (y, s) => `translateY(${y}px) scale(${s})`
+                  ),
+                }}
+              >
+                New best score!
+              </animated.div>
+            ) : null}
             <animated.h3
               id="squash-finished-title"
               className="mb-3 text-sm font-bold uppercase tracking-wide text-base-content"
@@ -228,7 +260,10 @@ export function FinishedOverlay({
               />
             ) : (
               <div data-testid="squash-finished-actions-pending">
-                <FinishCooldownIndicator motionOff={motionOff} delayMs={FINISHED_OVERLAY_ACTION_DELAY_MS} />
+                <FinishCooldownIndicator
+                  motionOff={motionOff}
+                  delayMs={FINISHED_OVERLAY_ACTION_DELAY_MS}
+                />
               </div>
             )}
           </>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, act } from '@testing-library/react';
+import { render, act, screen } from '@testing-library/react';
 import { SquashMinigame, __resetLastFinishNotificationForTests } from '../squash-minigame-shell';
 import { createGameStore, __resetSessionRoundIdForTests } from '../game-store';
 import type { GameLoop } from '../game-loop';
@@ -91,5 +91,61 @@ describe('SquashMinigame onFinish reporter', () => {
       store.setState({ score: 30 });
     });
     expect(onFinish).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the new-best banner when finishCelebration matches the finished roundId', () => {
+    const store = createGameStore();
+    const onFinish = vi.fn();
+
+    render(
+      <SquashMinigame
+        mode="standard"
+        onFinish={onFinish}
+        finishCelebration={{ roundId: 1, isNewHighScore: true }}
+        createStoreFn={() => store}
+        createLoopFn={() => noopLoop()}
+      />
+    );
+
+    act(() => {
+      store.setState({
+        status: 'finished',
+        score: 200,
+        highestCombo: 6,
+        bugsSquashed: 11,
+        featuresBroken: 1,
+        elapsedMs: 30_400,
+      });
+    });
+
+    expect(screen.getByTestId('squash-finished-new-best-banner').textContent).toContain('New best score!');
+  });
+
+  it('does not show the new-best banner when finishCelebration roundId does not match', () => {
+    const store = createGameStore();
+    const onFinish = vi.fn();
+
+    render(
+      <SquashMinigame
+        mode="standard"
+        onFinish={onFinish}
+        finishCelebration={{ roundId: 99, isNewHighScore: true }}
+        createStoreFn={() => store}
+        createLoopFn={() => noopLoop()}
+      />
+    );
+
+    act(() => {
+      store.setState({
+        status: 'finished',
+        score: 200,
+        highestCombo: 6,
+        bugsSquashed: 11,
+        featuresBroken: 1,
+        elapsedMs: 30_400,
+      });
+    });
+
+    expect(screen.queryByTestId('squash-finished-new-best-banner')).toBeNull();
   });
 });

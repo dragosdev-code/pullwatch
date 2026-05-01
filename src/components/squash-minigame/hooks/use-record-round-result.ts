@@ -1,6 +1,12 @@
 import { useCallback } from 'react';
-import { applyRoundResultToStats, type RoundResult } from '../storage/record-round-result';
+import {
+  applyRoundResultToStats,
+  isNewHighScoreForRound,
+  type RoundResult,
+} from '../storage/record-round-result';
 import { readMinigameStats, writeMinigameStats } from '../storage/minigame-stats-storage';
+
+export type RecordRoundPersistOutcome = { isNewHighScore: boolean };
 
 const pendingRoundIds = new Set<number>();
 const completedRoundIds = new Set<number>();
@@ -22,26 +28,32 @@ export function __resetRoundResultPersistingForTests(): void {
  * stop duplicate RMWs even when the second `Date.now()`-style key would differ.
  */
 export function useRecordRoundResult() {
-  return useCallback(async (result: RoundResult) => {
-    if (result.roundId === 0) {
-      return;
-    }
-    if (completedRoundIds.has(result.roundId)) {
-      return;
-    }
-    if (pendingRoundIds.has(result.roundId)) {
-      return;
-    }
-    pendingRoundIds.add(result.roundId);
-    try {
-      const current = await readMinigameStats();
-      const next = applyRoundResultToStats(current, result);
-      await writeMinigameStats(next);
-      completedRoundIds.add(result.roundId);
-    } catch {
-      /* swallow: a failed stats write must not break the launcher UX */
-    } finally {
-      pendingRoundIds.delete(result.roundId);
-    }
-  }, []);
+  return useCallback(
+    async (result: RoundResult): Promise<RecordRoundPersistOutcome | undefined> => {
+      if (result.roundId === 0) {
+        return undefined;
+      }
+      if (completedRoundIds.has(result.roundId)) {
+        return undefined;
+      }
+      if (pendingRoundIds.has(result.roundId)) {
+        return undefined;
+      }
+      pendingRoundIds.add(result.roundId);
+      try {
+        const current = await readMinigameStats();
+        const isNewHighScore = isNewHighScoreForRound(current, result);
+        const next = applyRoundResultToStats(current, result);
+        await writeMinigameStats(next);
+        completedRoundIds.add(result.roundId);
+        return { isNewHighScore };
+      } catch {
+        /* swallow: a failed stats write must not break the launcher UX */
+        return undefined;
+      } finally {
+        pendingRoundIds.delete(result.roundId);
+      }
+    },
+    []
+  );
 }

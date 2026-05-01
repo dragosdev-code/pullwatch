@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useState } from 'react';
 import clsx from 'clsx';
 import type { MinigameStats } from '@common/types';
-import type { FinishedRoundSummary, GameMode } from '../game-types';
+import type { FinishCelebration, FinishedRoundSummary, GameMode } from '../game-types';
 import { SquashMinigameLazy } from '../squash-minigame.lazy';
 import { MODE_METADATA } from './mode-metadata';
 import { useRecordRoundResult } from '../hooks/use-record-round-result';
@@ -11,7 +11,9 @@ export interface NeoTerminalLauncherProps {
   /** When set, mode picks open the app overlay instead of mounting `SquashMinigameLazy` inline. */
   onRequestPlayMode?: (mode: GameMode) => void;
   /** Test seam: replaces the real recorder so storage IO can be observed without mocks. */
-  recordRoundResult?: (summary: FinishedRoundSummary) => Promise<void> | void;
+  recordRoundResult?: (
+    summary: FinishedRoundSummary
+  ) => Promise<{ isNewHighScore: boolean } | void> | { isNewHighScore: boolean } | void;
 }
 
 /**
@@ -24,17 +26,25 @@ export function NeoTerminalLauncher({
   recordRoundResult,
 }: NeoTerminalLauncherProps) {
   const [activeMode, setActiveMode] = useState<GameMode | null>(null);
+  const [finishCelebration, setFinishCelebration] = useState<FinishCelebration | null>(null);
   const fallbackRecorder = useRecordRoundResult();
 
   const handleFinish = useCallback(
     (summary: FinishedRoundSummary) => {
       const recorder = recordRoundResult ?? fallbackRecorder;
-      void recorder(summary);
+      void Promise.resolve(recorder(summary)).then((meta) => {
+        if (meta?.isNewHighScore) {
+          setFinishCelebration({ roundId: summary.roundId, isNewHighScore: true });
+        }
+      });
     },
     [recordRoundResult, fallbackRecorder]
   );
 
-  const exitToMenu = useCallback(() => setActiveMode(null), []);
+  const exitToMenu = useCallback(() => {
+    setFinishCelebration(null);
+    setActiveMode(null);
+  }, []);
 
   if (activeMode) {
     return (
@@ -54,6 +64,7 @@ export function NeoTerminalLauncher({
             onExit={exitToMenu}
             onFinish={handleFinish}
             onChangeMode={(next) => setActiveMode(next)}
+            finishCelebration={finishCelebration}
           />
         </Suspense>
       </div>

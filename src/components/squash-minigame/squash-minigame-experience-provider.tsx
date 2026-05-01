@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { MinigameSessionCheckpoint } from '@common/types';
-import type { FinishedRoundSummary, GameMode } from './game-types';
+import type { FinishCelebration, FinishedRoundSummary, GameMode } from './game-types';
 import { applyPopupSizePresetToDocument, usePopupSize } from '@src/hooks/use-popup-size';
 import {
   useMinigameDiscovery,
@@ -80,6 +80,7 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
   const [session, setSession] = useState<SessionState>(null);
   /** Bumps React `key` on `SquashMinigameLazy` when the overlay picks the same mode again. */
   const [gameMountKey, setGameMountKey] = useState(0);
+  const [finishCelebration, setFinishCelebration] = useState<FinishCelebration | null>(null);
   const sessionRef = useRef<SessionState>(null);
   sessionRef.current = session;
   const recordRound = useRecordRoundResult();
@@ -91,6 +92,7 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
   }, [session]);
 
   const closeSquashGame = useCallback(() => {
+    setFinishCelebration(null);
     setSession((s) => {
       if (!s || s.stage === 'closing') return s;
       return { stage: 'closing' };
@@ -136,7 +138,11 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
 
   const handleFinish = useCallback(
     (summary: FinishedRoundSummary) => {
-      void recordRound(summary);
+      void recordRound(summary).then((meta) => {
+        if (meta?.isNewHighScore) {
+          setFinishCelebration({ roundId: summary.roundId, isNewHighScore: true });
+        }
+      });
     },
     [recordRound]
   );
@@ -338,6 +344,7 @@ export function SquashMinigameExperienceProvider({ children }: { children: React
                 checkpoint={session.checkpoint}
                 onSaveCheckpoint={handleSaveCheckpoint}
                 onClearCheckpoint={handleClearCheckpoint}
+                finishCelebration={finishCelebration}
               />
             </div>
           </Suspense>

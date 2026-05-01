@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import type { FinishedRoundSummary, GameMode } from '../game-types';
+import type { FinishCelebration, FinishedRoundSummary, GameMode } from '../game-types';
 import { GameBoard } from './game-board';
 import { FinishedOverlay } from './finished-overlay';
 import { Hud } from './hud';
@@ -19,6 +19,7 @@ export interface SquashMinigameBodyProps {
   onTryAgain: () => void;
   audioOptions?: UseAudioEffectsOptions;
   disableFctOverlay: boolean;
+  finishCelebration?: FinishCelebration | null;
 }
 
 /**
@@ -32,6 +33,7 @@ export function SquashMinigameBody({
   onTryAgain,
   audioOptions,
   disableFctOverlay,
+  finishCelebration = null,
 }: SquashMinigameBodyProps) {
   /**
    * WHY [engine via state + effect lifecycle]: both `useAudioEffects` (click tones) and
@@ -114,6 +116,7 @@ export function SquashMinigameBody({
         onTryAgain={onTryAgain}
         onChangeMode={onChangeMode}
         onExit={onExit}
+        finishCelebration={finishCelebration}
       />
     </div>
   );

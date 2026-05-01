@@ -1,6 +1,48 @@
 import { describe, it, expect } from 'vitest';
-import { applyRoundResultToStats } from '../record-round-result';
+import { applyRoundResultToStats, isNewHighScoreForRound } from '../record-round-result';
 import { ensureCompleteMinigameStats } from '../minigame-stats-defaults';
+
+const baseRound = {
+  roundId: 1,
+  mode: 'standard' as const,
+  highestCombo: 0,
+  bugsSquashed: 0,
+  featuresBroken: 0,
+  durationSeconds: 0,
+};
+
+describe('isNewHighScoreForRound', () => {
+  it('is true on first play with a positive score', () => {
+    const stats = ensureCompleteMinigameStats(undefined);
+    expect(isNewHighScoreForRound(stats, { ...baseRound, score: 10 })).toBe(true);
+  });
+
+  it('is false when score is zero and stored high is zero', () => {
+    const stats = ensureCompleteMinigameStats(undefined);
+    expect(isNewHighScoreForRound(stats, { ...baseRound, score: 0 })).toBe(false);
+  });
+
+  it('is true when score beats the stored high', () => {
+    const stats = ensureCompleteMinigameStats({
+      modes: { standard: { playCount: 1, highScore: 100, highestCombo: 0 } },
+    } as never);
+    expect(isNewHighScoreForRound(stats, { ...baseRound, score: 150 })).toBe(true);
+  });
+
+  it('is false on a tie with stored high', () => {
+    const stats = ensureCompleteMinigameStats({
+      modes: { standard: { playCount: 1, highScore: 100, highestCombo: 0 } },
+    } as never);
+    expect(isNewHighScoreForRound(stats, { ...baseRound, score: 100 })).toBe(false);
+  });
+
+  it('is false when score is below stored high', () => {
+    const stats = ensureCompleteMinigameStats({
+      modes: { standard: { playCount: 2, highScore: 200, highestCombo: 0 } },
+    } as never);
+    expect(isNewHighScoreForRound(stats, { ...baseRound, score: 50 })).toBe(false);
+  });
+});
 
 describe('applyRoundResultToStats', () => {
   it('records the first play for a mode and bumps overall counters', () => {
