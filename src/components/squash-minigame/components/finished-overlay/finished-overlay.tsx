@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
-import { animated, config, to, useSpring, useTrail } from '@react-spring/web';
+import { animated, config, to, useSpring } from '@react-spring/web';
 import { usePrefersReducedMotion } from '@src/hooks/use-prefers-reduced-motion';
 import { useGameStore } from '../../context/game-store-context';
 import { FINISHED_OVERLAY_ACTION_DELAY_MS } from '../../game-config';
@@ -10,6 +10,7 @@ import { MODE_METADATA } from '../../launcher/mode-metadata';
 import { FinishActionsReveal } from './finish-actions-reveal';
 import { FinishCooldownIndicator } from './finish-cooldown-indicator';
 import { FinishScoreRunway } from './finish-score-runway';
+import { FinishRoundStats } from './finish-round-stats';
 import type { FinishedOverlayProps } from './types';
 
 /**
@@ -70,14 +71,6 @@ export function FinishedOverlay({
     immediate: motionOff,
   });
 
-  const statSprings = useTrail(3, {
-    from: { opacity: 0, x: -10 },
-    to: { opacity: 1, x: 0 },
-    delay: motionOff ? 0 : 160,
-    config: { tension: 280, friction: 26 },
-    immediate: motionOff,
-  });
-
   const hasPersistMeta =
     status === 'finished' &&
     finishCelebration !== null &&
@@ -123,15 +116,6 @@ export function FinishedOverlay({
       onChangeMode?.(picked);
     }
   };
-
-  const statLines: Array<{
-    testId: 'squash-finished-combo' | 'squash-finished-bugs' | 'squash-finished-features';
-    text: string;
-  }> = [
-    { testId: 'squash-finished-combo', text: `best combo x${highestCombo}` },
-    { testId: 'squash-finished-bugs', text: `bugs ${bugsSquashed}` },
-    { testId: 'squash-finished-features', text: `features ${featuresBroken}` },
-  ];
 
   return (
     <animated.div
@@ -264,20 +248,12 @@ export function FinishedOverlay({
             >
               round over
             </animated.h3>
-            <ul className="mb-5 space-y-1 text-xs text-base-content/90">
-              {statLines.map((line, i) => (
-                <animated.li
-                  key={line.testId}
-                  data-testid={line.testId}
-                  style={{
-                    opacity: statSprings[i]?.opacity,
-                    transform: statSprings[i]?.x.to((x) => `translateX(${x}px)`),
-                  }}
-                >
-                  {line.text}
-                </animated.li>
-              ))}
-            </ul>
+            <FinishRoundStats
+              highestCombo={highestCombo}
+              bugsSquashed={bugsSquashed}
+              featuresBroken={featuresBroken}
+              motionOff={motionOff}
+            />
             {actionsReady ? (
               <FinishActionsReveal
                 motionOff={motionOff}

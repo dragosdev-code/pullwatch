@@ -131,7 +131,7 @@ describe('SquashMinigame shell', () => {
 
     expect(screen.getByTestId('squash-finished-overlay')).toBeTruthy();
     expect(screen.getByTestId('squash-finished-score').textContent).toContain('90');
-    expect(screen.getByTestId('squash-finished-combo').textContent).toContain('x4');
+    expect(screen.getByTestId('squash-finished-combo').textContent).toContain('4');
     expect(screen.getByTestId('squash-finished-bugs').textContent).toContain('9');
     expect(screen.getByTestId('squash-finished-features').textContent).toContain('1');
   });
