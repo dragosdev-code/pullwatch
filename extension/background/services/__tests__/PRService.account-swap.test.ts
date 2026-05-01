@@ -156,12 +156,46 @@ describe('PRService account swap (silent baseline)', () => {
     expect(setPRCountBadge).toHaveBeenCalledWith(2);
   });
 
+  it('identity mismatch: assigned empty result replaces old-account cache without outage', async () => {
+    fetchAssignedPRs.mockResolvedValue([]);
+    fetchReviewedPRs.mockResolvedValue([]);
+
+    const pr = makeService();
+    const assigned = await pr.fetchAndUpdateAssignedPRs(false, true);
+
+    expect(assigned).toEqual([]);
+    expect(showAssignedPRNotifications).not.toHaveBeenCalled();
+    expect(healthStub.signalGitHubOutage).not.toHaveBeenCalled();
+    expect(healthStub.clearGitHubOutage).toHaveBeenCalled();
+    expect(setPRCountBadge).toHaveBeenCalledWith(0);
+
+    const assignedCall = setStoredPRs.mock.calls.find((c) => c[0] === STORAGE_KEY_ASSIGNED_PRS);
+    expect(assignedCall).toBeDefined();
+    expect(assignedCall![1]).toEqual([]);
+  });
+
   it('identity mismatch: merged path skips notifications and strips isNew', async () => {
     const pr = makeService();
     const merged = await pr.updateMergedPRs(false, true);
 
     expect(showMergedPRNotifications).not.toHaveBeenCalled();
     expect(merged.every((p) => p.isNew !== true)).toBe(true);
+  });
+
+  it('identity mismatch: merged empty result replaces old-account cache without outage', async () => {
+    fetchMergedPRs.mockResolvedValue([]);
+
+    const pr = makeService();
+    const merged = await pr.updateMergedPRs(false, true);
+
+    expect(merged).toEqual([]);
+    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(healthStub.signalGitHubOutage).not.toHaveBeenCalled();
+    expect(healthStub.clearGitHubOutage).toHaveBeenCalled();
+
+    const mergedCall = setStoredPRs.mock.calls.find((c) => c[0] === STORAGE_KEY_MERGED_PRS);
+    expect(mergedCall).toBeDefined();
+    expect(mergedCall![1]).toEqual([]);
   });
 
   it('identity mismatch: authored path persists all rows with isNew false', async () => {
@@ -173,6 +207,21 @@ describe('PRService account swap (silent baseline)', () => {
     expect(authoredCall).toBeDefined();
     const written: PullRequest[] = authoredCall![1];
     expect(written.every((p) => p.isNew !== true)).toBe(true);
+  });
+
+  it('identity mismatch: authored empty result replaces old-account cache without outage', async () => {
+    fetchAuthoredPRs.mockResolvedValue([]);
+
+    const pr = makeService();
+    const authored = await pr.updateAuthoredPRs(false, true);
+
+    expect(authored).toEqual([]);
+    expect(healthStub.signalGitHubOutage).not.toHaveBeenCalled();
+    expect(healthStub.clearGitHubOutage).toHaveBeenCalled();
+
+    const authoredCall = setStoredPRs.mock.calls.find((c) => c[0] === STORAGE_KEY_AUTHORED_PRS);
+    expect(authoredCall).toBeDefined();
+    expect(authoredCall![1]).toEqual([]);
   });
 
   it('no stored identity (first install path): not treated as swap', async () => {

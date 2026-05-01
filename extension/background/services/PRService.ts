@@ -319,29 +319,32 @@ export class PRService implements IPRService {
       // hint before the reviewed request so the next fetch in this cycle can probe cleanly.
       await delay(REQUEST_DELAY_MS);
       const freshReviewedPRsRaw = await this.gitHubService.fetchReviewedPRs();
-
-      const assignedTrust = await this.trustAssessor.assess(
-        oldPRs,
-        [...freshPendingPRsRaw, ...freshReviewedPRsRaw]
-      );
-      if (assignedTrust.suspicious) {
-        this.debugService.warn(
-          `[PRService] Trust gate: suspicious assigned fetch (${assignedTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored PRs.`
-        );
-        await this.limboPromoter.recordSuspiciousFetch(
-          'assigned',
-          assignedTrust.reasons,
-          oldPRs,
-          [...freshPendingPRsRaw, ...freshReviewedPRsRaw]
-        );
-        await this.persistUntrustedFetchMetadata(
-          `Suspicious assigned list: ${assignedTrust.reasons.join(', ')}`
-        );
-        return oldPRs;
-      }
-
       if (!accountSwap) {
         ({ accountSwap } = await this.detectAccountSwap('silent assigned baseline'));
+      }
+
+      const freshAssignedPRsRaw = [...freshPendingPRsRaw, ...freshReviewedPRsRaw];
+      if (!accountSwap) {
+        const assignedTrust = await this.trustAssessor.assess(oldPRs, freshAssignedPRsRaw);
+        if (assignedTrust.suspicious) {
+          this.debugService.warn(
+            `[PRService] Trust gate: suspicious assigned fetch (${assignedTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored PRs.`
+          );
+          await this.limboPromoter.recordSuspiciousFetch(
+            'assigned',
+            assignedTrust.reasons,
+            oldPRs,
+            freshAssignedPRsRaw
+          );
+          await this.persistUntrustedFetchMetadata(
+            `Suspicious assigned list: ${assignedTrust.reasons.join(', ')}`
+          );
+          return oldPRs;
+        }
+      } else {
+        this.debugService.log(
+          '[PRService] Account swap detected for assigned PRs; trusting fresh list as new baseline.'
+        );
       }
 
       const oldPendingForCompare = accountSwap ? [] : oldPendingPRs;
@@ -408,6 +411,10 @@ export class PRService implements IPRService {
     await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRs);
     await this.storageService.setLastFetchTime(Date.now());
     await this.badgeService.setPRCountBadge(filteredPendingCount);
+  }
+
+  private markAsExistingBaseline(prs: PullRequest[]): PullRequest[] {
+    return prs.map((pr) => ({ ...pr, isNew: false }));
   }
 
   /**
@@ -530,27 +537,32 @@ export class PRService implements IPRService {
         `[PRService] Fetched ${freshAuthoredPRsRaw.length} authored PRs from GitHub`
       );
 
-      const authoredTrust = await this.trustAssessor.assess(oldPRs, freshAuthoredPRsRaw);
-      if (authoredTrust.suspicious) {
-        this.debugService.warn(
-          `[PRService] Trust gate: suspicious authored fetch (${authoredTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored authored PRs.`
+      const { accountSwap } = await this.detectAccountSwap('refreshing authored list baseline');
+      if (!accountSwap) {
+        const authoredTrust = await this.trustAssessor.assess(oldPRs, freshAuthoredPRsRaw);
+        if (authoredTrust.suspicious) {
+          this.debugService.warn(
+            `[PRService] Trust gate: suspicious authored fetch (${authoredTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored authored PRs.`
+          );
+          await this.limboPromoter.recordSuspiciousFetch(
+            'authored',
+            authoredTrust.reasons,
+            oldPRs,
+            freshAuthoredPRsRaw
+          );
+          await this.persistUntrustedFetchMetadata(
+            `Suspicious authored list: ${authoredTrust.reasons.join(', ')}`
+          );
+          return oldPRs;
+        }
+      } else {
+        this.debugService.log(
+          '[PRService] Account swap detected for authored PRs; trusting fresh list as new baseline.'
         );
-        await this.limboPromoter.recordSuspiciousFetch(
-          'authored',
-          authoredTrust.reasons,
-          oldPRs,
-          freshAuthoredPRsRaw
-        );
-        await this.persistUntrustedFetchMetadata(
-          `Suspicious authored list: ${authoredTrust.reasons.join(', ')}`
-        );
-        return oldPRs;
       }
 
-      const { accountSwap } = await this.detectAccountSwap('refreshing authored list baseline');
-
       const freshAuthoredPRs = accountSwap
-        ? freshAuthoredPRsRaw.map((pr) => ({ ...pr, isNew: false }))
+        ? this.markAsExistingBaseline(freshAuthoredPRsRaw)
         : freshAuthoredPRsRaw;
 
       await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, freshAuthoredPRs);
@@ -613,46 +625,50 @@ export class PRService implements IPRService {
       const freshMergedPRs = await this.gitHubService.fetchMergedPRs();
       this.debugService.log(`[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`);
 
-      const mergedTrust = await this.trustAssessor.assess(oldPRs, freshMergedPRs);
-      if (mergedTrust.suspicious) {
-        this.debugService.warn(
-          `[PRService] Trust gate: suspicious merged fetch (${mergedTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored merged PRs.`
-        );
-        await this.limboPromoter.recordSuspiciousFetch(
-          'merged',
-          mergedTrust.reasons,
-          oldPRs,
-          freshMergedPRs
-        );
-        await this.persistUntrustedFetchMetadata(
-          `Suspicious merged list: ${mergedTrust.reasons.join(', ')}`
-        );
-        return oldPRs;
-      }
-
       const { accountSwap } = await this.detectAccountSwap('silent merged baseline');
+      let newPRs: PullRequest[] = [];
+      let mergedPRsWithStatus: PullRequest[];
 
-      const trustedMergedPRs = await this.limboPromoter.promoteTrustedMergedList(
-        oldPRs,
-        freshMergedPRs,
-        mergedTrust.missConfirmationsRequired
-      );
-
-      const oldMergedForCompare = accountSwap ? [] : oldPRs;
-
-      let { newPRs, allPRsWithStatus: mergedPRsWithStatus } = this.comparePRs(
-        oldMergedForCompare,
-        trustedMergedPRs
-      );
       if (accountSwap) {
-        newPRs = [];
-        mergedPRsWithStatus = mergedPRsWithStatus.map((pr) => ({ ...pr, isNew: false }));
+        this.debugService.log(
+          '[PRService] Account swap detected for merged PRs; trusting fresh list as new baseline.'
+        );
+        mergedPRsWithStatus = this.markAsExistingBaseline(freshMergedPRs);
+        await this.limboPromoter.recordTrustedFetch('merged', mergedPRsWithStatus.length);
+      } else {
+        const mergedTrust = await this.trustAssessor.assess(oldPRs, freshMergedPRs);
+        if (mergedTrust.suspicious) {
+          this.debugService.warn(
+            `[PRService] Trust gate: suspicious merged fetch (${mergedTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored merged PRs.`
+          );
+          await this.limboPromoter.recordSuspiciousFetch(
+            'merged',
+            mergedTrust.reasons,
+            oldPRs,
+            freshMergedPRs
+          );
+          await this.persistUntrustedFetchMetadata(
+            `Suspicious merged list: ${mergedTrust.reasons.join(', ')}`
+          );
+          return oldPRs;
+        }
+
+        const trustedMergedPRs = await this.limboPromoter.promoteTrustedMergedList(
+          oldPRs,
+          freshMergedPRs,
+          mergedTrust.missConfirmationsRequired
+        );
+
+        ({ newPRs, allPRsWithStatus: mergedPRsWithStatus } = this.comparePRs(
+          oldPRs,
+          trustedMergedPRs
+        ));
+        newPRs = this.mergedNotificationEligibility.filterFreshCandidates(
+          newPRs,
+          storedData?.timestamp,
+          mergedTrust.status
+        );
       }
-      newPRs = this.mergedNotificationEligibility.filterFreshCandidates(
-        newPRs,
-        storedData?.timestamp,
-        mergedTrust.status
-      );
       this.debugService.log(`[PRService] Newly merged PRs detected: ${newPRs.length}`);
 
       // WHY notify before persist: same rationale as persistAndNotifyAssigned.
