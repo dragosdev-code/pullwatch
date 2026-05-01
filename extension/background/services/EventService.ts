@@ -159,12 +159,22 @@ export class EventService implements IEventService {
    * WHY [storage not sendMessage]: Popup reads `chrome.storage.local` and listens with
    * `chrome.storage.onChanged`; removing keys here invalidates the GitHub web session for every
    * open UI surface without requiring a document reload.
+   *
+   * WHY [health flags reset]: `clearGitHubWebSessionCaches` removes the persisted health-flag
+   * payloads, but {@link HealthStatusService} also keeps in-memory mirrors with single-flag dedupe
+   * (see `signalGitHubOutage`/`signalParserBreakage`). If we leave those mirrors set after wipe, a
+   * subsequent real fault skips the storage write because the dedupe says "already signaled". Call
+   * the clear methods so the in-memory state matches storage and the popup gets a `*Cleared`
+   * broadcast.
    */
   private async invalidateGitHubWebSessionAfterAuthFailure(): Promise<void> {
     try {
       const storageService = this.serviceContainer.getService('storageService');
       const badgeService = this.serviceContainer.getService('badgeService');
+      const healthStatusService = this.serviceContainer.getService('healthStatusService');
       await storageService.clearGitHubWebSessionCaches();
+      await healthStatusService.clearGitHubOutage();
+      await healthStatusService.clearParserBreakage();
       await badgeService.setDefaultBadge();
     } catch (err) {
       this.debugService.error('[EventService] GitHub session wipe failed after auth error:', err);

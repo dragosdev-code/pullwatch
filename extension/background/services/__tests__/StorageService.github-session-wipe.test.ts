@@ -4,10 +4,14 @@ import type { IDebugService } from '../../interfaces/IDebugService';
 import {
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
+  STORAGE_KEY_GITHUB_OUTAGE,
   STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_LAST_FETCH,
+  STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT,
   STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
+  STORAGE_KEY_PARSER_BREAKAGE,
+  STORAGE_KEY_PR_LIST_TRUST,
   STORAGE_KEY_ROUTE_HINT,
 } from '@common/constants';
 
@@ -41,7 +45,7 @@ describe('StorageService.clearGitHubWebSessionCaches', () => {
     );
   });
 
-  it('removes viewer identity then batches PR cache and probe keys', async () => {
+  it('removes viewer identity, then batches PR cache, probe keys, and local-trust health flags', async () => {
     const debugService: IDebugService = {
       initialize: vi.fn(),
       dispose: vi.fn(),
@@ -61,6 +65,10 @@ describe('StorageService.clearGitHubWebSessionCaches', () => {
       STORAGE_KEY_AUTHORED_PRS,
       STORAGE_KEY_LAST_FETCH,
       STORAGE_KEY_ROUTE_HINT,
+      STORAGE_KEY_GITHUB_OUTAGE,
+      STORAGE_KEY_PARSER_BREAKAGE,
+      STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT,
+      STORAGE_KEY_PR_LIST_TRUST,
     ]);
     expect(localSet).toHaveBeenCalledWith({
       [STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING]: true,

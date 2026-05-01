@@ -7,6 +7,7 @@ import type { IPRService } from '../../interfaces/IPRService';
 import type { IStorageService } from '../../interfaces/IStorageService';
 import type { IAlarmService } from '../../interfaces/IAlarmService';
 import type { IBadgeService } from '../../interfaces/IBadgeService';
+import type { IHealthStatusService } from '../../interfaces/IHealthStatusService';
 import type { IRateLimitService } from '../../interfaces/IRateLimitService';
 import type { MessageResponse, RuntimeRequestMessage } from '@common/types';
 import { GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE } from '@common/errors';
@@ -24,6 +25,8 @@ const debugService: IDebugService = {
 describe('EventService GitHub web-session invalidation', () => {
   let clearGitHubWebSessionCaches: Mock;
   let setDefaultBadge: Mock;
+  let clearGitHubOutage: Mock;
+  let clearParserBreakage: Mock;
   let eventService: EventService;
 
   beforeEach(() => {
@@ -41,6 +44,8 @@ describe('EventService GitHub web-session invalidation', () => {
     );
     clearGitHubWebSessionCaches = vi.fn().mockResolvedValue(undefined);
     setDefaultBadge = vi.fn().mockResolvedValue(undefined);
+    clearGitHubOutage = vi.fn().mockResolvedValue(undefined);
+    clearParserBreakage = vi.fn().mockResolvedValue(undefined);
 
     const storageService = {
       initialize: vi.fn(),
@@ -54,6 +59,15 @@ describe('EventService GitHub web-session invalidation', () => {
       dispose: vi.fn(),
       setDefaultBadge,
     } as unknown as IBadgeService;
+
+    const healthStatusService = {
+      initialize: vi.fn(),
+      dispose: vi.fn(),
+      clearGitHubOutage,
+      clearParserBreakage,
+      signalGitHubOutage: vi.fn().mockResolvedValue(undefined),
+      signalParserBreakage: vi.fn().mockResolvedValue(undefined),
+    } as unknown as IHealthStatusService;
 
     const prService = {
       initialize: vi.fn(),
@@ -93,6 +107,8 @@ describe('EventService GitHub web-session invalidation', () => {
             return alarmService as ServiceMap[K];
           case 'rateLimitService':
             return rateLimitService as ServiceMap[K];
+          case 'healthStatusService':
+            return healthStatusService as ServiceMap[K];
           default:
             throw new Error(`Unexpected getService key in test: ${String(key)}`);
         }
@@ -105,6 +121,8 @@ describe('EventService GitHub web-session invalidation', () => {
   it('handleAlarm clears GitHub-derived storage when the fetch proves logged out', async () => {
     await eventService.handleAlarm({ name: EVENT_FETCH_PRS } as Alarm);
     expect(clearGitHubWebSessionCaches).toHaveBeenCalledTimes(1);
+    expect(clearGitHubOutage).toHaveBeenCalledTimes(1);
+    expect(clearParserBreakage).toHaveBeenCalledTimes(1);
     expect(setDefaultBadge).toHaveBeenCalledTimes(1);
   });
 
@@ -115,9 +133,22 @@ describe('EventService GitHub web-session invalidation', () => {
       sendResponse as (r: MessageResponse) => void
     );
     expect(clearGitHubWebSessionCaches).toHaveBeenCalledTimes(1);
+    expect(clearGitHubOutage).toHaveBeenCalledTimes(1);
+    expect(clearParserBreakage).toHaveBeenCalledTimes(1);
     expect(setDefaultBadge).toHaveBeenCalledTimes(1);
     expect(sendResponse).toHaveBeenCalledWith(
       expect.objectContaining({ success: false, error: GITHUB_WEB_SESSION_NOT_LOGGED_IN_MESSAGE })
     );
+  });
+
+  it('resets health-flag in-memory mirrors after storage wipe so dedupe does not stick', async () => {
+    await eventService.handleAlarm({ name: EVENT_FETCH_PRS } as Alarm);
+
+    const wipeOrder = clearGitHubWebSessionCaches.mock.invocationCallOrder[0];
+    const outageOrder = clearGitHubOutage.mock.invocationCallOrder[0];
+    const parserOrder = clearParserBreakage.mock.invocationCallOrder[0];
+
+    expect(wipeOrder).toBeLessThan(outageOrder);
+    expect(wipeOrder).toBeLessThan(parserOrder);
   });
 });
