@@ -30,6 +30,7 @@ function createHarness(prOverrides: Partial<IPRService> = {}) {
   const updateAuthored = vi.fn().mockResolvedValue([]);
 
   const prService = {
+    beginPrListHealthWave: vi.fn(),
     fetchAndUpdateAssignedPRs: fetchAssigned,
     updateMergedPRs: updateMerged,
     updateAuthoredPRs: updateAuthored,
@@ -44,10 +45,19 @@ function createHarness(prOverrides: Partial<IPRService> = {}) {
     rescheduleFetchAlarmFromNow,
   } as unknown as IAlarmService;
 
+  const gitHubStatusClient = {
+    getStatus: vi.fn().mockResolvedValue({
+      prComponentStatus: 'operational',
+      globalIndicator: 'none',
+      fetchedAt: 0,
+    }),
+  };
+
   const container = {
     getService: vi.fn((key: string) => {
       if (key === 'prService') return prService;
       if (key === 'alarmService') return alarmService;
+      if (key === 'gitHubStatusClient') return gitHubStatusClient;
       throw new Error(`Unexpected service: ${key}`);
     }),
   } as unknown as ServiceContainer;
@@ -81,6 +91,7 @@ function createHarness(prOverrides: Partial<IPRService> = {}) {
     fetchAssigned,
     updateMerged,
     updateAuthored,
+    gitHubStatusClient,
   };
 }
 
@@ -104,6 +115,7 @@ describe('User requested refresh from the popup', () => {
       fetchAssigned,
       updateMerged,
       updateAuthored,
+      gitHubStatusClient,
     } = createHarness();
 
     const sendAssigned = createSendResponse();
@@ -117,13 +129,22 @@ describe('User requested refresh from the popup', () => {
     ]);
 
     expect(fetchAssigned).toHaveBeenCalledTimes(1);
-    expect(fetchAssigned).toHaveBeenCalledWith(true);
+    expect(fetchAssigned).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
     expect(updateMerged).toHaveBeenCalledTimes(1);
-    expect(updateMerged).toHaveBeenCalledWith(true);
+    expect(updateMerged).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
     expect(updateAuthored).toHaveBeenCalledTimes(1);
-    expect(updateAuthored).toHaveBeenCalledWith(true);
+    expect(updateAuthored).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
 
     expect(rescheduleFetchAlarmFromNow).toHaveBeenCalledTimes(1);
+    // Coalesced wave Statuspage prefetch: three parallel handlers → one summary.json fetch.
+    expect(gitHubStatusClient.getStatus).toHaveBeenCalledTimes(1);
+    expect(gitHubStatusClient.getStatus).toHaveBeenCalledWith({ bypassCache: true });
 
     expect(sendAssigned).toHaveBeenCalledWith({ success: true, data: [] });
     expect(sendMerged).toHaveBeenCalledWith({ success: true, data: [] });

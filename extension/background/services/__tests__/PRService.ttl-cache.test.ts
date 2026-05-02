@@ -100,6 +100,10 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
           fetchedAt: T0,
         }),
       } as never,
+      alarmSeqClock: {
+        current: vi.fn().mockResolvedValue(0),
+        advance: vi.fn().mockResolvedValue(1),
+      } as never,
     });
   }
 

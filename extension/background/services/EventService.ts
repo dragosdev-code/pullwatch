@@ -225,6 +225,7 @@ export class EventService implements IEventService {
           await storageService.remove(STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE);
           await badgeService.setLoadingBadge();
           await this.withPrUiFetchIndicator(async () => {
+            prService.beginPrListHealthWave();
             await prService.fetchAndUpdateAssignedPRs(true, true);
             await prService.updateMergedPRs(true, true);
             await prService.updateAuthoredPRs(true, true);
@@ -246,6 +247,7 @@ export class EventService implements IEventService {
         // WHY [forceRefresh only on install]: `false` here matches the periodic alarm so version
         // bumps behave as a plain refresh; install-time forceRefresh lives in the branch above.
         await this.withPrUiFetchIndicator(async () => {
+          prService.beginPrListHealthWave();
           await prService.fetchAndUpdateAssignedPRs(false, true);
           await prService.updateMergedPRs(false, true);
           await prService.updateAuthoredPRs(false, true);
@@ -276,6 +278,7 @@ export class EventService implements IEventService {
       await permissionService.checkAllPermissions();
       await alarmService.setupFetchAlarm();
       await this.withPrUiFetchIndicator(async () => {
+        prService.beginPrListHealthWave();
         await prService.fetchAndUpdateAssignedPRs(true, true);
         await prService.updateMergedPRs(true, true);
         await prService.updateAuthoredPRs(true, true);
@@ -307,15 +310,29 @@ export class EventService implements IEventService {
         this.debugService.log('[EventService] Fetch alarm triggered - fetching all PR types');
 
         const prService = this.serviceContainer.getService('prService');
+        const gitHubStatusClient = this.serviceContainer.getService('gitHubStatusClient');
+        const alarmSeqClock = this.serviceContainer.getService('alarmSeqClock');
 
         // WHY [bypassCache]: Alarm spacing is the rate limiter — each tick should hit GitHub, not the
         // short TTL cache in `PRService`. Same `withPrUiFetchIndicator` wrapper as install/startup so
         // depth hits zero once and `persistResolvedViewerIdentity` stays ordered with the full wave.
+        // WHY [single Statuspage fetch per wave]: assess() runs once per list; without a shared
+        // snapshot we either burn three network calls (bypass each call) or miss a freshly flipped
+        // degraded status (cache each call). Prefetching with bypass also overwrites the cache so
+        // any incidental same-wave non-bypass read hits the refreshed entry.
         await this.withPrUiFetchIndicator(async () => {
-          await prService.fetchAndUpdateAssignedPRs(false, true);
-          await prService.updateMergedPRs(false, true);
-          await prService.updateAuthoredPRs(false, true);
+          const waveStatus = await gitHubStatusClient.getStatus({ bypassCache: true });
+          prService.beginPrListHealthWave();
+          await prService.fetchAndUpdateAssignedPRs(false, true, waveStatus);
+          await prService.updateMergedPRs(false, true, waveStatus);
+          await prService.updateAuthoredPRs(false, true, waveStatus);
         });
+
+        // WHY [advance after persist]: tombstone window is anchored to alarm waves; advancing here
+        // (only here — not in manual refresh) means the next wave's findResurrected sees this
+        // wave's drops as "1 alarm ago", giving the configured 4-wave window. Advancing before the
+        // wave would tombstone keys at seq N+1 even though they dropped during seq N.
+        await alarmSeqClock.advance();
 
         this.debugService.log('[EventService] Completed alarm fetch for all PR types');
       } else {

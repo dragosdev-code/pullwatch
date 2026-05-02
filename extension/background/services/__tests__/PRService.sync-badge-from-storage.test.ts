@@ -59,6 +59,10 @@ describe('PRService.syncBadgeFromStorage', () => {
       rateLimitService: {} as never,
       healthStatusService: {} as never,
       gitHubStatusClient: {} as never,
+      alarmSeqClock: {
+        current: vi.fn().mockResolvedValue(0),
+        advance: vi.fn().mockResolvedValue(1),
+      } as never,
     });
   }
 

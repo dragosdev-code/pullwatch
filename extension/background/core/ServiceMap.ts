@@ -14,6 +14,7 @@ import type { IPatternRegistryService } from '../interfaces/IPatternRegistryServ
 import type { IStorageService } from '../interfaces/IStorageService';
 import type { IHealthStatusService } from '../interfaces/IHealthStatusService';
 import type { IGitHubStatusClient } from '../interfaces/IGitHubStatusClient';
+import type { AlarmSeqClock } from '../domain/pr-list-trust';
 
 /**
  * Typed registry mapping service keys to their interface types.
@@ -36,4 +37,9 @@ export interface ServiceMap {
   notificationService: INotificationService;
   prService: IPRService;
   devTestService: IDevTestService;
+  // WHY [shared instance]: EventService advances seq on alarm completion; PRService reads it for
+  // PrTombstoneStore's window math. Container-registered so both paths see the same in-memory
+  // reference (state is in chrome.storage so multiple instances would also work, but one wiring
+  // point keeps the dependency edge explicit).
+  alarmSeqClock: AlarmSeqClock;
 }

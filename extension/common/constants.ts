@@ -26,6 +26,42 @@ export const STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT = 'last_untrusted_fetch_at';
 export const STORAGE_KEY_PR_LIST_TRUST = 'pr_list_trust_state';
 /** Cached `summary.json` snapshot from githubstatus.com (TTL {@link GITHUB_STATUS_CACHE_TTL_MS}). */
 export const STORAGE_KEY_GITHUB_STATUS_CACHE = 'github_status_cache';
+/**
+ * Per-list bounded tombstone log used by `PrTombstoneStore` to detect resurrection
+ * (a PR key disappearing from one wave's fresh list and returning within the alarm window).
+ *
+ * WHY [versioned key]: shape may evolve (e.g. richer per-tombstone metadata); the `_v1` suffix lets
+ * us migrate without colliding with stale storage from older builds.
+ */
+export const STORAGE_KEY_PR_TOMBSTONES = 'pr_tombstones_v1';
+/**
+ * Monotonic alarm sequence advanced once per completed alarm wave by `EventService`.
+ *
+ * WHY [alarm-anchored not wall-clock]: tombstone TTL is "4 alarm intervals" — manual refreshes
+ * between alarms must NOT consume window slots, otherwise a user mashing refresh would expire
+ * tombstones prematurely. Stored separately from `STORAGE_KEY_PR_TOMBSTONES` so corruption in one
+ * does not block the other.
+ */
+export const STORAGE_KEY_ALARM_SEQ = 'pr_tombstone_alarm_seq';
+/**
+ * A tombstone is alive while `currentAlarmSeq - droppedAtAlarmSeq <= TOMBSTONE_ALARM_WINDOW`.
+ * Strict-greater on the right keeps the tombstone alive through exactly four subsequent waves.
+ */
+export const TOMBSTONE_ALARM_WINDOW = 4;
+/**
+ * Merged-list shrink at or above this row count routes through the suspect_partial branch even when
+ * the assessor's `partialDropFlavor === 'operational'`.
+ *
+ * WHY [merged stays strict]: merged is append-heavy; losing >= 4 rows in one tick is the
+ * GitHub-side incompleteness pattern, not legitimate churn. Assigned/authored, by contrast, accept
+ * operational shrink so bulk merges land in the popup immediately.
+ */
+export const MERGED_SHRINK_SUSPICION_THRESHOLD = 4;
+/**
+ * LRU bound per list on the tombstone log. Guards against unbounded growth on pathological churn
+ * (e.g. flapping repo with hundreds of distinct PRs per day).
+ */
+export const PR_TOMBSTONE_MAX_ENTRIES_PER_LIST = 200;
 export const STORAGE_KEY_ROUTE_HINT = 'pulls_list_route_hint';
 /** Parsed GitHub session login for account-swap detection vs PR cache (see PRService silent baseline). */
 export const STORAGE_KEY_GITHUB_VIEWER_IDENTITY = 'github_viewer_identity';

@@ -1,5 +1,6 @@
 import type { PullRequest } from '@common/types';
 import type { IService } from './IService';
+import type { GitHubStatusSnapshot } from './IGitHubStatusClient';
 
 /**
  * Interface for the PR service that handles pull request management and coordination.
@@ -9,8 +10,14 @@ export interface IPRService extends IService {
    * Fetches and updates assigned/review pull requests with state management.
    * @param forceRefresh - Bypass cache AND skip notifications (for install/startup/manual refresh)
    * @param bypassCache - Bypass cache but still show notifications (for alarm-triggered fetches)
+   * @param waveStatus - Pre-fetched Statuspage snapshot shared across the whole alarm/manual wave so
+   *   `PrListTrustAssessor.assess` does not re-hit `summary.json` for each list.
    */
-  fetchAndUpdateAssignedPRs(forceRefresh?: boolean, bypassCache?: boolean): Promise<PullRequest[]>;
+  fetchAndUpdateAssignedPRs(
+    forceRefresh?: boolean,
+    bypassCache?: boolean,
+    waveStatus?: GitHubStatusSnapshot
+  ): Promise<PullRequest[]>;
 
   /**
    * Gets currently stored assigned/review pull requests.
@@ -38,15 +45,25 @@ export interface IPRService extends IService {
    * Fetches and updates authored pull requests with state management.
    * @param forceRefresh - Bypass cache
    * @param bypassCache - Bypass cache (for alarm-triggered fetches)
+   * @param waveStatus - See {@link fetchAndUpdateAssignedPRs}.
    */
-  updateAuthoredPRs(forceRefresh?: boolean, bypassCache?: boolean): Promise<PullRequest[]>;
+  updateAuthoredPRs(
+    forceRefresh?: boolean,
+    bypassCache?: boolean,
+    waveStatus?: GitHubStatusSnapshot
+  ): Promise<PullRequest[]>;
 
   /**
    * Fetches and updates merged pull requests with state management.
    * @param forceRefresh - Bypass cache AND skip notifications
    * @param bypassCache - Bypass cache but still show notifications (for alarm-triggered fetches)
+   * @param waveStatus - See {@link fetchAndUpdateAssignedPRs}.
    */
-  updateMergedPRs(forceRefresh?: boolean, bypassCache?: boolean): Promise<PullRequest[]>;
+  updateMergedPRs(
+    forceRefresh?: boolean,
+    bypassCache?: boolean,
+    waveStatus?: GitHubStatusSnapshot
+  ): Promise<PullRequest[]>;
 
   /**
    * Compares old and new PR lists to identify new PRs.
@@ -58,6 +75,13 @@ export interface IPRService extends IService {
     newPRs: PullRequest[];
     allPRsWithStatus: PullRequest[];
   };
+
+  /**
+   * Call once at the start of an alarm / install / startup / manual-refresh **wave** before the
+   * first list fetch. Resets coordination so `pr_list_churn` signaled on one list is not cleared by
+   * a later list’s successful-path {@link IHealthStatusService.clearGitHubOutage} in the same wave.
+   */
+  beginPrListHealthWave(): void;
 
   /**
    * Writes `github_viewer_identity` from the last HTML-derived login.

@@ -14,6 +14,7 @@ import { PatternRegistryService } from '../services/PatternRegistryService';
 import { RateLimitService } from '../services/RateLimitService';
 import { HealthStatusService } from '../services/HealthStatusService';
 import { GitHubStatusClient } from '@common/github-status-client';
+import { AlarmSeqClock } from '../domain/pr-list-trust';
 import { GITHUB_BASE_URL } from '@common/constants';
 import type { IService } from '../interfaces/IService';
 import type { ServiceMap } from './ServiceMap';
@@ -49,6 +50,7 @@ export class ServiceContainer {
       'gitHubStatusClient',
       new GitHubStatusClient(this.getService('debugService'))
     );
+    this.registerService('alarmSeqClock', new AlarmSeqClock(this.getService('storageService')));
     this.registerService('eventService', new EventService(this.getService('debugService'), this));
 
     // Initialize business logic services
@@ -90,6 +92,7 @@ export class ServiceContainer {
         rateLimitService: this.getService('rateLimitService'),
         healthStatusService: this.getService('healthStatusService'),
         gitHubStatusClient: this.getService('gitHubStatusClient'),
+        alarmSeqClock: this.getService('alarmSeqClock'),
       })
     );
 

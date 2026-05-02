@@ -10,6 +10,7 @@ import type { IGitHubStatusClient } from '../interfaces/IGitHubStatusClient';
 import type { PullRequest } from '@common/types';
 import {
   CACHE_TTL_MS,
+  MERGED_SHRINK_SUSPICION_THRESHOLD,
   REQUEST_DELAY_MS,
   STORAGE_KEY_ASSIGNED_PRS,
   STORAGE_KEY_AUTHORED_PRS,
@@ -28,6 +29,7 @@ import {
   mergeAndFilterAssignedPRs,
 } from '@background/utils/pull-request-list-utils';
 import {
+  AlarmSeqClock,
   EmptyConfirmationTracker,
   type ListKind,
   type ListTrustAssessment,
@@ -35,7 +37,9 @@ import {
   MergedNotificationEligibility,
   PrListTrustAssessor,
   PrListTrustStore,
+  PrTombstoneStore,
 } from '@background/domain/pr-list-trust';
+import type { GitHubStatusSnapshot } from '@background/interfaces/IGitHubStatusClient';
 import { PrFetchErrorHandler } from '@background/domain/PrFetchErrorHandler';
 
 /**
@@ -57,6 +61,8 @@ export class PRService implements IPRService {
   private emptyTracker: EmptyConfirmationTracker;
   private mergedNotificationEligibility: MergedNotificationEligibility;
   private fetchErrorHandler: PrFetchErrorHandler;
+  private tombstoneStore: PrTombstoneStore;
+  private alarmSeqClock: AlarmSeqClock;
   private initialized = false;
   /**
    * One entry per list (assigned / merged / authored) while its fetch is in flight.
@@ -80,6 +86,12 @@ export class PRService implements IPRService {
    * its storage to prevent the previous account's PRs from leaking under the new viewer identity.
    */
   private cycleListsRefreshed = new Set<'assigned' | 'merged' | 'authored'>();
+  /**
+   * Set when {@link applyTombstoneFilter} signals `pr_list_churn` for this wave; blocks routine
+   * `clearGitHubOutage` calls on **every** list until {@link beginPrListHealthWave} runs again so
+   * merged/authored success cannot erase the integrity flag set by assigned (same alarm tick).
+   */
+  private suppressGitHubOutageClearForListChurnWave = false;
 
   constructor(deps: {
     debugService: IDebugService;
@@ -90,6 +102,7 @@ export class PRService implements IPRService {
     rateLimitService: IRateLimitService;
     healthStatusService: IHealthStatusService;
     gitHubStatusClient: IGitHubStatusClient;
+    alarmSeqClock: AlarmSeqClock;
   }) {
     this.debugService = deps.debugService;
     this.storageService = deps.storageService;
@@ -99,11 +112,13 @@ export class PRService implements IPRService {
     this.rateLimitService = deps.rateLimitService;
     this.healthStatusService = deps.healthStatusService;
     this.gitHubStatusClient = deps.gitHubStatusClient;
+    this.alarmSeqClock = deps.alarmSeqClock;
     this.trustStore = new PrListTrustStore(this.storageService, this.debugService);
     this.trustAssessor = new PrListTrustAssessor(this.gitHubStatusClient);
     this.limboPromoter = new MergedLimboPromoter(this.trustStore);
     this.emptyTracker = new EmptyConfirmationTracker(this.trustStore, this.debugService);
     this.mergedNotificationEligibility = new MergedNotificationEligibility(this.debugService);
+    this.tombstoneStore = new PrTombstoneStore(this.storageService, this.debugService);
     this.fetchErrorHandler = new PrFetchErrorHandler(
       this.debugService,
       this.badgeService,
@@ -116,6 +131,15 @@ export class PRService implements IPRService {
     if (this.initialized) return;
     this.initialized = true;
     this.debugService.log('[PRService] PR service initialized');
+  }
+
+  beginPrListHealthWave(): void {
+    this.suppressGitHubOutageClearForListChurnWave = false;
+  }
+
+  private async maybeClearGitHubOutageAfterListSuccess(): Promise<void> {
+    if (this.suppressGitHubOutageClearForListChurnWave) return;
+    await this.healthStatusService.clearGitHubOutage();
   }
 
   /**
@@ -254,10 +278,11 @@ export class PRService implements IPRService {
    */
   async fetchAndUpdateAssignedPRs(
     forceRefresh = false,
-    bypassCache = false
+    bypassCache = false,
+    waveStatus?: GitHubStatusSnapshot
   ): Promise<PullRequest[]> {
     return this.withInflightDedup('assigned', { forceRefresh, bypassCache }, 'Assigned', () =>
-      this.doFetchAndUpdateAssignedPRs(forceRefresh, bypassCache)
+      this.doFetchAndUpdateAssignedPRs(forceRefresh, bypassCache, waveStatus)
     );
   }
 
@@ -341,12 +366,16 @@ export class PRService implements IPRService {
   }
 
   /**
-   * Dispatches a `ListTrustAssessment` into one of five branches. Callers must
+   * Dispatches a `ListTrustAssessment` into one of six branches. Callers must
    * have already filtered out the account-swap case via
    * {@link detectAccountSwap}; the dispatcher does NOT re-check identity.
    *
    * Branches:
    * - `trusted`: caller runs the existing happy path (compare/persist/notify).
+   * - `trusted_operational_shrink`: same downstream behavior as `trusted` — the assessor flagged
+   *   `suspect_partial` with `partialDropFlavor === 'operational'` on assigned/authored (or merged
+   *   with a sub-threshold shrink). UX freshness wins over hypothetical truncation; tombstones
+   *   still record the dropped keys downstream so flapping is detected post-hoc.
    * - `suspect_partial`: caller runs the existing limbo + corroborated outage path.
    * - `suspect_empty_pending`: silent — caller returns oldPRs without touching
    *   `healthStatusService` or `STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT`.
@@ -366,6 +395,7 @@ export class PRService implements IPRService {
     currentLogin: string | null;
   }): Promise<
     | { branch: 'trusted' }
+    | { branch: 'trusted_operational_shrink' }
     | { branch: 'suspect_partial' }
     | { branch: 'suspect_empty_pending'; streak: number; threshold: number }
     | { branch: 'suspect_empty_accept'; streak: number; threshold: number }
@@ -374,7 +404,24 @@ export class PRService implements IPRService {
   > {
     const { listKind, assessment, oldCount, currentLogin } = args;
     if (assessment.kind === 'trusted') return { branch: 'trusted' };
-    if (assessment.kind === 'suspect_partial') return { branch: 'suspect_partial' };
+    if (assessment.kind === 'suspect_partial') {
+      // WHY [trust-split]: assigned/authored bulk shrink (e.g. sprint-end merge wave taking 10→4)
+      // is operational churn — leaving the popup stuck on `oldPRs` until limbo eventually promotes
+      // is worse than persisting the fresh shorter list. Merged is append-heavy; losing
+      // >= MERGED_SHRINK_SUSPICION_THRESHOLD rows in a single tick is the GitHub-side
+      // incompleteness pattern, not legitimate churn, so it stays on the suspicious path.
+      const isOperational = assessment.partialDropFlavor === 'operational';
+      if (isOperational) {
+        if (listKind !== 'merged') {
+          return { branch: 'trusted_operational_shrink' };
+        }
+        const missing = assessment.missingCount ?? 0;
+        if (missing < MERGED_SHRINK_SUSPICION_THRESHOLD) {
+          return { branch: 'trusted_operational_shrink' };
+        }
+      }
+      return { branch: 'suspect_partial' };
+    }
 
     const outcome = await this.emptyTracker.observeEmpty({
       listKind,
@@ -441,7 +488,8 @@ export class PRService implements IPRService {
 
   private async doFetchAndUpdateAssignedPRs(
     forceRefresh: boolean,
-    bypassCache: boolean
+    bypassCache: boolean,
+    waveStatus?: GitHubStatusSnapshot
   ): Promise<PullRequest[]> {
     this.debugService.log(
       `[PRService] Fetching and updating assigned PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`
@@ -471,7 +519,11 @@ export class PRService implements IPRService {
 
       const freshAssignedPRsRaw = [...freshPendingPRsRaw, ...freshReviewedPRsRaw];
       if (!accountSwap) {
-        const assignedTrust = await this.trustAssessor.assess(oldPRs, freshAssignedPRsRaw);
+        const assignedTrust = await this.trustAssessor.assess(
+          oldPRs,
+          freshAssignedPRsRaw,
+          waveStatus
+        );
         const dispatch = await this.dispatchPrListAssessment({
           listKind: 'assigned',
           assessment: assignedTrust,
@@ -514,7 +566,7 @@ export class PRService implements IPRService {
             this.cycleListsRefreshed.add('assigned');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
-            await this.healthStatusService.clearGitHubOutage();
+            await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
           }
           case 'suspect_empty_corroborated': {
@@ -544,9 +596,14 @@ export class PRService implements IPRService {
             this.cycleListsRefreshed.add('assigned');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
-            await this.healthStatusService.clearGitHubOutage();
+            await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
           }
+          case 'trusted_operational_shrink':
+            this.debugService.log(
+              `[PRService] assigned operational shrink (${assignedTrust.reasons.join(', ')}) — persisting fresh list.`
+            );
+            break;
           case 'trusted':
             break;
         }
@@ -586,6 +643,22 @@ export class PRService implements IPRService {
           allPRs.filter((pr) => pr.reviewStatus !== 'reviewed'),
           showDrafts
         );
+      } else {
+        // WHY [skip on baseline branches]: account-swap and recovery-baseline already squash newPRs
+        // and isNew flags as part of treating fresh as a new baseline; running tombstone filtering
+        // there would also tombstone keys absent from the synthetic empty oldPendingForCompare,
+        // wiping the log on every swap.
+        ({ newPRs, allPRsWithStatus: allPRs } = await this.applyTombstoneFilter({
+          listKind: 'assigned',
+          oldPRs,
+          freshList: allPRs,
+          newPRs,
+          allPRsWithStatus: allPRs,
+        }));
+        filteredPending = filterPendingAssignedByDraftSetting(
+          allPRs.filter((pr) => pr.reviewStatus !== 'reviewed'),
+          showDrafts
+        );
       }
 
       await this.persistAndNotifyAssigned(allPRs, filteredPending.length, newPRs, forceRefresh);
@@ -594,7 +667,7 @@ export class PRService implements IPRService {
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
-      await this.healthStatusService.clearGitHubOutage();
+      await this.maybeClearGitHubOutageAfterListSuccess();
       this.debugService.log(`[PRService] Successfully updated ${allPRs.length} PRs`);
       return allPRs;
     } catch (error) {
@@ -639,6 +712,70 @@ export class PRService implements IPRService {
 
   private markAsExistingBaseline(prs: PullRequest[]): PullRequest[] {
     return prs.map((pr) => ({ ...pr, isNew: false }));
+  }
+
+  /**
+   * WHY [tombstone after assess, before notify]: trust assessment decides what list to persist;
+   * tombstones decide *notification eligibility* on top of that. They are orthogonal — an
+   * operational shrink can also be a flap. Resurrection within {@link TOMBSTONE_ALARM_WINDOW}
+   * means a key briefly vanished and returned; `comparePRs` would tag it `isNew` because it is
+   * absent from `oldPRs`, so without this filter the user gets a spurious "new PR" notification
+   * for a PR that was never actually new. The signal also raises a `pr_list_churn` outage so the
+   * popup banner reflects the integrity event even when Statuspage is green.
+   *
+   * Drops are recorded **after** the resurrection check so a key that just reappeared is not
+   * immediately re-tombstoned by a stale `oldKeys` snapshot. Always called on persist branches
+   * (trusted + trusted_operational_shrink) so flapping is detected even when the assessor would
+   * have signed the same shrink off as legitimate.
+   *
+   * Returns the (possibly mutated) `newPRs` and `allPRsWithStatus` arrays — callers must use the
+   * returned values for the actual notify + persist calls.
+   */
+  private async applyTombstoneFilter(args: {
+    listKind: ListKind;
+    oldPRs: PullRequest[];
+    freshList: PullRequest[];
+    newPRs: PullRequest[];
+    allPRsWithStatus: PullRequest[];
+  }): Promise<{ newPRs: PullRequest[]; allPRsWithStatus: PullRequest[] }> {
+    const { listKind, oldPRs, freshList } = args;
+    const alarmSeq = await this.alarmSeqClock.current();
+    const oldKeys = oldPRs.map(getPrKey);
+    const freshKeys = freshList.map(getPrKey);
+
+    const resurrected = await this.tombstoneStore.findResurrected({
+      listKind,
+      freshKeys,
+      currentAlarmSeq: alarmSeq,
+    });
+
+    let { newPRs, allPRsWithStatus } = args;
+
+    if (resurrected.length > 0) {
+      const resurrectedSet = new Set(resurrected);
+      this.debugService.warn(
+        `[PRService] Tombstone resurrection on ${listKind} (${resurrected.length} key(s)) — suppressing 'new PR' notifications and signaling pr_list_churn.`
+      );
+      newPRs = newPRs.filter((pr) => !resurrectedSet.has(getPrKey(pr)));
+      allPRsWithStatus = allPRsWithStatus.map((pr) =>
+        resurrectedSet.has(getPrKey(pr)) ? { ...pr, isNew: false } : pr
+      );
+      await this.healthStatusService.signalGitHubOutage(
+        `List integrity: ${resurrected.length} resurrected key(s) on ${listKind}`,
+        'pr_list_churn'
+      );
+      this.suppressGitHubOutageClearForListChurnWave = true;
+      await this.tombstoneStore.clearKeys(listKind, resurrected);
+    }
+
+    await this.tombstoneStore.recordDrops({
+      listKind,
+      oldKeys,
+      freshKeys,
+      currentAlarmSeq: alarmSeq,
+    });
+
+    return { newPRs, allPRsWithStatus };
   }
 
   /**
@@ -735,15 +872,20 @@ export class PRService implements IPRService {
     return stored?.prs || [];
   }
 
-  async updateAuthoredPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
+  async updateAuthoredPRs(
+    forceRefresh = false,
+    bypassCache = false,
+    waveStatus?: GitHubStatusSnapshot
+  ): Promise<PullRequest[]> {
     return this.withInflightDedup('authored', { forceRefresh, bypassCache }, 'Authored', () =>
-      this.doUpdateAuthoredPRs(forceRefresh, bypassCache)
+      this.doUpdateAuthoredPRs(forceRefresh, bypassCache, waveStatus)
     );
   }
 
   private async doUpdateAuthoredPRs(
     forceRefresh: boolean,
-    bypassCache: boolean
+    bypassCache: boolean,
+    waveStatus?: GitHubStatusSnapshot
   ): Promise<PullRequest[]> {
     this.debugService.log(
       `[PRService] Updating authored PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`
@@ -763,7 +905,11 @@ export class PRService implements IPRService {
 
       const { accountSwap } = await this.detectAccountSwap('refreshing authored list baseline');
       if (!accountSwap) {
-        const authoredTrust = await this.trustAssessor.assess(oldPRs, freshAuthoredPRsRaw);
+        const authoredTrust = await this.trustAssessor.assess(
+          oldPRs,
+          freshAuthoredPRsRaw,
+          waveStatus
+        );
         const dispatch = await this.dispatchPrListAssessment({
           listKind: 'authored',
           assessment: authoredTrust,
@@ -802,7 +948,7 @@ export class PRService implements IPRService {
             this.cycleListsRefreshed.add('authored');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
-            await this.healthStatusService.clearGitHubOutage();
+            await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
           }
           case 'suspect_empty_corroborated': {
@@ -829,9 +975,14 @@ export class PRService implements IPRService {
             this.cycleListsRefreshed.add('authored');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
-            await this.healthStatusService.clearGitHubOutage();
+            await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
           }
+          case 'trusted_operational_shrink':
+            this.debugService.log(
+              `[PRService] authored operational shrink (${authoredTrust.reasons.join(', ')}) — persisting fresh list.`
+            );
+            break;
           case 'trusted':
             break;
         }
@@ -847,9 +998,23 @@ export class PRService implements IPRService {
         freshAuthoredPRsRaw.length > 0 &&
         (await this.consumeRecoveryBaseline('authored'));
       const treatAsBaseline = accountSwap || recoveryBaseline;
-      const freshAuthoredPRs = treatAsBaseline
+      let freshAuthoredPRs = treatAsBaseline
         ? this.markAsExistingBaseline(freshAuthoredPRsRaw)
         : freshAuthoredPRsRaw;
+
+      if (!treatAsBaseline) {
+        // WHY [authored has no notifications today]: applyTombstoneFilter still runs so drops are
+        // recorded and the pr_list_churn signal fires on resurrection — keeps the integrity
+        // semantics aligned with assigned/merged and future-proofs a notifications addition.
+        const filtered = await this.applyTombstoneFilter({
+          listKind: 'authored',
+          oldPRs,
+          freshList: freshAuthoredPRs,
+          newPRs: [],
+          allPRsWithStatus: freshAuthoredPRs,
+        });
+        freshAuthoredPRs = filtered.allPRsWithStatus;
+      }
 
       await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, freshAuthoredPRs);
       await this.limboPromoter.recordTrustedFetch('authored', freshAuthoredPRs.length);
@@ -857,7 +1022,7 @@ export class PRService implements IPRService {
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
-      await this.healthStatusService.clearGitHubOutage();
+      await this.maybeClearGitHubOutageAfterListSuccess();
       this.debugService.log(
         `[PRService] Successfully updated ${freshAuthoredPRs.length} authored PRs`
       );
@@ -886,15 +1051,20 @@ export class PRService implements IPRService {
    * @param forceRefresh - Bypass cache and suppress merged notifications (manual refresh).
    * @param bypassCache - Ignore TTL cache and always refetch (periodic alarm).
    */
-  async updateMergedPRs(forceRefresh = false, bypassCache = false): Promise<PullRequest[]> {
+  async updateMergedPRs(
+    forceRefresh = false,
+    bypassCache = false,
+    waveStatus?: GitHubStatusSnapshot
+  ): Promise<PullRequest[]> {
     return this.withInflightDedup('merged', { forceRefresh, bypassCache }, 'Merged', () =>
-      this.doUpdateMergedPRs(forceRefresh, bypassCache)
+      this.doUpdateMergedPRs(forceRefresh, bypassCache, waveStatus)
     );
   }
 
   private async doUpdateMergedPRs(
     forceRefresh: boolean,
-    bypassCache: boolean
+    bypassCache: boolean,
+    waveStatus?: GitHubStatusSnapshot
   ): Promise<PullRequest[]> {
     this.debugService.log(
       `[PRService] Updating merged PRs (force: ${forceRefresh}, bypassCache: ${bypassCache})`
@@ -924,7 +1094,7 @@ export class PRService implements IPRService {
         mergedPRsWithStatus = this.markAsExistingBaseline(freshMergedPRs);
         await this.limboPromoter.recordTrustedFetch('merged', mergedPRsWithStatus.length);
       } else {
-        const mergedTrust = await this.trustAssessor.assess(oldPRs, freshMergedPRs);
+        const mergedTrust = await this.trustAssessor.assess(oldPRs, freshMergedPRs, waveStatus);
         const dispatch = await this.dispatchPrListAssessment({
           listKind: 'merged',
           assessment: mergedTrust,
@@ -963,7 +1133,7 @@ export class PRService implements IPRService {
             this.cycleListsRefreshed.add('merged');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
-            await this.healthStatusService.clearGitHubOutage();
+            await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
           }
           case 'suspect_empty_corroborated': {
@@ -990,9 +1160,14 @@ export class PRService implements IPRService {
             this.cycleListsRefreshed.add('merged');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
-            await this.healthStatusService.clearGitHubOutage();
+            await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
           }
+          case 'trusted_operational_shrink':
+            this.debugService.log(
+              `[PRService] merged operational shrink (${mergedTrust.reasons.join(', ')}) — under threshold, persisting fresh list.`
+            );
+            break;
           case 'trusted':
             break;
         }
@@ -1021,6 +1196,17 @@ export class PRService implements IPRService {
             storedData?.timestamp,
             mergedTrust.status
           );
+          // WHY [tombstone after notification eligibility]: Resurrection suppression must run AFTER
+          // mergedNotificationEligibility (which already drops stale-window candidates) so the
+          // pr_list_churn signal is reserved for genuine flapping, not for PRs the freshness
+          // window would have suppressed anyway.
+          ({ newPRs, allPRsWithStatus: mergedPRsWithStatus } = await this.applyTombstoneFilter({
+            listKind: 'merged',
+            oldPRs,
+            freshList: mergedPRsWithStatus,
+            newPRs,
+            allPRsWithStatus: mergedPRsWithStatus,
+          }));
         }
       }
       this.debugService.log(`[PRService] Newly merged PRs detected: ${newPRs.length}`);
@@ -1045,7 +1231,7 @@ export class PRService implements IPRService {
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
-      await this.healthStatusService.clearGitHubOutage();
+      await this.maybeClearGitHubOutageAfterListSuccess();
       this.debugService.log(
         `[PRService] Successfully updated ${mergedPRsWithStatus.length} merged PRs`
       );

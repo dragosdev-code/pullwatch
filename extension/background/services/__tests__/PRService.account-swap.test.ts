@@ -138,6 +138,10 @@ describe('PRService account swap (silent baseline)', () => {
           fetchedAt: 0,
         }),
       } as never,
+      alarmSeqClock: {
+        current: vi.fn().mockResolvedValue(0),
+        advance: vi.fn().mockResolvedValue(1),
+      } as never,
     });
   }
 
@@ -351,6 +355,10 @@ describe('PRService.persistResolvedViewerIdentity — F3 partial-refresh swap', 
           globalIndicator: 'none',
           fetchedAt: 0,
         }),
+      } as never,
+      alarmSeqClock: {
+        current: vi.fn().mockResolvedValue(0),
+        advance: vi.fn().mockResolvedValue(1),
       } as never,
     });
   }

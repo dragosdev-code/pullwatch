@@ -95,6 +95,7 @@ describe.sequential('EventService manual refresh throttle', () => {
       getStoredMergedPRs: getStoredMerged,
       getStoredAuthoredPRs: getStoredAuthored,
       persistResolvedViewerIdentity: vi.fn().mockResolvedValue(undefined),
+      beginPrListHealthWave: vi.fn(),
     } as unknown as IPRService;
 
     const storageService = {
@@ -120,6 +121,23 @@ describe.sequential('EventService manual refresh throttle', () => {
             return storageService as ServiceMap[K];
           case 'alarmService':
             return alarmService as ServiceMap[K];
+          case 'gitHubStatusClient':
+            return {
+              initialize: vi.fn(),
+              dispose: vi.fn(),
+              getStatus: vi.fn().mockResolvedValue({
+                prComponentStatus: 'operational',
+                globalIndicator: 'none',
+                fetchedAt: 0,
+              }),
+            } as unknown as ServiceMap[K];
+          case 'alarmSeqClock':
+            return {
+              initialize: vi.fn(),
+              dispose: vi.fn(),
+              current: vi.fn().mockResolvedValue(0),
+              advance: vi.fn().mockResolvedValue(1),
+            } as unknown as ServiceMap[K];
           default:
             throw new Error(`Unexpected getService key in test: ${String(key)}`);
         }
@@ -150,9 +168,15 @@ describe.sequential('EventService manual refresh throttle', () => {
 
     await drainMicrotasks();
 
-    expect(fetchAssigned).toHaveBeenCalledWith(true);
-    expect(updateMerged).toHaveBeenCalledWith(true);
-    expect(updateAuthored).toHaveBeenCalledWith(true);
+    expect(fetchAssigned).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
+    expect(updateMerged).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
+    expect(updateAuthored).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
     expect(rescheduleFetchAlarmFromNow).toHaveBeenCalled();
     expect(sessionSet).toHaveBeenCalledTimes(1);
     expect(sessionSet).toHaveBeenCalledWith({
@@ -282,6 +306,7 @@ describe.sequential('EventService manual refresh throttle', () => {
       getStoredMergedPRs: getStoredMerged,
       getStoredAuthoredPRs: getStoredAuthored,
       persistResolvedViewerIdentity: vi.fn().mockResolvedValue(undefined),
+      beginPrListHealthWave: vi.fn(),
     } as unknown as IPRService;
 
     const storageService = {
@@ -309,6 +334,23 @@ describe.sequential('EventService manual refresh throttle', () => {
             return alarmService as ServiceMap[K];
           case 'rateLimitService':
             return rateLimitService as unknown as ServiceMap[K];
+          case 'gitHubStatusClient':
+            return {
+              initialize: vi.fn(),
+              dispose: vi.fn(),
+              getStatus: vi.fn().mockResolvedValue({
+                prComponentStatus: 'operational',
+                globalIndicator: 'none',
+                fetchedAt: 0,
+              }),
+            } as unknown as ServiceMap[K];
+          case 'alarmSeqClock':
+            return {
+              initialize: vi.fn(),
+              dispose: vi.fn(),
+              current: vi.fn().mockResolvedValue(0),
+              advance: vi.fn().mockResolvedValue(1),
+            } as unknown as ServiceMap[K];
           default:
             throw new Error(`Unexpected getService key in test: ${String(key)}`);
         }
@@ -363,9 +405,15 @@ describe.sequential('EventService manual refresh throttle', () => {
     resolveGet({});
     await drainMicrotasks();
 
-    expect(fetchAssigned).toHaveBeenCalledWith(true);
-    expect(updateMerged).toHaveBeenCalledWith(true);
-    expect(updateAuthored).toHaveBeenCalledWith(true);
+    expect(fetchAssigned).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
+    expect(updateMerged).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
+    expect(updateAuthored).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
     expect(sessionSet).toHaveBeenCalledTimes(1);
   });
 });

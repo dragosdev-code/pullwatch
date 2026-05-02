@@ -1,6 +1,7 @@
 import type { ServiceContainer } from '../../core/ServiceContainer';
 import type { IDebugService } from '../../interfaces/IDebugService';
 import type { IPRService } from '../../interfaces/IPRService';
+import type { GitHubStatusSnapshot } from '../../interfaces/IGitHubStatusClient';
 import type { MessageResponse, PullRequest } from '@common/types';
 import {
   MIN_REFRESH_INTERVAL_MS,
@@ -26,7 +27,10 @@ export interface ManualPrRefreshCoordinatorDeps {
 }
 
 interface KindConfig {
-  fetchFresh: (prService: IPRService) => Promise<PullRequest[]>;
+  fetchFresh: (
+    prService: IPRService,
+    waveStatus: GitHubStatusSnapshot | undefined
+  ) => Promise<PullRequest[]>;
   getStored: (prService: IPRService) => Promise<PullRequest[]>;
   throttledLog: string;
   fetchingLog: string;
@@ -36,7 +40,8 @@ interface KindConfig {
 
 const KIND_CONFIG: Record<ManualPrRefreshKind, KindConfig> = {
   assigned: {
-    fetchFresh: (prService) => prService.fetchAndUpdateAssignedPRs(true),
+    fetchFresh: (prService, waveStatus) =>
+      prService.fetchAndUpdateAssignedPRs(true, false, waveStatus),
     getStored: (prService) => prService.getStoredAssignedPRs(),
     throttledLog: '[EventService] Manual refresh throttled — returning stored assigned PRs',
     fetchingLog: '[EventService] Manual refresh - fetching fresh assigned PRs from GitHub',
@@ -44,7 +49,7 @@ const KIND_CONFIG: Record<ManualPrRefreshKind, KindConfig> = {
     errorMessage: 'Failed to handle assigned PR action',
   },
   merged: {
-    fetchFresh: (prService) => prService.updateMergedPRs(true),
+    fetchFresh: (prService, waveStatus) => prService.updateMergedPRs(true, false, waveStatus),
     getStored: (prService) => prService.getStoredMergedPRs(),
     throttledLog: '[EventService] Manual refresh throttled — returning stored merged PRs',
     fetchingLog: '[EventService] Manual refresh - fetching fresh merged PRs from GitHub',
@@ -52,7 +57,7 @@ const KIND_CONFIG: Record<ManualPrRefreshKind, KindConfig> = {
     errorMessage: 'Failed to handle merged PR action',
   },
   authored: {
-    fetchFresh: (prService) => prService.updateAuthoredPRs(true),
+    fetchFresh: (prService, waveStatus) => prService.updateAuthoredPRs(true, false, waveStatus),
     getStored: (prService) => prService.getStoredAuthoredPRs(),
     throttledLog: '[EventService] Manual refresh throttled — returning stored authored PRs',
     fetchingLog: '[EventService] Manual refresh - fetching fresh authored PRs from GitHub',
@@ -78,6 +83,14 @@ export class ManualPrRefreshCoordinator {
 
   /** Coalesces parallel manual refresh messages into one alarm reset. */
   private fetchAlarmPushBackInFlight: Promise<void> | null = null;
+  /**
+   * Coalesces parallel manual refresh messages into one Statuspage prefetch.
+   *
+   * WHY [shared promise, not waveDepth check]: the per-sibling depth check races with the leader's
+   * bypass fetch — followers can otherwise read a stale cache before the leader's writeback lands.
+   * Sharing the promise guarantees all three siblings receive the same fresh snapshot.
+   */
+  private waveStatusInFlight: Promise<GitHubStatusSnapshot> | null = null;
   /**
    * WHY [manual refresh only]: Parallel `fetch*` messages share one wave; set after `session.get` resolves
    * so siblings re-check this flag and skip the time window (see `shouldThrottleManualRefresh`).
@@ -120,8 +133,14 @@ export class ManualPrRefreshCoordinator {
       this.waveDepth += 1;
       try {
         this.debugService.log(config.fetchingLog);
+        if (this.waveDepth === 1) {
+          this.serviceContainer.getService('prService').beginPrListHealthWave();
+        }
         await this.coalescedPushBackFetchAlarm();
-        const prs = await this.withPrUiFetchIndicator(async () => config.fetchFresh(prService));
+        const waveStatus = await this.coalescedWaveStatusFetch();
+        const prs = await this.withPrUiFetchIndicator(async () =>
+          config.fetchFresh(prService, waveStatus)
+        );
         sendResponse({ success: true, data: prs });
       } finally {
         this.waveDepth -= 1;
@@ -141,6 +160,23 @@ export class ManualPrRefreshCoordinator {
           : config.errorMessage,
       });
     }
+  }
+
+  /**
+   * Single Statuspage prefetch shared by all parallel manual refresh handlers.
+   *
+   * WHY [bypass + shared]: bypass restarts the cache TTL so any incidental same-wave cached read
+   * (and the next periodic alarm within 120s) sees a fresh snapshot; sharing the promise means
+   * three parallel popup messages produce one network call instead of three.
+   */
+  private coalescedWaveStatusFetch(): Promise<GitHubStatusSnapshot> {
+    if (this.waveStatusInFlight !== null) return this.waveStatusInFlight;
+    const gitHubStatusClient = this.serviceContainer.getService('gitHubStatusClient');
+    const pending = gitHubStatusClient.getStatus({ bypassCache: true }).finally(() => {
+      this.waveStatusInFlight = null;
+    });
+    this.waveStatusInFlight = pending;
+    return pending;
   }
 
   /**

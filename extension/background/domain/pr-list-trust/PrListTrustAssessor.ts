@@ -2,7 +2,7 @@ import type { IGitHubStatusClient } from '../../interfaces/IGitHubStatusClient';
 import type { GitHubStatusSnapshot } from '../../interfaces/IGitHubStatusClient';
 import type { PullRequest } from '@common/types';
 import { getMissingPRs } from '@background/utils/pull-request-list-utils';
-import type { ListTrustAssessment, ListTrustKind } from './types';
+import type { ListTrustAssessment, ListTrustKind, PartialDropFlavor } from './types';
 
 export function isProblematicPRStatus(status: GitHubStatusSnapshot): boolean {
   if (status.prComponentStatus === 'operational') return false;
@@ -39,12 +39,21 @@ export class PrListTrustAssessor {
    * a single observation. Callers use `missConfirmationsRequired` to keep missing rows in limbo for
    * multiple trusted polls before pruning them from storage.
    */
-  async assess(oldPRs: PullRequest[], freshPRs: PullRequest[]): Promise<ListTrustAssessment> {
-    const status = await this.gitHubStatusClient.getStatus();
+  async assess(
+    oldPRs: PullRequest[],
+    freshPRs: PullRequest[],
+    preFetchedStatus?: GitHubStatusSnapshot
+  ): Promise<ListTrustAssessment> {
+    // WHY [preFetchedStatus]: `EventService` / `ManualPrRefreshCoordinator` prefetch one Statuspage
+    // snapshot per wave with `bypassCache: true`, then thread it through all three list paths so
+    // assess() shares the same view of GitHub health instead of either triple-fetching the network
+    // (bypass each call) or quietly reusing a stale TTL'd snapshot (cache each call).
+    const status = preFetchedStatus ?? (await this.gitHubStatusClient.getStatus());
     const missingPRs = getMissingPRs(oldPRs, freshPRs);
     const reasons: string[] = [];
     let emptyTransition = false;
     let partialDrop = false;
+    let partialDropFlavor: PartialDropFlavor | undefined;
 
     if (oldPRs.length > 0 && freshPRs.length === 0) {
       reasons.push('empty_after_non_empty');
@@ -70,6 +79,7 @@ export class PrListTrustAssessor {
         if (oldPRs.length >= 5 && missingPRs.length >= operationalDropThreshold) {
           reasons.push(`partial_drop_operational:${missingPRs.length}/${oldPRs.length}`);
           partialDrop = true;
+          partialDropFlavor = 'operational';
         }
       } else if (missingPRs.length > 0 && problematicStatus) {
         if (
@@ -80,11 +90,13 @@ export class PrListTrustAssessor {
         ) {
           reasons.push(`partial_drop_degraded:${missingPRs.length}/${oldPRs.length}`);
           partialDrop = true;
+          partialDropFlavor = 'degraded';
         }
       } else if (missingPRs.length > 0 && status.prComponentStatus === 'unknown') {
         if (oldPRs.length >= 5 && missingPRs.length >= operationalDropThreshold) {
           reasons.push(`partial_drop_unknown_status:${missingPRs.length}/${oldPRs.length}`);
           partialDrop = true;
+          partialDropFlavor = 'unknown_status';
         }
       }
     }
@@ -109,6 +121,8 @@ export class PrListTrustAssessor {
       status,
       missConfirmationsRequired: problematicStatus ? 3 : 2,
       kind,
+      partialDropFlavor: kind === 'suspect_partial' ? partialDropFlavor : undefined,
+      missingCount: kind === 'suspect_partial' ? missingPRs.length : undefined,
     };
   }
 }

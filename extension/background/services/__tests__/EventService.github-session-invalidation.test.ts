@@ -78,6 +78,7 @@ describe('EventService GitHub web-session invalidation', () => {
       updateMergedPRs: vi.fn(),
       updateAuthoredPRs: vi.fn(),
       persistResolvedViewerIdentity: vi.fn().mockResolvedValue(undefined),
+      beginPrListHealthWave: vi.fn(),
     } as unknown as IPRService;
 
     const alarmService = {
@@ -109,6 +110,23 @@ describe('EventService GitHub web-session invalidation', () => {
             return rateLimitService as ServiceMap[K];
           case 'healthStatusService':
             return healthStatusService as ServiceMap[K];
+          case 'gitHubStatusClient':
+            return {
+              initialize: vi.fn(),
+              dispose: vi.fn(),
+              getStatus: vi.fn().mockResolvedValue({
+                prComponentStatus: 'operational',
+                globalIndicator: 'none',
+                fetchedAt: 0,
+              }),
+            } as unknown as ServiceMap[K];
+          case 'alarmSeqClock':
+            return {
+              initialize: vi.fn(),
+              dispose: vi.fn(),
+              current: vi.fn().mockResolvedValue(0),
+              advance: vi.fn().mockResolvedValue(1),
+            } as unknown as ServiceMap[K];
           default:
             throw new Error(`Unexpected getService key in test: ${String(key)}`);
         }

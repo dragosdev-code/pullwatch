@@ -26,5 +26,11 @@ export interface GitHubStatusSnapshot {
  * trusting the PR fetch; `GitHubOutageError` still covers hard transport failures on github.com.
  */
 export interface IGitHubStatusClient extends IService {
-  getStatus(): Promise<GitHubStatusSnapshot>;
+  /**
+   * @param options.bypassCache - Skip the {@link GITHUB_STATUS_CACHE_TTL_MS} short-circuit and
+   *   always fetch a fresh `summary.json`. The result is written back to cache so subsequent
+   *   non-bypass reads in the same alarm wave (e.g. each per-list `assess()` call) hit the
+   *   refreshed snapshot instead of triple-hitting the network.
+   */
+  getStatus(options?: { bypassCache?: boolean }): Promise<GitHubStatusSnapshot>;
 }

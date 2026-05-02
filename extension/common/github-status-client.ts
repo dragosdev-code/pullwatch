@@ -97,14 +97,19 @@ export class GitHubStatusClient implements IGitHubStatusClient {
     // No resources — cache lives in chrome.storage.local.
   }
 
-  async getStatus(): Promise<GitHubStatusSnapshot> {
+  async getStatus(options?: { bypassCache?: boolean }): Promise<GitHubStatusSnapshot> {
     const now = Date.now();
 
-    const cached = await this.readCache();
-    if (cached && now - cached.fetchedAt < GITHUB_STATUS_CACHE_TTL_MS) {
-      return cached;
+    if (!options?.bypassCache) {
+      const cached = await this.readCache();
+      if (cached && now - cached.fetchedAt < GITHUB_STATUS_CACHE_TTL_MS) {
+        return cached;
+      }
     }
 
+    // WHY [bypass overwrites cache]: an alarm/manual wave prefetches once with bypassCache; the
+    // subsequent same-wave per-list assess() calls must hit the refreshed cache instead of
+    // re-fetching summary.json three times. Restarting the TTL from "now" is the dedupe primitive.
     const fresh = await this.fetchSnapshot(now);
     await this.writeCache(fresh);
     return fresh;

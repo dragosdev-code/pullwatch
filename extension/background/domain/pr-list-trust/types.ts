@@ -94,10 +94,25 @@ export interface PRListTrustState {
  */
 export type ListTrustKind = 'trusted' | 'suspect_partial' | 'suspect_empty';
 
+/**
+ * Subdivides `kind === 'suspect_partial'` for the policy split in `PRService.dispatchPrListAssessment`:
+ * assigned/authored downgrade `'operational'` to a trusted persist (UX wins over hypothetical
+ * truncation on bulk-merge churn); merged stays strict on `'operational'` once `missingCount`
+ * crosses {@link MERGED_SHRINK_SUSPICION_THRESHOLD}.
+ *
+ * WHY [explicit field, not reason-string parsing]: reason strings are for logs; control flow that
+ * grep-matches them is fragile. The discriminator keeps the policy split type-checked.
+ */
+export type PartialDropFlavor = 'operational' | 'degraded' | 'unknown_status';
+
 export interface ListTrustAssessment {
   suspicious: boolean;
   reasons: string[];
   status: GitHubStatusSnapshot;
   missConfirmationsRequired: number;
   kind: ListTrustKind;
+  /** Set only when `kind === 'suspect_partial'`. */
+  partialDropFlavor?: PartialDropFlavor;
+  /** Set only when `kind === 'suspect_partial'`. Lets the policy split decide on shrink size for merged. */
+  missingCount?: number;
 }

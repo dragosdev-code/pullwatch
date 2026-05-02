@@ -102,6 +102,7 @@ describe.sequential('EventService manual PR fetch barrier (withPrUiFetchIndicato
       updateMergedPRs: updateMerged,
       updateAuthoredPRs: updateAuthored,
       persistResolvedViewerIdentity,
+      beginPrListHealthWave: vi.fn(),
     } as unknown as IPRService;
 
     storageSet = vi.fn(async (key: string, value: unknown) => {
@@ -133,6 +134,23 @@ describe.sequential('EventService manual PR fetch barrier (withPrUiFetchIndicato
             return storageService as ServiceMap[K];
           case 'alarmService':
             return alarmService as ServiceMap[K];
+          case 'gitHubStatusClient':
+            return {
+              initialize: vi.fn(),
+              dispose: vi.fn(),
+              getStatus: vi.fn().mockResolvedValue({
+                prComponentStatus: 'operational',
+                globalIndicator: 'none',
+                fetchedAt: 0,
+              }),
+            } as unknown as ServiceMap[K];
+          case 'alarmSeqClock':
+            return {
+              initialize: vi.fn(),
+              dispose: vi.fn(),
+              current: vi.fn().mockResolvedValue(0),
+              advance: vi.fn().mockResolvedValue(1),
+            } as unknown as ServiceMap[K];
           default:
             throw new Error(`Unexpected getService key in test: ${String(key)}`);
         }
@@ -199,8 +217,14 @@ describe.sequential('EventService manual PR fetch barrier (withPrUiFetchIndicato
 
     expect(persistResolvedViewerIdentity).toHaveBeenCalledTimes(1);
     expect(sendResponse).toHaveBeenCalledTimes(3);
-    expect(fetchAssigned).toHaveBeenCalledWith(true);
-    expect(updateMerged).toHaveBeenCalledWith(true);
-    expect(updateAuthored).toHaveBeenCalledWith(true);
+    expect(fetchAssigned).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
+    expect(updateMerged).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
+    expect(updateAuthored).toHaveBeenCalledWith(true, false, expect.objectContaining({
+      prComponentStatus: 'operational',
+    }));
   });
 });

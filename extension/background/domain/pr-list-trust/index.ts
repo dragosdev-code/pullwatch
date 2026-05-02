@@ -5,9 +5,13 @@ export type {
   PRListTrustState,
   ListTrustAssessment,
   ListTrustKind,
+  PartialDropFlavor,
   EmptyConfirmationBucket,
   RecoveryBaselineReason,
 } from './types';
+export { PrTombstoneStore } from './PrTombstoneStore';
+export type { Tombstone, PrTombstoneState } from './PrTombstoneStore';
+export { AlarmSeqClock } from './AlarmSeqClock';
 export { PrListTrustStore } from './PrListTrustStore';
 export { PrListTrustAssessor, isProblematicPRStatus } from './PrListTrustAssessor';
 export { MergedLimboPromoter } from './MergedLimboPromoter';

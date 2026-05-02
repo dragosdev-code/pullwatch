@@ -121,6 +121,10 @@ describe('PRService outage gate', () => {
       gitHubStatusClient: {
         getStatus,
       } as never,
+      alarmSeqClock: {
+        current: vi.fn().mockResolvedValue(0),
+        advance: vi.fn().mockResolvedValue(1),
+      } as never,
     });
   }
 

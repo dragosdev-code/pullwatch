@@ -235,4 +235,41 @@ describe('GitHubStatusClient.getStatus', () => {
       expect.stringContaining('Pull Requests component not found')
     );
   });
+
+  it('bypassCache: true skips TTL short-circuit even with a fresh cache entry', async () => {
+    storageGet.mockResolvedValue({
+      [STORAGE_KEY_GITHUB_STATUS_CACHE]: {
+        prComponentStatus: 'operational',
+        globalIndicator: 'none',
+        fetchedAt: T0 - 1, // 1ms old — well within TTL
+      },
+    });
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(makeSummary('major_outage', 'critical')));
+    const client = new GitHubStatusClient(makeDebug());
+
+    const out = await client.getStatus({ bypassCache: true });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(out.prComponentStatus).toBe('major_outage');
+  });
+
+  it('bypassCache: true overwrites the stored cache so subsequent non-bypass reads see the fresh snapshot', async () => {
+    let stored: unknown = {
+      prComponentStatus: 'operational',
+      globalIndicator: 'none',
+      fetchedAt: T0 - 1,
+    };
+    storageGet.mockImplementation(async () => ({ [STORAGE_KEY_GITHUB_STATUS_CACHE]: stored }));
+    storageSet.mockImplementation(async (entry: Record<string, unknown>) => {
+      stored = entry[STORAGE_KEY_GITHUB_STATUS_CACHE];
+    });
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(makeSummary('partial_outage', 'major')));
+    const client = new GitHubStatusClient(makeDebug());
+
+    await client.getStatus({ bypassCache: true });
+    const second = await client.getStatus(); // non-bypass should see the just-written entry
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(second.prComponentStatus).toBe('partial_outage');
+  });
 });
