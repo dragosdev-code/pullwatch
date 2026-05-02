@@ -31,12 +31,14 @@ export class MergedLimboPromoter {
       };
     }
 
-    lists[listKind] = {
-      ...current,
-      limboByKey,
-      lastSuspiciousAt: now,
-      lastReasons: reasons,
-    };
+    // WHY [reset empty-streak on suspicious]: a partial-drop or
+    // corroborated-empty event invalidates any in-flight legitimate-zero
+    // streak. Leaving `emptyConfirm` populated would let a later empty fetch
+    // resume from a stale streak that was logically broken by this partial
+    // drop, prematurely accepting [] without N fresh confirmations.
+    const next = { ...current, limboByKey, lastSuspiciousAt: now, lastReasons: reasons };
+    delete next.emptyConfirm;
+    lists[listKind] = next;
     await this.trustStore.write({ ...state, lists });
   }
 
@@ -76,13 +78,18 @@ export class MergedLimboPromoter {
       }
     }
 
-    lists.merged = {
+    // WHY [reset empty-streak on trusted]: same rationale as `recordTrustedFetch` —
+    // a successful trusted merged fetch invalidates any in-flight `emptyConfirm`
+    // bucket so future empty fetches can not resume from stale streak state.
+    const next = {
       ...current,
       limboByKey,
       lastTrustedAt: now,
       lastTrustedCount: promoted.length,
       lastReasons: [],
     };
+    delete next.emptyConfirm;
+    lists.merged = next;
     await this.trustStore.write({ ...state, lists });
 
     return sortPullRequestsByEventTime(promoted);
@@ -92,12 +99,18 @@ export class MergedLimboPromoter {
     const state = await this.trustStore.read();
     const lists = { ...(state.lists ?? {}) };
     const current = lists[listKind] ?? {};
-    lists[listKind] = {
+    // WHY [reset empty-streak on trusted]: a successful trusted fetch is the
+    // canonical "list is healthy now" signal. Any in-flight `emptyConfirm`
+    // streak from prior empty polls must drop here so a future empty does
+    // not resume from stale state.
+    const next = {
       ...current,
       lastTrustedAt: Date.now(),
       lastTrustedCount: count,
       lastReasons: [],
     };
+    delete next.emptyConfirm;
+    lists[listKind] = next;
     await this.trustStore.write({ ...state, lists });
   }
 }

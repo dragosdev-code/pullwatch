@@ -233,7 +233,11 @@ describe('PRService outage gate', () => {
     });
   });
 
-  it('3. suspicious empty (healthy): empty fresh + non-empty stored + operational → preserves stored baseline', async () => {
+  it('3. empty fresh + non-empty stored + operational → silent pending (no banner, no metadata write)', async () => {
+    // WHY [silent pending]: empty_after_non_empty under a green Statuspage is
+    // most often legitimate-zero (last review cleared / last PR merged). The
+    // tracker holds the streak in chrome.storage.local; the dispatcher returns
+    // oldPRs WITHOUT signaling outage or writing LAST_UNTRUSTED_FETCH_AT.
     getStatus.mockResolvedValue(snapshot('operational', 'none'));
     fetchMergedPRs.mockResolvedValue([]);
     const oldPRs = storedByKey[STORAGE_KEY_MERGED_PRS]!.prs;
@@ -244,10 +248,9 @@ describe('PRService outage gate', () => {
     expect(out).toBe(oldPRs);
     expect(showMergedPRNotifications).not.toHaveBeenCalled();
     expect(setStoredPRs).not.toHaveBeenCalled();
-    expect(clearGitHubOutage).not.toHaveBeenCalled();
-    expect(signalGitHubOutage).toHaveBeenCalledWith(
-      expect.stringContaining('Suspicious merged list'),
-      'pr_component_degraded'
+    expect(signalGitHubOutage).not.toHaveBeenCalled();
+    expect(storageSet).not.toHaveBeenCalledWith(
+      expect.objectContaining({ [STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT]: expect.anything() })
     );
   });
 
@@ -279,7 +282,11 @@ describe('PRService outage gate', () => {
     expect(notifiedPRs[0]!.id).toBe('m-new');
   });
 
-  it('5. fail-safe: status returns unknown but empty transition still preserves baseline', async () => {
+  it('5. status unknown without global incident + empty → silent pending (fail-open, no banner)', async () => {
+    // WHY [unknown is fail-open]: Statuspage timeout / component-name miss
+    // returns 'unknown'. Without a corroborating non-none global indicator
+    // it does NOT corroborate as outage — empty is treated as legitimate-zero
+    // pending confirmation.
     getStatus.mockResolvedValue(snapshot('unknown', 'unknown'));
     fetchMergedPRs.mockResolvedValue([]);
     const oldPRs = storedByKey[STORAGE_KEY_MERGED_PRS]!.prs;
@@ -289,7 +296,7 @@ describe('PRService outage gate', () => {
 
     expect(out).toBe(oldPRs);
     expect(setStoredPRs).not.toHaveBeenCalled();
-    expect(signalGitHubOutage).toHaveBeenCalled();
+    expect(signalGitHubOutage).not.toHaveBeenCalled();
   });
 
   it('6. cold start: stored empty + fresh empty + degraded status → gate inactive (oldLength === 0)', async () => {
@@ -337,14 +344,17 @@ describe('PRService outage gate', () => {
     expect(signalGitHubOutage).not.toHaveBeenCalled();
   });
 
-  it('9. global non-none + PR component operational: empty transition still preserves baseline', async () => {
+  it('9. global indicator non-none + PR component operational + empty → silent pending', async () => {
+    // WHY [PR component wins]: a global incident on Statuspage that does not
+    // touch the PR component does not corroborate empty PR HTML. The PR
+    // component is the authoritative signal for this gate.
     getStatus.mockResolvedValue(snapshot('operational', 'critical'));
     fetchMergedPRs.mockResolvedValue([]);
 
     const pr = makeService();
     await pr.updateMergedPRs(false, true);
 
-    expect(signalGitHubOutage).toHaveBeenCalled();
+    expect(signalGitHubOutage).not.toHaveBeenCalled();
     expect(setStoredPRs).not.toHaveBeenCalled();
   });
 

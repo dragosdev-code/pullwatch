@@ -28,6 +28,9 @@ import {
   mergeAndFilterAssignedPRs,
 } from '@background/utils/pull-request-list-utils';
 import {
+  EmptyConfirmationTracker,
+  type ListKind,
+  type ListTrustAssessment,
   MergedLimboPromoter,
   MergedNotificationEligibility,
   PrListTrustAssessor,
@@ -48,8 +51,10 @@ export class PRService implements IPRService {
   private rateLimitService: IRateLimitService;
   private healthStatusService: IHealthStatusService;
   private gitHubStatusClient: IGitHubStatusClient;
+  private trustStore: PrListTrustStore;
   private trustAssessor: PrListTrustAssessor;
   private limboPromoter: MergedLimboPromoter;
+  private emptyTracker: EmptyConfirmationTracker;
   private mergedNotificationEligibility: MergedNotificationEligibility;
   private fetchErrorHandler: PrFetchErrorHandler;
   private initialized = false;
@@ -94,9 +99,10 @@ export class PRService implements IPRService {
     this.rateLimitService = deps.rateLimitService;
     this.healthStatusService = deps.healthStatusService;
     this.gitHubStatusClient = deps.gitHubStatusClient;
-    const trustStore = new PrListTrustStore(this.storageService, this.debugService);
+    this.trustStore = new PrListTrustStore(this.storageService, this.debugService);
     this.trustAssessor = new PrListTrustAssessor(this.gitHubStatusClient);
-    this.limboPromoter = new MergedLimboPromoter(trustStore);
+    this.limboPromoter = new MergedLimboPromoter(this.trustStore);
+    this.emptyTracker = new EmptyConfirmationTracker(this.trustStore, this.debugService);
     this.mergedNotificationEligibility = new MergedNotificationEligibility(this.debugService);
     this.fetchErrorHandler = new PrFetchErrorHandler(
       this.debugService,
@@ -334,6 +340,105 @@ export class PRService implements IPRService {
     await this.healthStatusService.signalGitHubOutage(context, 'pr_component_degraded');
   }
 
+  /**
+   * Dispatches a `ListTrustAssessment` into one of five branches. Callers must
+   * have already filtered out the account-swap case via
+   * {@link detectAccountSwap}; the dispatcher does NOT re-check identity.
+   *
+   * Branches:
+   * - `trusted`: caller runs the existing happy path (compare/persist/notify).
+   * - `suspect_partial`: caller runs the existing limbo + corroborated outage path.
+   * - `suspect_empty_pending`: silent — caller returns oldPRs without touching
+   *   `healthStatusService` or `STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT`.
+   * - `suspect_empty_accept`: streak hit threshold — caller persists `[]` and
+   *   sets `recoveryBaseline = 'accepted_empty'` on the bucket so the next
+   *   trusted non-empty fetch routes through `markAsExistingBaseline`.
+   * - `suspect_empty_corroborated`: Statuspage corroborates — caller runs the
+   *   existing limbo + corroborated outage path.
+   * - `suspect_empty_reset_swap`: tracker observed identity mismatch the swap
+   *   pre-empt missed — caller treats fresh as a new baseline (parallel to
+   *   account-swap), NO outage signal.
+   */
+  private async dispatchPrListAssessment(args: {
+    listKind: ListKind;
+    assessment: ListTrustAssessment;
+    oldCount: number;
+    currentLogin: string | null;
+  }): Promise<
+    | { branch: 'trusted' }
+    | { branch: 'suspect_partial' }
+    | { branch: 'suspect_empty_pending'; streak: number; threshold: number }
+    | { branch: 'suspect_empty_accept'; streak: number; threshold: number }
+    | { branch: 'suspect_empty_corroborated' }
+    | { branch: 'suspect_empty_reset_swap' }
+  > {
+    const { listKind, assessment, oldCount, currentLogin } = args;
+    if (assessment.kind === 'trusted') return { branch: 'trusted' };
+    if (assessment.kind === 'suspect_partial') return { branch: 'suspect_partial' };
+
+    const outcome = await this.emptyTracker.observeEmpty({
+      listKind,
+      oldCount,
+      currentLogin,
+      status: assessment.status,
+    });
+    switch (outcome.kind) {
+      case 'pending':
+        return {
+          branch: 'suspect_empty_pending',
+          streak: outcome.streak,
+          threshold: outcome.threshold,
+        };
+      case 'accept':
+        return {
+          branch: 'suspect_empty_accept',
+          streak: outcome.streak,
+          threshold: outcome.threshold,
+        };
+      case 'corroborated':
+        return { branch: 'suspect_empty_corroborated' };
+      case 'reset_swap':
+        return { branch: 'suspect_empty_reset_swap' };
+    }
+  }
+
+  /**
+   * One-shot recovery hint set by the AcceptedEmpty transition; consumed by
+   * the next trusted non-empty fetch in the corresponding `do*` method.
+   *
+   * WHY [markAsExistingBaseline parity]: Without consuming this marker, the
+   * trusted branch would call `comparePullRequestLists([], fresh)` and treat
+   * every returning PR as new — fanning out a notification storm. Consuming
+   * the marker switches the per-list path to the same `markAsExistingBaseline`
+   * shape used by the account-swap branch.
+   */
+  private async markRecoveryBaseline(listKind: ListKind): Promise<void> {
+    const state = await this.trustStore.read();
+    const lists = { ...(state.lists ?? {}) };
+    const current = lists[listKind] ?? {};
+    lists[listKind] = { ...current, recoveryBaseline: 'accepted_empty' };
+    await this.trustStore.write({ ...state, lists });
+  }
+
+  private async clearRecoveryBaseline(listKind: ListKind): Promise<void> {
+    const state = await this.trustStore.read();
+    const lists = { ...(state.lists ?? {}) };
+    const current = lists[listKind];
+    if (!current?.recoveryBaseline) return;
+    const cleared = { ...current };
+    delete cleared.recoveryBaseline;
+    lists[listKind] = cleared;
+    await this.trustStore.write({ ...state, lists });
+  }
+
+  /** Clears and returns whether `recoveryBaseline` was set; call only when `fresh.length > 0`. */
+  private async consumeRecoveryBaseline(listKind: ListKind): Promise<boolean> {
+    const state = await this.trustStore.read();
+    const present = state.lists?.[listKind]?.recoveryBaseline === 'accepted_empty';
+    if (present) await this.clearRecoveryBaseline(listKind);
+    return present;
+  }
+
   private async doFetchAndUpdateAssignedPRs(
     forceRefresh: boolean,
     bypassCache: boolean
@@ -367,28 +472,105 @@ export class PRService implements IPRService {
       const freshAssignedPRsRaw = [...freshPendingPRsRaw, ...freshReviewedPRsRaw];
       if (!accountSwap) {
         const assignedTrust = await this.trustAssessor.assess(oldPRs, freshAssignedPRsRaw);
-        if (assignedTrust.suspicious) {
-          this.debugService.warn(
-            `[PRService] Trust gate: suspicious assigned fetch (${assignedTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored PRs.`
-          );
-          await this.limboPromoter.recordSuspiciousFetch(
-            'assigned',
-            assignedTrust.reasons,
-            oldPRs,
-            freshAssignedPRsRaw
-          );
-          await this.persistUntrustedFetchMetadata(
-            `Suspicious assigned list: ${assignedTrust.reasons.join(', ')}`
-          );
-          return oldPRs;
+        const dispatch = await this.dispatchPrListAssessment({
+          listKind: 'assigned',
+          assessment: assignedTrust,
+          oldCount: oldPRs.length,
+          currentLogin: this.gitHubService.getLastResolvedViewerLogin(),
+        });
+        switch (dispatch.branch) {
+          case 'suspect_partial': {
+            this.debugService.warn(
+              `[PRService] Trust gate: partial-drop assigned fetch (${assignedTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored PRs.`
+            );
+            await this.limboPromoter.recordSuspiciousFetch(
+              'assigned',
+              assignedTrust.reasons,
+              oldPRs,
+              freshAssignedPRsRaw
+            );
+            await this.persistUntrustedFetchMetadata(
+              `Suspicious assigned list: ${assignedTrust.reasons.join(', ')}`
+            );
+            return oldPRs;
+          }
+          case 'suspect_empty_pending': {
+            // WHY [silent]: legitimate "I cleared my queue" is the dominant case
+            // for a non-empty → empty assigned transition. We carry oldPRs forward
+            // until N consecutive confirmations promote the empty to AcceptedEmpty.
+            // No outage signal, no LAST_UNTRUSTED_FETCH_AT write, no banner.
+            this.debugService.log(
+              `[PRService] assigned empty pending confirmation (streak=${dispatch.streak}/${dispatch.threshold})`
+            );
+            return oldPRs;
+          }
+          case 'suspect_empty_accept': {
+            this.debugService.log(
+              `[PRService] assigned empty accepted after ${dispatch.streak} confirmations — persisting [].`
+            );
+            await this.persistAndNotifyAssigned([], 0, [], forceRefresh);
+            await this.markRecoveryBaseline('assigned');
+            await this.limboPromoter.recordTrustedFetch('assigned', 0);
+            this.cycleListsRefreshed.add('assigned');
+            this.rateLimitService.recordSuccess();
+            await this.healthStatusService.clearParserBreakage();
+            await this.healthStatusService.clearGitHubOutage();
+            return [];
+          }
+          case 'suspect_empty_corroborated': {
+            this.debugService.warn(
+              `[PRService] Trust gate: empty assigned fetch corroborated by Statuspage — preserving ${oldPRs.length} stored PRs.`
+            );
+            await this.limboPromoter.recordSuspiciousFetch(
+              'assigned',
+              [...assignedTrust.reasons, 'corroborated_by_statuspage'],
+              oldPRs,
+              freshAssignedPRsRaw
+            );
+            await this.persistUntrustedFetchMetadata(
+              `Suspicious assigned list (corroborated): ${assignedTrust.reasons.join(', ')}`
+            );
+            return oldPRs;
+          }
+          case 'suspect_empty_reset_swap': {
+            // WHY [parallel to swap]: tracker observed identity mismatch the
+            // detectAccountSwap pre-empt missed. Treat fresh as a new baseline,
+            // NO outage signal — identity change is not an outage.
+            this.debugService.log(
+              '[PRService] assigned empty under identity mismatch; trusting fresh as baseline.'
+            );
+            await this.persistAndNotifyAssigned([], 0, [], forceRefresh);
+            await this.limboPromoter.recordTrustedFetch('assigned', 0);
+            this.cycleListsRefreshed.add('assigned');
+            this.rateLimitService.recordSuccess();
+            await this.healthStatusService.clearParserBreakage();
+            await this.healthStatusService.clearGitHubOutage();
+            return [];
+          }
+          case 'trusted':
+            break;
         }
       } else {
         this.debugService.log(
           '[PRService] Account swap detected for assigned PRs; trusting fresh list as new baseline.'
         );
+        // WHY [parity with reset_swap]: a swap detected at the dispatcher level
+        // also clears any in-flight empty streak so a subsequent legitimate-zero
+        // streak under the new identity starts fresh.
+        await this.emptyTracker.clear('assigned');
       }
 
-      const oldPendingForCompare = accountSwap ? [] : oldPendingPRs;
+      // WHY [recovery consumption]: if the previous cycle's AcceptedEmpty wrote
+      // [] and armed the marker, route the next non-empty fetch through
+      // markAsExistingBaseline (same shape as account swap) so returning PRs
+      // are not classified as new. Empty trusted ticks after accept must NOT
+      // consume the marker (would defeat suppression after intermittent [] polls).
+      const recoveryBaseline =
+        !accountSwap &&
+        freshAssignedPRsRaw.length > 0 &&
+        (await this.consumeRecoveryBaseline('assigned'));
+      const treatAsBaseline = accountSwap || recoveryBaseline;
+      const oldPendingForCompare = treatAsBaseline ? [] : oldPendingPRs;
 
       let { allPRs, filteredPending, newPRs } = mergeAndFilterAssignedPRs(
         oldPendingForCompare,
@@ -397,7 +579,7 @@ export class PRService implements IPRService {
         showDrafts
       );
 
-      if (accountSwap) {
+      if (treatAsBaseline) {
         newPRs = [];
         allPRs = allPRs.map((pr) => ({ ...pr, isNew: false }));
         filteredPending = filterPendingAssignedByDraftSetting(
@@ -582,28 +764,90 @@ export class PRService implements IPRService {
       const { accountSwap } = await this.detectAccountSwap('refreshing authored list baseline');
       if (!accountSwap) {
         const authoredTrust = await this.trustAssessor.assess(oldPRs, freshAuthoredPRsRaw);
-        if (authoredTrust.suspicious) {
-          this.debugService.warn(
-            `[PRService] Trust gate: suspicious authored fetch (${authoredTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored authored PRs.`
-          );
-          await this.limboPromoter.recordSuspiciousFetch(
-            'authored',
-            authoredTrust.reasons,
-            oldPRs,
-            freshAuthoredPRsRaw
-          );
-          await this.persistUntrustedFetchMetadata(
-            `Suspicious authored list: ${authoredTrust.reasons.join(', ')}`
-          );
-          return oldPRs;
+        const dispatch = await this.dispatchPrListAssessment({
+          listKind: 'authored',
+          assessment: authoredTrust,
+          oldCount: oldPRs.length,
+          currentLogin: this.gitHubService.getLastResolvedViewerLogin(),
+        });
+        switch (dispatch.branch) {
+          case 'suspect_partial': {
+            this.debugService.warn(
+              `[PRService] Trust gate: partial-drop authored fetch (${authoredTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored authored PRs.`
+            );
+            await this.limboPromoter.recordSuspiciousFetch(
+              'authored',
+              authoredTrust.reasons,
+              oldPRs,
+              freshAuthoredPRsRaw
+            );
+            await this.persistUntrustedFetchMetadata(
+              `Suspicious authored list: ${authoredTrust.reasons.join(', ')}`
+            );
+            return oldPRs;
+          }
+          case 'suspect_empty_pending': {
+            this.debugService.log(
+              `[PRService] authored empty pending confirmation (streak=${dispatch.streak}/${dispatch.threshold})`
+            );
+            return oldPRs;
+          }
+          case 'suspect_empty_accept': {
+            this.debugService.log(
+              `[PRService] authored empty accepted after ${dispatch.streak} confirmations — persisting [].`
+            );
+            await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, []);
+            await this.markRecoveryBaseline('authored');
+            await this.limboPromoter.recordTrustedFetch('authored', 0);
+            this.cycleListsRefreshed.add('authored');
+            this.rateLimitService.recordSuccess();
+            await this.healthStatusService.clearParserBreakage();
+            await this.healthStatusService.clearGitHubOutage();
+            return [];
+          }
+          case 'suspect_empty_corroborated': {
+            this.debugService.warn(
+              `[PRService] Trust gate: empty authored fetch corroborated by Statuspage — preserving ${oldPRs.length} stored authored PRs.`
+            );
+            await this.limboPromoter.recordSuspiciousFetch(
+              'authored',
+              [...authoredTrust.reasons, 'corroborated_by_statuspage'],
+              oldPRs,
+              freshAuthoredPRsRaw
+            );
+            await this.persistUntrustedFetchMetadata(
+              `Suspicious authored list (corroborated): ${authoredTrust.reasons.join(', ')}`
+            );
+            return oldPRs;
+          }
+          case 'suspect_empty_reset_swap': {
+            this.debugService.log(
+              '[PRService] authored empty under identity mismatch; trusting fresh as baseline.'
+            );
+            await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, []);
+            await this.limboPromoter.recordTrustedFetch('authored', 0);
+            this.cycleListsRefreshed.add('authored');
+            this.rateLimitService.recordSuccess();
+            await this.healthStatusService.clearParserBreakage();
+            await this.healthStatusService.clearGitHubOutage();
+            return [];
+          }
+          case 'trusted':
+            break;
         }
       } else {
         this.debugService.log(
           '[PRService] Account swap detected for authored PRs; trusting fresh list as new baseline.'
         );
+        await this.emptyTracker.clear('authored');
       }
 
-      const freshAuthoredPRs = accountSwap
+      const recoveryBaseline =
+        !accountSwap &&
+        freshAuthoredPRsRaw.length > 0 &&
+        (await this.consumeRecoveryBaseline('authored'));
+      const treatAsBaseline = accountSwap || recoveryBaseline;
+      const freshAuthoredPRs = treatAsBaseline
         ? this.markAsExistingBaseline(freshAuthoredPRsRaw)
         : freshAuthoredPRsRaw;
 
@@ -676,41 +920,108 @@ export class PRService implements IPRService {
         this.debugService.log(
           '[PRService] Account swap detected for merged PRs; trusting fresh list as new baseline.'
         );
+        await this.emptyTracker.clear('merged');
         mergedPRsWithStatus = this.markAsExistingBaseline(freshMergedPRs);
         await this.limboPromoter.recordTrustedFetch('merged', mergedPRsWithStatus.length);
       } else {
         const mergedTrust = await this.trustAssessor.assess(oldPRs, freshMergedPRs);
-        if (mergedTrust.suspicious) {
-          this.debugService.warn(
-            `[PRService] Trust gate: suspicious merged fetch (${mergedTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored merged PRs.`
-          );
-          await this.limboPromoter.recordSuspiciousFetch(
-            'merged',
-            mergedTrust.reasons,
-            oldPRs,
-            freshMergedPRs
-          );
-          await this.persistUntrustedFetchMetadata(
-            `Suspicious merged list: ${mergedTrust.reasons.join(', ')}`
-          );
-          return oldPRs;
+        const dispatch = await this.dispatchPrListAssessment({
+          listKind: 'merged',
+          assessment: mergedTrust,
+          oldCount: oldPRs.length,
+          currentLogin: this.gitHubService.getLastResolvedViewerLogin(),
+        });
+        switch (dispatch.branch) {
+          case 'suspect_partial': {
+            this.debugService.warn(
+              `[PRService] Trust gate: partial-drop merged fetch (${mergedTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored merged PRs.`
+            );
+            await this.limboPromoter.recordSuspiciousFetch(
+              'merged',
+              mergedTrust.reasons,
+              oldPRs,
+              freshMergedPRs
+            );
+            await this.persistUntrustedFetchMetadata(
+              `Suspicious merged list: ${mergedTrust.reasons.join(', ')}`
+            );
+            return oldPRs;
+          }
+          case 'suspect_empty_pending': {
+            this.debugService.log(
+              `[PRService] merged empty pending confirmation (streak=${dispatch.streak}/${dispatch.threshold})`
+            );
+            return oldPRs;
+          }
+          case 'suspect_empty_accept': {
+            this.debugService.log(
+              `[PRService] merged empty accepted after ${dispatch.streak} confirmations — persisting [].`
+            );
+            await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, []);
+            await this.markRecoveryBaseline('merged');
+            await this.limboPromoter.recordTrustedFetch('merged', 0);
+            this.cycleListsRefreshed.add('merged');
+            this.rateLimitService.recordSuccess();
+            await this.healthStatusService.clearParserBreakage();
+            await this.healthStatusService.clearGitHubOutage();
+            return [];
+          }
+          case 'suspect_empty_corroborated': {
+            this.debugService.warn(
+              `[PRService] Trust gate: empty merged fetch corroborated by Statuspage — preserving ${oldPRs.length} stored merged PRs.`
+            );
+            await this.limboPromoter.recordSuspiciousFetch(
+              'merged',
+              [...mergedTrust.reasons, 'corroborated_by_statuspage'],
+              oldPRs,
+              freshMergedPRs
+            );
+            await this.persistUntrustedFetchMetadata(
+              `Suspicious merged list (corroborated): ${mergedTrust.reasons.join(', ')}`
+            );
+            return oldPRs;
+          }
+          case 'suspect_empty_reset_swap': {
+            this.debugService.log(
+              '[PRService] merged empty under identity mismatch; trusting fresh as baseline.'
+            );
+            await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, []);
+            await this.limboPromoter.recordTrustedFetch('merged', 0);
+            this.cycleListsRefreshed.add('merged');
+            this.rateLimitService.recordSuccess();
+            await this.healthStatusService.clearParserBreakage();
+            await this.healthStatusService.clearGitHubOutage();
+            return [];
+          }
+          case 'trusted':
+            break;
         }
 
-        const trustedMergedPRs = await this.limboPromoter.promoteTrustedMergedList(
-          oldPRs,
-          freshMergedPRs,
-          mergedTrust.missConfirmationsRequired
-        );
+        const recoveryBaseline =
+          freshMergedPRs.length > 0 && (await this.consumeRecoveryBaseline('merged'));
+        if (recoveryBaseline) {
+          // WHY [recovery baseline parity]: Returning PRs after an accepted-empty
+          // window must not flood notifications. Mirror the account-swap branch:
+          // mark fresh as baseline and skip the comparePRs/notification path.
+          mergedPRsWithStatus = this.markAsExistingBaseline(freshMergedPRs);
+          await this.limboPromoter.recordTrustedFetch('merged', mergedPRsWithStatus.length);
+        } else {
+          const trustedMergedPRs = await this.limboPromoter.promoteTrustedMergedList(
+            oldPRs,
+            freshMergedPRs,
+            mergedTrust.missConfirmationsRequired
+          );
 
-        ({ newPRs, allPRsWithStatus: mergedPRsWithStatus } = this.comparePRs(
-          oldPRs,
-          trustedMergedPRs
-        ));
-        newPRs = this.mergedNotificationEligibility.filterFreshCandidates(
-          newPRs,
-          storedData?.timestamp,
-          mergedTrust.status
-        );
+          ({ newPRs, allPRsWithStatus: mergedPRsWithStatus } = this.comparePRs(
+            oldPRs,
+            trustedMergedPRs
+          ));
+          newPRs = this.mergedNotificationEligibility.filterFreshCandidates(
+            newPRs,
+            storedData?.timestamp,
+            mergedTrust.status
+          );
+        }
       }
       this.debugService.log(`[PRService] Newly merged PRs detected: ${newPRs.length}`);
 
