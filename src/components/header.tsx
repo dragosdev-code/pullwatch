@@ -14,7 +14,7 @@ import { NamedLogo } from './ui/named-logo';
 import { useDebugMode, useResetDebugMode } from '@src/stores/debug';
 import { useHeaderStorageSignals } from '@src/hooks/use-header-storage-signals';
 import { HeaderLastUpdatedLabel } from './header-last-updated-label';
-import { useNamedLogoCelebrateOnNewPr } from '@src/hooks/use-named-logo-celebrate-on-new-pr';
+import { usePrCelebrateSignal } from '@src/stores/pr-celebrate-signal';
 
 export const Header = () => {
   const squash = useSquashMinigameExperience();
@@ -22,14 +22,10 @@ export const Header = () => {
   const resetDebugMode = useResetDebugMode();
   const setGlobalError = useSetGlobalError();
   const clearGlobalError = useClearGlobalError();
-  const { data: assignedPRs = [], isLoading: isLoadingPRs, error: queryError } = useAssignedPRs();
+  const { isLoading: isLoadingPRs, error: queryError } = useAssignedPRs();
   const refreshPRsMutation = useRefreshAssignedPRs();
-  const {
-    data: mergedPRs = [],
-    isLoading: isLoadingMergedPRs,
-    error: queryErrorMerged,
-  } = useMergedPRs();
-  const celebrateSignal = useNamedLogoCelebrateOnNewPr(assignedPRs, mergedPRs);
+  const { isLoading: isLoadingMergedPRs, error: queryErrorMerged } = useMergedPRs();
+  const celebrateSignal = usePrCelebrateSignal();
   const refreshMergedPRsMutation = useRefreshMergedPRs();
   const { isLoading: isLoadingAuthoredPRs, error: queryErrorAuthored } = useAuthoredPRs();
   const refreshAuthoredPRsMutation = useRefreshAuthoredPRs();

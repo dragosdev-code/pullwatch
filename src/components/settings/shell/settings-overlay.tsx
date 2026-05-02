@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSpring, animated } from '@react-spring/web';
+import { usePrCelebrateSignal } from '@src/stores/pr-celebrate-signal';
 import { SettingsPage } from './settings-page';
 import { GearIcon } from '../../ui/icons';
 
@@ -41,6 +42,9 @@ export const SettingsOverlay = ({ position = 'left' }: SettingsOverlayProps) => 
   const [isHovered, setIsHovered] = useState(false);
   const [openRadius, setOpenRadius] = useState(FALLBACK_OPEN_RADIUS);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const prevCelebrateSignalRef = useRef(0);
+
+  const celebrateSignal = usePrCelebrateSignal();
 
   const config = positionConfig[position];
 
@@ -52,6 +56,15 @@ export const SettingsOverlay = ({ position = 'left' }: SettingsOverlayProps) => 
   const handleClose = useCallback(() => {
     setIsOpen(false);
   }, []);
+
+  // Same “new isNew id” delta as the header wordmark: close settings so the celebration is visible
+  // and the gear returns to its normal idle state (matches manual close).
+  useEffect(() => {
+    if (celebrateSignal > prevCelebrateSignalRef.current && isOpen) {
+      handleClose();
+    }
+    prevCelebrateSignalRef.current = celebrateSignal;
+  }, [celebrateSignal, isOpen, handleClose]);
 
   // Size the reveal circle to the popup's diagonal so the clip-path always covers every corner,
   // regardless of the active popup-size preset. ResizeObserver keeps it in sync when the preset changes.

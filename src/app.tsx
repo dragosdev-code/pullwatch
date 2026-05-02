@@ -14,6 +14,7 @@ import { useAuthoredPRs } from '@src/hooks/use-authored-prs';
 import { usePrEntranceViewedState } from '@src/hooks/use-pr-entrance-viewed-state';
 import { useStorageSync } from '@src/hooks/use-storage-sync';
 import { usePrListsStorageSync } from '@src/hooks/use-pr-lists-storage-sync';
+import { useSyncPrCelebrateSignal } from '@src/hooks/use-sync-pr-celebrate-signal';
 import { useGlobalError, useClearGlobalError } from '@src/stores/global-error';
 import { useDebugMode } from '@src/stores/debug';
 import { DiagnosticsSurface } from '@src/diagnostics-surface';
@@ -38,6 +39,8 @@ const AppShell = () => {
   const { data: assignedPRs = [], isSuccess } = useAssignedPRs();
   const { data: mergedPRs = [] } = useMergedPRs();
   const { data: authoredPRs = [] } = useAuthoredPRs();
+
+  useSyncPrCelebrateSignal(assignedPRs, mergedPRs);
 
   const hasEverLoaded = isSuccess || assignedPRs.length > 0;
 

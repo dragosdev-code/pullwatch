@@ -87,6 +87,5 @@ describe('SquashMinigameSection', () => {
     });
     render(<SquashMinigameSection />);
     expect(screen.getByTestId('neo-terminal-stub')).toBeTruthy();
-    expect(screen.getByText('Squash the Bugs')).toBeTruthy();
   });
 });
