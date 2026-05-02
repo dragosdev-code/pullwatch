@@ -25,6 +25,7 @@ import { delay } from '@common/utils';
 import {
   comparePullRequestLists,
   filterPendingAssignedByDraftSetting,
+  getMissingPRs,
   getPrKey,
   mergeAndFilterAssignedPRs,
 } from '@background/utils/pull-request-list-utils';
@@ -259,6 +260,28 @@ export class PRService implements IPRService {
     }
 
     return { accountSwap, baselineLogin, currentLogin };
+  }
+
+  /**
+   * WHY: When `github_viewer_identity` already matches the live session, {@link detectAccountSwap}
+   * is false but `github_merged_prs` can still hold another account's rows. A full URL-key
+   * turnover with every stored row's primary author ≠ the resolved viewer is not the same
+   * truncation risk as {@link MERGED_SHRINK_SUSPICION_THRESHOLD} (same-account merges vanishing).
+   * Requires a non-empty fresh list so empty-fetch / empty-confirm paths stay unchanged.
+   */
+  private isImplicitStaleMergedBaseline(
+    oldPRs: PullRequest[],
+    freshPRs: PullRequest[],
+    currentLogin: string | null,
+    accountSwap: boolean
+  ): boolean {
+    if (accountSwap || !currentLogin || oldPRs.length === 0 || freshPRs.length === 0) return false;
+    if (getMissingPRs(oldPRs, freshPRs).length !== oldPRs.length) return false;
+    for (const pr of oldPRs) {
+      const login = pr.author?.[0]?.login;
+      if (!login || login === currentLogin) return false;
+    }
+    return true;
   }
 
   /**
@@ -1083,13 +1106,26 @@ export class PRService implements IPRService {
       this.debugService.log(`[PRService] Fetched ${freshMergedPRs.length} merged PRs from GitHub`);
 
       const { accountSwap } = await this.detectAccountSwap('silent merged baseline');
+      const currentLogin = this.gitHubService.getLastResolvedViewerLogin();
+      const implicitStaleMergedBaseline = this.isImplicitStaleMergedBaseline(
+        oldPRs,
+        freshMergedPRs,
+        currentLogin,
+        accountSwap
+      );
       let newPRs: PullRequest[] = [];
       let mergedPRsWithStatus: PullRequest[];
 
-      if (accountSwap) {
-        this.debugService.log(
-          '[PRService] Account swap detected for merged PRs; trusting fresh list as new baseline.'
-        );
+      if (accountSwap || implicitStaleMergedBaseline) {
+        if (accountSwap) {
+          this.debugService.log(
+            '[PRService] Account swap detected for merged PRs; trusting fresh list as new baseline.'
+          );
+        } else {
+          this.debugService.log(
+            '[PRService] Implicit stale merged baseline (stored authors ≠ viewer, zero key overlap); trusting fresh list.'
+          );
+        }
         await this.emptyTracker.clear('merged');
         mergedPRsWithStatus = this.markAsExistingBaseline(freshMergedPRs);
         await this.limboPromoter.recordTrustedFetch('merged', mergedPRsWithStatus.length);

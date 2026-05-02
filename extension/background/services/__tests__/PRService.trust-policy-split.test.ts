@@ -245,6 +245,54 @@ describe('PRService trust-policy split (operational partial drop)', () => {
     expect(signalGitHubOutage).not.toHaveBeenCalled();
   });
 
+  it('merged: implicit stale baseline when identity matches but stored rows are another author (disjoint fresh, operational)', async () => {
+    const oldPrs = Array.from({ length: 8 }, (_, i) =>
+      makePR({
+        id: `https://github.com/other-account/example-repo/pull/${i + 1}`,
+        url: `https://github.com/other-account/example-repo/pull/${i + 1}`,
+        type: 'merged',
+        author: [{ login: 'other-account' }],
+        number: i + 1,
+        repoName: 'other-account/example-repo',
+      })
+    );
+    storedByKey[STORAGE_KEY_MERGED_PRS] = { prs: oldPrs };
+    getGitHubViewerIdentity.mockResolvedValue({ login: 'dragosdev-code' });
+    getLastResolvedViewerLogin.mockReturnValue('dragosdev-code');
+    const fresh: PullRequest[] = [
+      makePR({
+        id: 'https://github.com/dragosdev-code/acme-app/pull/100',
+        url: 'https://github.com/dragosdev-code/acme-app/pull/100',
+        type: 'merged',
+        author: [{ login: 'dragosdev-code' }],
+        number: 100,
+        repoName: 'dragosdev-code/acme-app',
+      }),
+      makePR({
+        id: 'https://github.com/dragosdev-code/acme-app/pull/101',
+        url: 'https://github.com/dragosdev-code/acme-app/pull/101',
+        type: 'merged',
+        author: [{ login: 'dragosdev-code' }],
+        number: 101,
+        repoName: 'dragosdev-code/acme-app',
+      }),
+    ];
+    fetchMergedPRs.mockResolvedValue(fresh);
+
+    const pr = makeService();
+    const out = await pr.updateMergedPRs(false, true, snapshot('operational', 'none'));
+
+    expect(out).toHaveLength(2);
+    expect(out.every((p) => p.isNew === false)).toBe(true);
+    expect(out.map((p) => p.url).sort()).toEqual(fresh.map((p) => p.url).sort());
+    expect(signalGitHubOutage).not.toHaveBeenCalled();
+    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    const mergedCall = setStoredPRs.mock.calls.find((c) => c[0] === STORAGE_KEY_MERGED_PRS);
+    expect(mergedCall).toBeDefined();
+    expect(mergedCall![1]).toHaveLength(2);
+    expect(mergedCall![1].every((p: PullRequest) => p.isNew === false)).toBe(true);
+  });
+
   it('assigned: degraded partial drop still escalates (suspect_partial path preserved)', async () => {
     storedByKey[STORAGE_KEY_ASSIGNED_PRS] = { prs: makePRList('a', 10) };
     const fresh = makePRList('a', 4);
