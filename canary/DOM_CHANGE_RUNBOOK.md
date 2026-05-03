@@ -25,7 +25,7 @@ This is not a parser pattern failure when the log contains either:
 - `/pulls returns "Page not found" after N recovery attempts`
 - `Account activation failed`
 
-**Cause:** GitHub can keep several `user_session_*` cookies in a browser context. Global surfaces such as `/pulls`, `/pulls/search`, and `/notifications` route through an active-account cookie that GitHub sets server-side from `/login/account_switch?login=<username>`. Reading `/<username>` confirms the profile is visible, but it does not promote that account for global routing.
+**Cause:** GitHub can keep several `user_session_*` cookies in a browser context. Global surfaces such as `/pulls`, `/pulls/search`, and `/notifications` route through an active-account cookie that GitHub sets server-side from the account switcher. Reading `/<username>` confirms the profile is visible, but it does not promote that account for global routing; synthesizing `/login/account_switch` can miss hidden per-session parameters, so the canary clicks the real switcher row.
 
 **Self-heal (no manual cache clear for this flake):** Fresh logins always run `activateAccountForRouting` before persisting `storageState`. If a **cached** session still hits a global-pulls 404, `getPageHTML` runs bounded recovery: it calls `activateAccountForRouting` again and, when `/pulls` succeeds afterward, **rewrites the same `playwright-state-*.json`** so the **next hourly run** starts from repaired cookies. You do not need to delete session files or use `force_fresh_login` for a one-off routing miss unless you are debugging or activation keeps failing (`Account activation failed` with good secrets).
 
@@ -38,9 +38,10 @@ This is not a parser pattern failure when the log contains either:
 npx playwright show-trace traces/*.zip
 ```
 
-3. In the trace, find `/login/account_switch?login=...` and check the response status plus `Set-Cookie`.
-4. If the request is 4xx, the bot username probably does not match an account in the stored session. Re-run the workflow with `force_fresh_login=true`; if it repeats, rotate credentials or check 2FA/account membership.
-5. If the request is 200 but no active-account cookie is set, GitHub changed activation semantics. Update `activateAccountForRouting` in [`canary/utils/github-session.ts`](utils/github-session.ts).
+3. In the trace, find the click on `/switch_account` and the following `/login/account_switch` request. Check the response status plus `Set-Cookie`.
+4. If no row matches the target account, check whether the secret contains an email address while GitHub displays the login. Prefer setting `GH_CANARY_USERNAME_*` to the GitHub login when possible; the canary also tries the restored `dotcom_user` cookie and the email local-part as candidates.
+5. If the account-switch request is 4xx, the bot probably does not match a valid session in the switcher. Re-run the workflow with `force_fresh_login=true`; if it repeats, rotate credentials or check 2FA/account membership.
+6. If the request is 200 but no active-account cookie is set, GitHub changed activation semantics. Update `activateAccountForRouting` in [`canary/utils/github-session.ts`](utils/github-session.ts).
 
 **Classification glossary:**
 

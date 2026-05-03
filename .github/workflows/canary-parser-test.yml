@@ -143,6 +143,7 @@ jobs:
           path: |
             canary/snapshots/
             canary/traces/
+            canary/traces/**/*.zip
             canary.log
             playwright-state-legacy.json
             playwright-state-new.json
@@ -172,7 +173,7 @@ jobs:
           elif [ "${{ steps.canary-markers.outputs.activation_failed }}" = "true" ]; then
             CONTENT='@here **Parser Canary FAILED — CRITICAL: bot session cannot activate target account.**'
             TITLE='CRITICAL: Bot session activation failed'
-            DESC='The canary logged `Account activation failed`. GitHub did not activate the target account via `/login/account_switch`; rotate credentials or check 2FA/session account membership. Download the canary failure artifact and inspect the Playwright trace.'
+            DESC='The canary logged `Account activation failed`. GitHub did not activate the target account through the account switcher; rotate credentials, check 2FA/session account membership, or confirm the username secret matches the GitHub login. Download the canary failure artifact and inspect the Playwright trace.'
             COLOR=15158332
           elif [ "${{ steps.gh-status.outputs.indicator }}" != "none" ]; then
             CONTENT='@here **Parser Canary FAILED — likely a GitHub outage (not a DOM change).**'

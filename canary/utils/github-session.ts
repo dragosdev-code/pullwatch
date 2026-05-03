@@ -14,7 +14,7 @@
  */
 
 import fs from 'node:fs';
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright';
 import { GITHUB_BASE_URL } from '@common/constants';
 import { isGitHubLoggedOutHtmlShell } from '@common/github-html-session';
 import {
@@ -30,6 +30,13 @@ const GOTO_OPTS = { waitUntil: 'domcontentloaded' as const, timeout: 30_000 };
 const RECOVERY_BACKOFF_MS = [2_000, 5_000] as const;
 
 type PullsShell = 'ok' | 'page-not-found' | 'logged-out';
+
+interface CapturedPullsShell {
+  html: string;
+  title: string;
+  finalUrl: string;
+  shell: PullsShell;
+}
 
 export interface GitHubSessionOptions {
   username: string;
@@ -146,12 +153,7 @@ export class GitHubSession {
    * `goto`, capture URL/title/HTML, classify the shell, then settle the search UI
    * only for an authenticated `/pulls/search` document.
    */
-  private async navigateToUrlAndCapture(requestedUrl: string): Promise<{
-    html: string;
-    title: string;
-    finalUrl: string;
-    shell: PullsShell;
-  }> {
+  private async navigateToUrlAndCapture(requestedUrl: string): Promise<CapturedPullsShell> {
     await this.page.goto(requestedUrl, GOTO_OPTS);
     console.log('  [navigate] Waiting for document load...');
     await this.page.waitForLoadState('load', { timeout: 25_000 });
@@ -246,7 +248,8 @@ export class GitHubSession {
 
   /**
    * 404 on `/pulls` means the active-account cookie was lost or never set.
-   * Only GitHub's account-switch endpoint re-mints that server-side routing cookie.
+   * GitHub only re-mints that server-side routing cookie through the account
+   * switcher flow.
    */
   private async refreshActiveUserContextForStaleSession(): Promise<void> {
     await this.activateAccountForRouting(this.options.username);
@@ -265,6 +268,27 @@ export class GitHubSession {
     return this.options.usernameEnvHint
       .replace(/^GH_CANARY_USERNAME_/, '')
       .toLowerCase();
+  }
+
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private async routingLoginCandidates(username: string): Promise<string[]> {
+    const candidates = new Set<string>();
+    const cookies = await this.context.cookies(GITHUB_BASE_URL);
+    const dotcomUser = cookies.find((cookie) => cookie.name === 'dotcom_user')?.value;
+
+    // WHY [login identity]: GitHub accepts email on `/login`, but the account
+    // switcher usually displays the canonical login. Restored state gives us
+    // `dotcom_user`, which is the best match for the real switcher row.
+    if (dotcomUser) candidates.add(dotcomUser);
+    candidates.add(username);
+    if (username.includes('@')) {
+      candidates.add(username.split('@')[0]);
+    }
+
+    return Array.from(candidates).filter((candidate) => candidate.trim().length > 0);
   }
 
   /**
@@ -401,44 +425,130 @@ export class GitHubSession {
 
   /**
    * Multi-account routing invariant: global `/pulls` resolves via an active-account
-   * cookie set by `/login/account_switch`. Opening `/<username>` reads that profile
-   * but does not promote it for global surfaces like `/pulls` or `/notifications`.
+   * cookie minted by GitHub's account-switcher flow. Opening `/<username>` reads
+   * that profile but does not promote it for global surfaces like `/pulls` or
+   * `/notifications`, and synthesizing `/login/account_switch` can miss hidden
+   * per-session parameters, so we click the real switcher control when present.
    */
   private async activateAccountForRouting(username: string): Promise<void> {
     console.log(`  [login] Activating @${username} for global GitHub routing...`);
-    const switchUrl = `${GITHUB_BASE_URL}/login/account_switch?login=${encodeURIComponent(username)}`;
+
+    if (this.page.url().includes('/switch_account')) {
+      await this.activateFromAccountSwitcher(username);
+    } else {
+      const initialProbe = await this.probePullsForActiveRouting();
+      if (initialProbe.shell === 'ok') {
+        console.log(`  ✓ [login] Account routing already active for @${username} (/pulls probe ok)`);
+        return;
+      }
+
+      console.warn(
+        `  [login] /pulls probe classified as ${initialProbe.shell}; opening account switcher for activation...`,
+      );
+      await this.page.goto(
+        `${GITHUB_BASE_URL}/switch_account?return_to=${encodeURIComponent(`${GITHUB_BASE_URL}/pulls`)}`,
+        GOTO_OPTS,
+      );
+      await this.page.waitForLoadState('load', { timeout: 25_000 });
+
+      if (this.page.url().includes('/switch_account')) {
+        await this.activateFromAccountSwitcher(username);
+      }
+    }
+
+    const probe = await this.probePullsForActiveRouting();
+
+    if (probe.shell !== 'ok') {
+      const label = this.failureLabel('account-activation-failed');
+      writeCanaryFailureSnapshot(probe.html, label);
+      await stopAndSaveTrace(this.context, label);
+      const shellDescription = probe.shell === 'page-not-found' ? '404' : probe.shell;
+      throw new Error(
+        `[canary] Account activation failed: /pulls still ${shellDescription} after ` +
+          `the account switcher flow. Bot may not be in this session's account list, ` +
+          `GH_CANARY_USERNAME may not match the GitHub login, or GitHub changed activation semantics.`,
+      );
+    }
+
+    console.log(`  ✓ [login] Account routing active for @${username} (/pulls probe ok)`);
+  }
+
+  private async probePullsForActiveRouting(): Promise<CapturedPullsShell> {
+    await this.page.goto(`${GITHUB_BASE_URL}/pulls`, GOTO_OPTS);
+    await this.page.waitForLoadState('load', { timeout: 25_000 });
+    const finalUrl = this.page.url();
+    const title = await this.page.title();
+    const html = await this.page.content();
+    const shell = this.classifyPullsShell(html, title, finalUrl);
+    console.log(`  [login] /pulls activation probe classified as: ${shell}`);
+    return { html, title, finalUrl, shell };
+  }
+
+  private async activateFromAccountSwitcher(username: string): Promise<void> {
+    const candidates = await this.routingLoginCandidates(username);
+    const actionSelector = [
+      'a[href*="/login/account_switch"]',
+      'form[action*="/login/account_switch"] button',
+      'form[action*="/login/account_switch"] input[type="submit"]',
+    ].join(', ');
+
+    for (const candidate of candidates) {
+      const candidatePattern = new RegExp(this.escapeRegExp(candidate), 'i');
+      const action = await this.findAccountSwitcherAction(candidatePattern);
+      if (action) {
+        console.log(`  [login] Selecting account switcher row matching "${candidate}"`);
+        await this.clickAccountSwitcherAction(action);
+        return;
+      }
+    }
+
+    const actions = this.page.locator(actionSelector);
+    const actionCount = await actions.count();
+    if (actionCount === 1) {
+      console.log('  [login] Selecting the only available account switcher row');
+      await this.clickAccountSwitcherAction(actions.first());
+      return;
+    }
+
+    const switcherHtml = await this.page.content();
+    const label = this.failureLabel('account-switcher-no-target');
+    writeCanaryFailureSnapshot(switcherHtml, label);
+    await stopAndSaveTrace(this.context, label);
+    throw new Error(
+      `[canary] Account activation failed: could not find an account switcher row for ` +
+        `"${username}" (candidates: ${candidates.join(', ')}). HTML + Playwright trace saved under canary/.`,
+    );
+  }
+
+  private async findAccountSwitcherAction(candidatePattern: RegExp): Promise<Locator | null> {
+    const link = this.page
+      .locator('a[href*="/login/account_switch"]')
+      .filter({ hasText: candidatePattern })
+      .first();
+    if (await link.isVisible().catch(() => false)) return link;
+
+    const formButton = this.page
+      .locator('form[action*="/login/account_switch"]')
+      .filter({ hasText: candidatePattern })
+      .locator('button, input[type="submit"]')
+      .first();
+    if (await formButton.isVisible().catch(() => false)) return formButton;
+
+    return null;
+  }
+
+  private async clickAccountSwitcherAction(action: Locator): Promise<void> {
     const responsePromise = this.page.waitForResponse(
       (response) => response.url().includes('/login/account_switch') && response.status() < 400,
       { timeout: 15_000 },
     ).catch((error: unknown) => error);
 
-    const switchResponse = await this.page.goto(switchUrl, GOTO_OPTS);
-    const switchResponseSeen = await responsePromise;
-    if (switchResponseSeen instanceof Error) {
-      const status = switchResponse?.status() ?? 'unknown';
-      console.warn(`  [login] Account-switch response wait did not observe <400 status (goto status: ${status})`);
+    await action.click();
+    const switchResponse = await responsePromise;
+    if (switchResponse instanceof Error) {
+      console.warn(`  [login] Account-switch click did not observe a <400 response: ${switchResponse}`);
     }
-
-    await this.page.goto(`${GITHUB_BASE_URL}/pulls`, GOTO_OPTS);
-    await this.page.waitForLoadState('load', { timeout: 25_000 });
-    const probeFinalUrl = this.page.url();
-    const probeTitle = await this.page.title();
-    const probeHtml = await this.page.content();
-    const probeShell = this.classifyPullsShell(probeHtml, probeTitle, probeFinalUrl);
-
-    if (probeShell !== 'ok') {
-      const label = this.failureLabel('account-activation-failed');
-      writeCanaryFailureSnapshot(probeHtml, label);
-      await stopAndSaveTrace(this.context, label);
-      const shellDescription = probeShell === 'page-not-found' ? '404' : probeShell;
-      throw new Error(
-        `[canary] Account activation failed: /pulls still ${shellDescription} after ` +
-          `/login/account_switch?login=${username}. Bot may not be in this session's account list, ` +
-          `or GitHub changed activation semantics.`,
-      );
-    }
-
-    console.log(`  ✓ [login] Account routing active for @${username} (/pulls probe ok)`);
+    await this.page.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => undefined);
   }
 
   // ── Private: device verification ─────────────────────────────────────
