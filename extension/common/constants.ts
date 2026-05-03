@@ -89,6 +89,9 @@ export const REMOTE_PATTERNS_URL =
 export const REMOTE_PATTERNS_STAGING_URL =
   'https://raw.githubusercontent.com/dragosdev-code/pr-live-config/staging/patterns.json';
 export const PATTERN_REFRESH_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// WHY [supply-chain]: Remote regex config is data, not code, but a compromised
+// config host must not be able to make the service worker allocate unbounded JSON.
+export const REMOTE_PATTERNS_MAX_BYTES = 1 * 1024 * 1024; // 1 MiB
 
 // Route hint — remembers whether /pulls/search or /pulls last succeeded so
 // steady-state polling makes one request per list instead of probing both.

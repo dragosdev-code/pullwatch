@@ -11,6 +11,7 @@ import {
   REMOTE_PATTERNS_URL,
   PATTERN_REFRESH_TTL_MS,
   REMOTE_FETCH_TIMEOUT_MS,
+  REMOTE_PATTERNS_MAX_BYTES,
 } from '@common/constants';
 import {
   validateRemoteConfig,
@@ -18,6 +19,8 @@ import {
   type StoredPatternData,
 } from '@common/pattern-registry-schema';
 import { chromeExtensionService } from '@common/chrome-extension-service';
+
+type RemoteConfigReadResult<T> = { success: true; data: T } | { success: false };
 
 function getExtensionVersion(): string {
   try {
@@ -123,7 +126,9 @@ export class PatternRegistryService implements IPatternRegistryService {
         return;
       }
 
-      const raw: unknown = await response.json();
+      const rawResult = await this.readRemoteConfigJson(response);
+      if (!rawResult.success) return;
+      const raw = rawResult.data;
 
       const validated = validateRemoteConfig(raw);
       if (!validated.success) {
@@ -172,6 +177,66 @@ export class PatternRegistryService implements IPatternRegistryService {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────
+
+  private async readRemoteConfigJson(response: Response): Promise<RemoteConfigReadResult<unknown>> {
+    const contentLength = response.headers.get('Content-Length');
+    if (contentLength) {
+      const declaredBytes = Number(contentLength);
+      if (Number.isFinite(declaredBytes) && declaredBytes > REMOTE_PATTERNS_MAX_BYTES) {
+        this.debugService.warn(
+          `[PatternRegistry] Remote config rejected: payload declares ${declaredBytes} bytes, above ${REMOTE_PATTERNS_MAX_BYTES} byte limit`
+        );
+        return { success: false };
+      }
+    }
+
+    const textResult = await this.readRemoteConfigText(response);
+    if (!textResult.success) return textResult;
+
+    return { success: true, data: JSON.parse(textResult.data) };
+  }
+
+  private async readRemoteConfigText(response: Response): Promise<RemoteConfigReadResult<string>> {
+    if (!response.body) {
+      const data = await response.text();
+      const byteLength = new TextEncoder().encode(data).byteLength;
+      if (byteLength > REMOTE_PATTERNS_MAX_BYTES) {
+        this.debugService.warn(
+          `[PatternRegistry] Remote config rejected: payload read ${byteLength} bytes, above ${REMOTE_PATTERNS_MAX_BYTES} byte limit`
+        );
+        return { success: false };
+      }
+      return { success: true, data };
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let receivedBytes = 0;
+    let data = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        receivedBytes += value.byteLength;
+        if (receivedBytes > REMOTE_PATTERNS_MAX_BYTES) {
+          await reader.cancel();
+          this.debugService.warn(
+            `[PatternRegistry] Remote config rejected: payload exceeded ${REMOTE_PATTERNS_MAX_BYTES} byte limit while streaming`
+          );
+          return { success: false };
+        }
+
+        data += decoder.decode(value, { stream: true });
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    data += decoder.decode();
+    return { success: true, data };
+  }
 
   private safeCompile(registry: PatternRegistry): CompiledPatterns | null {
     try {

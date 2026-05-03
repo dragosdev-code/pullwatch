@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { waitFor } from '@testing-library/react';
 import { PatternRegistryService } from '../PatternRegistryService';
-import { STORAGE_KEY_PATTERN_REGISTRY } from '@common/constants';
+import { REMOTE_PATTERNS_MAX_BYTES, STORAGE_KEY_PATTERN_REGISTRY } from '@common/constants';
 import { DEFAULT_COMPILED_PATTERNS, DEFAULT_PATTERNS } from '@common/default-patterns';
 import { clone, makeValidRemoteConfig } from '@common/__tests__/schema-test-helpers';
 import type { IDebugService } from '../../interfaces/IDebugService';
@@ -34,11 +34,14 @@ function createDebugService(): IDebugService {
 }
 
 function okJsonResponse(body: unknown): Response {
+  const text = JSON.stringify(body);
   return {
     ok: true,
     status: 200,
     statusText: 'OK',
-    json: async () => body,
+    headers: new Headers(),
+    body: null,
+    text: async () => text,
   } as Response;
 }
 
@@ -82,9 +85,9 @@ describe('Remote pattern delivery', () => {
       expect(wroteRemote).toBe(true);
     });
 
-    expect(
-      service.getPatterns().pageRecognition.hasPRContent.compiled.source,
-    ).toBe('REMOTE_REGISTRY_UNIQUE');
+    expect(service.getPatterns().pageRecognition.hasPRContent.compiled.source).toBe(
+      'REMOTE_REGISTRY_UNIQUE'
+    );
   });
 
   it('falls back to bundled patterns when the registry fetch fails or returns an invalid schema', async () => {
@@ -103,10 +106,7 @@ describe('Remote pattern delivery', () => {
 
     expect(serviceA.getPatterns()).toBe(DEFAULT_COMPILED_PATTERNS);
     expect(storageSet).toHaveBeenCalledTimes(1);
-    const firstPayload = storageSet.mock.calls[0][0] as Record<
-      string,
-      { version: number }
-    >;
+    const firstPayload = storageSet.mock.calls[0][0] as Record<string, { version: number }>;
     expect(firstPayload[STORAGE_KEY_PATTERN_REGISTRY].version).toBe(0);
     expect(debugA.warn).toHaveBeenCalled();
 
@@ -119,7 +119,7 @@ describe('Remote pattern delivery', () => {
         version: 1,
         minExtensionVersion: '1.0.0',
         patterns: { not: 'a full registry' },
-      }),
+      })
     );
 
     const debugB = createDebugService();
@@ -138,8 +138,47 @@ describe('Remote pattern delivery', () => {
     expect(
       warnB.mock.calls.some(
         (args: unknown[]) =>
-          typeof args[0] === 'string' && args[0].includes('Remote config rejected'),
-      ),
+          typeof args[0] === 'string' && args[0].includes('Remote config rejected')
+      )
     ).toBe(true);
+  });
+
+  it('rejects remote patterns whose declared payload size exceeds the cap', async () => {
+    storageGet.mockResolvedValue({});
+
+    const text = vi.fn().mockResolvedValue(
+      JSON.stringify(
+        makeValidRemoteConfig({
+          version: 42,
+          minExtensionVersion: '0.0.0',
+          patterns: DEFAULT_PATTERNS,
+        })
+      )
+    );
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers({
+        'Content-Length': String(REMOTE_PATTERNS_MAX_BYTES + 1),
+      }),
+      body: null,
+      text,
+    } as unknown as Response);
+
+    const debug = createDebugService();
+    const service = new PatternRegistryService(debug);
+
+    await expect(service.initialize()).resolves.toBeUndefined();
+
+    await waitFor(() => {
+      expect(debug.warn).toHaveBeenCalledWith(expect.stringContaining('above 1048576 byte limit'));
+    });
+
+    expect(text).not.toHaveBeenCalled();
+    expect(service.getPatterns()).toBe(DEFAULT_COMPILED_PATTERNS);
+    expect(storageSet).toHaveBeenCalledTimes(1);
+    const payload = storageSet.mock.calls[0][0] as Record<string, { version: number }>;
+    expect(payload[STORAGE_KEY_PATTERN_REGISTRY].version).toBe(0);
   });
 });
