@@ -34,6 +34,7 @@ import { GitHubOutageBanner } from '../github-outage-banner';
 const transportPayload: GitHubOutagePayload = {
   detected: true,
   timestamp: 1_700_000_000_000,
+  lastSeenAt: 1_700_000_000_000,
   context: 'transport boom',
   reason: 'transport',
 };
@@ -41,6 +42,7 @@ const transportPayload: GitHubOutagePayload = {
 const componentDegradedPayload: GitHubOutagePayload = {
   detected: true,
   timestamp: 1_700_000_001_000,
+  lastSeenAt: 1_700_000_001_000,
   context: 'PR component degraded',
   reason: 'pr_component_degraded',
 };
@@ -48,6 +50,7 @@ const componentDegradedPayload: GitHubOutagePayload = {
 const listChurnPayload: GitHubOutagePayload = {
   detected: true,
   timestamp: 1_700_000_002_000,
+  lastSeenAt: 1_700_000_002_000,
   context: 'tombstone resurrection',
   reason: 'pr_list_churn',
 };

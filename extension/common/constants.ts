@@ -12,6 +12,10 @@ export const STORAGE_KEY_USER_DATA = 'user_data'; // Example, can be expanded
 export const STORAGE_KEY_PATTERN_REGISTRY = 'parser_pattern_registry';
 export const STORAGE_KEY_PARSER_BREAKAGE = 'parser_breakage';
 export const STORAGE_KEY_GITHUB_OUTAGE = 'github_outage';
+// WHY [stale banner]: A popup may open long after a missed recovery broadcast.
+// Repeated outage signals refresh `lastSeenAt`, so real ongoing outages stay visible
+// while abandoned storage flags age out.
+export const GITHUB_OUTAGE_STALE_AFTER_MS = 2 * 60 * 60 * 1000; // 2 hours
 /**
  * Last uncaught render error captured by the popup ErrorBoundary. Written by the boundary on
  * componentDidCatch (truncated stack), read by support/diagnostics. Single-row replace each

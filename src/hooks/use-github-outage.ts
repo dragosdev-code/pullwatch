@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { BROADCAST_ACTION } from '@common/runtime-actions';
-import { STORAGE_KEY_GITHUB_OUTAGE, STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT } from '@common/constants';
+import {
+  GITHUB_OUTAGE_STALE_AFTER_MS,
+  STORAGE_KEY_GITHUB_OUTAGE,
+  STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT,
+} from '@common/constants';
 import { chromeExtensionService, type StorageChange } from '@common/chrome-extension-service';
 import type { GitHubOutagePayload, GitHubOutageReason } from '@common/types';
 
@@ -39,6 +43,10 @@ function readUntrustedMs(result: Record<string, unknown>): number | null {
  * would otherwise be rejected and the banner would stay hidden while the flag is still active.
  * Default to `'transport'` so the banner shows the most generic, never-over-promising copy and the
  * link stays gated by `hasCorroboratingStatusCache`.
+ *
+ * WHY [stale flag expiry]: Broadcasts are best-effort and a popup can mount hours after recovery.
+ * `lastSeenAt` is refreshed by repeated background outage signals; if it is too old, storage is no
+ * longer a reliable statement about GitHub's current state.
  */
 function parsePayload(value: unknown): GitHubOutagePayload | null {
   if (!value || typeof value !== 'object') return null;
@@ -46,6 +54,11 @@ function parsePayload(value: unknown): GitHubOutagePayload | null {
   if (candidate.detected !== true) return null;
   if (typeof candidate.timestamp !== 'number' || !Number.isFinite(candidate.timestamp)) return null;
   if (typeof candidate.context !== 'string') return null;
+  const lastSeenAt =
+    typeof candidate.lastSeenAt === 'number' && Number.isFinite(candidate.lastSeenAt)
+      ? candidate.lastSeenAt
+      : candidate.timestamp;
+  if (Date.now() - lastSeenAt > GITHUB_OUTAGE_STALE_AFTER_MS) return null;
   const reason: GitHubOutageReason =
     typeof candidate.reason === 'string' &&
     KNOWN_REASONS.has(candidate.reason as GitHubOutageReason)
@@ -54,6 +67,7 @@ function parsePayload(value: unknown): GitHubOutagePayload | null {
   return {
     detected: true,
     timestamp: candidate.timestamp,
+    lastSeenAt,
     context: candidate.context,
     reason,
   };
@@ -80,8 +94,9 @@ export function useGitHubOutage(): GitHubOutageUiState {
         .get([STORAGE_KEY_GITHUB_OUTAGE, STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT])
         .then((result) => {
           if (cancelled) return;
-          setPayload(parsePayload(result[STORAGE_KEY_GITHUB_OUTAGE]));
-          setLastUntrustedAttemptAt(readUntrustedMs(result));
+          const nextPayload = parsePayload(result[STORAGE_KEY_GITHUB_OUTAGE]);
+          setPayload(nextPayload);
+          setLastUntrustedAttemptAt(nextPayload ? readUntrustedMs(result) : null);
         })
         .catch(() => {
           // Transient storage error: keep prior UI state rather than flipping the banner off.
@@ -117,7 +132,9 @@ export function useGitHubOutage(): GitHubOutageUiState {
         const nv = changes[STORAGE_KEY_GITHUB_OUTAGE].newValue;
         // WHY [undefined → cleared]: chrome.storage.local.remove emits `newValue: undefined`. Treat
         // as a clear so a key removal flips the banner off without waiting for the broadcast.
-        setPayload(nv === undefined ? null : parsePayload(nv));
+        const nextPayload = nv === undefined ? null : parsePayload(nv);
+        setPayload(nextPayload);
+        if (!nextPayload) setLastUntrustedAttemptAt(null);
       }
       if (STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT in changes) {
         const nv = changes[STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT].newValue;

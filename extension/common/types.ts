@@ -250,7 +250,10 @@ export type GitHubOutageReason = 'transport' | 'pr_component_degraded' | 'pr_lis
 /** Persisted payload shape under `STORAGE_KEY_GITHUB_OUTAGE`; also the broadcast `data` for `githubOutageDetected`. */
 export interface GitHubOutagePayload {
   detected: true;
+  /** First detection time for the active outage window; kept stable so context/reason copy is consistent. */
   timestamp: number;
+  /** Last time the background still observed the outage; popup uses this to age out stale stored flags. */
+  lastSeenAt: number;
   context: string;
   reason: GitHubOutageReason;
 }

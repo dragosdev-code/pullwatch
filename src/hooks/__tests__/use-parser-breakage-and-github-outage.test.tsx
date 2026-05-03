@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor, cleanup } from '@testing-library/react';
 import { BROADCAST_ACTION } from '@common/runtime-actions';
 import {
+  GITHUB_OUTAGE_STALE_AFTER_MS,
   STORAGE_KEY_PARSER_BREAKAGE,
   STORAGE_KEY_GITHUB_OUTAGE,
   STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT,
@@ -72,18 +73,21 @@ vi.mock('@common/chrome-extension-service', () => ({
 const transportPayload: GitHubOutagePayload = {
   detected: true,
   timestamp: 1_700_000_000_000,
+  lastSeenAt: Date.now(),
   context: 'transport boom',
   reason: 'transport',
 };
 const componentDegradedPayload: GitHubOutagePayload = {
   detected: true,
   timestamp: 1_700_000_001_000,
+  lastSeenAt: Date.now(),
   context: 'PR component down',
   reason: 'pr_component_degraded',
 };
 const listChurnPayload: GitHubOutagePayload = {
   detected: true,
   timestamp: 1_700_000_002_000,
+  lastSeenAt: Date.now(),
   context: 'tombstone resurrection',
   reason: 'pr_list_churn',
 };
@@ -254,7 +258,7 @@ describe('Status banners after a bad sync', () => {
   it('falls back to reason="transport" for legacy payloads missing the discriminator', async () => {
     const legacyPayload = {
       detected: true,
-      timestamp: 1_700_000_000_000,
+      timestamp: Date.now(),
       context: 'pre-reason build',
     };
     chromeMocks.storageGet.mockResolvedValue({
@@ -267,6 +271,24 @@ describe('Status banners after a bad sync', () => {
       expect(result.current.isActive).toBe(true);
       expect(result.current.payload?.reason).toBe('transport');
       expect(result.current.payload?.context).toBe('pre-reason build');
+    });
+  });
+
+  it('ignores a stale stored outage and drops stale untrusted metadata', async () => {
+    chromeMocks.storageGet.mockResolvedValue({
+      [STORAGE_KEY_GITHUB_OUTAGE]: {
+        ...componentDegradedPayload,
+        lastSeenAt: Date.now() - GITHUB_OUTAGE_STALE_AFTER_MS - 1,
+      },
+      [STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT]: 12_000,
+    });
+
+    const { result } = renderHook(() => useGitHubOutage());
+
+    await waitFor(() => {
+      expect(result.current.isActive).toBe(false);
+      expect(result.current.payload).toBe(null);
+      expect(result.current.lastUntrustedAttemptAt).toBe(null);
     });
   });
 
