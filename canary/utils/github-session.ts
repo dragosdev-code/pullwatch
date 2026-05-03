@@ -21,11 +21,15 @@ import {
   isGitHubPageNotFoundDocument,
   isGitHubPageNotFoundTitle,
 } from './github-page-signals';
+import { stopAndSaveTrace, writeCanaryFailureSnapshot } from './failure-snapshot';
 import { getGitHubVerificationCode } from './gmail-fetcher';
 import { HAS_GMAIL_SECRETS, REALISTIC_UA } from './config';
 
 /** Shared `page.goto` options for GitHub navigations (fast first paint, bounded timeout). */
 const GOTO_OPTS = { waitUntil: 'domcontentloaded' as const, timeout: 30_000 };
+const RECOVERY_BACKOFF_MS = [2_000, 5_000] as const;
+
+type PullsShell = 'ok' | 'page-not-found' | 'logged-out';
 
 export interface GitHubSessionOptions {
   username: string;
@@ -93,6 +97,8 @@ export class GitHubSession {
     console.log(`  [pw] Creating browser context (storageState: ${hasCachedState ? 'CACHED' : 'NONE'})...`);
     this.context = await this.browser.newContext(contextOptions);
     console.log('  [pw] Browser context created');
+    await this.context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+    console.log('  [trace] Playwright tracing started');
 
     this.page = await this.context.newPage();
     console.log('  [pw] New page opened');
@@ -105,24 +111,28 @@ export class GitHubSession {
   }
 
   /**
-   * Navigates to a URL, waits for document load and (on the new `/pulls/search`
-   * dashboard) for list markers to attach, then returns the full page HTML.
+   * Navigates to a pulls URL, classifies GitHub error shells before parser work,
+   * and returns the authenticated page HTML.
    */
   async getPageHTML(url: string): Promise<string> {
     const html = await this.loadPullsPageWithRecovery(url);
     return html;
   }
 
-  /**
-   * After `goto(..., domcontentloaded)`, wait for the `load` event, then — only for
-   * the React search dashboard — for `results-count` or a row link so empty and
-   * non-empty lists both resolve without a fixed sleep (Playwright-recommended
-   * condition waits). Legacy `/pulls?q=` and repo `/pulls` tabs rely on `load` only.
-   */
-  private async settleAfterPullsNavigation(requestedUrl: string): Promise<void> {
-    await this.page.waitForLoadState('load', { timeout: 25_000 });
-    if (!requestedUrl.includes('/pulls/search')) return;
+  private classifyPullsShell(html: string, title: string, finalUrl: string): PullsShell {
+    if (isGitHubPageNotFoundDocument(html) || isGitHubPageNotFoundTitle(title)) {
+      return 'page-not-found';
+    }
+    if (isGitHubLoggedOutHtmlShell(html, finalUrl)) return 'logged-out';
+    return 'ok';
+  }
 
+  /**
+   * Waits for the React search dashboard only after the HTML shell is known-good.
+   * That keeps 404/login shells classified from captured HTML instead of timing
+   * out on selectors that can never exist there.
+   */
+  private async settleSearchSurface(): Promise<void> {
     // Non-empty `/pulls/search` can render both `results-count` and row title links.
     // `locator.or()` matches *all* union members, so waitFor hits strict-mode (2+ nodes).
     // Comma CSS + `.first()` waits until either signal exists while resolving to one element.
@@ -133,61 +143,96 @@ export class GitHubSession {
   }
 
   /**
-   * `goto` + {@link settleAfterPullsNavigation}, then snapshot URL/title/HTML.
+   * `goto`, capture URL/title/HTML, classify the shell, then settle the search UI
+   * only for an authenticated `/pulls/search` document.
    */
   private async navigateToUrlAndCapture(requestedUrl: string): Promise<{
     html: string;
     title: string;
     finalUrl: string;
+    shell: PullsShell;
   }> {
     await this.page.goto(requestedUrl, GOTO_OPTS);
-    console.log('  [navigate] Waiting for load / pulls surface readiness...');
-    await this.settleAfterPullsNavigation(requestedUrl);
+    console.log('  [navigate] Waiting for document load...');
+    await this.page.waitForLoadState('load', { timeout: 25_000 });
     const finalUrl = this.page.url();
     const title = await this.page.title();
     const html = await this.page.content();
-    return { html, title, finalUrl };
+    const shell = this.classifyPullsShell(html, title, finalUrl);
+    console.log(`  [navigate] Shell classification: ${shell}`);
+
+    if (shell === 'ok' && requestedUrl.includes('/pulls/search')) {
+      console.log('  [navigate] Waiting for search surface readiness...');
+      try {
+        await this.settleSearchSurface();
+      } catch (error) {
+        const label = this.failureLabelForUrl(requestedUrl, 'ok-search-surface-unreachable');
+        writeCanaryFailureSnapshot(html, label);
+        await stopAndSaveTrace(this.context, label);
+        console.error(
+          '  [navigate] Search shell classified ok, but expected search surface selectors did not attach. ' +
+            'HTML + Playwright trace saved under canary/.',
+        );
+        throw error;
+      }
+    }
+
+    return { html, title, finalUrl, shell };
   }
 
   /**
-   * Loads `url`, with one automatic recovery if global `/pulls` returns GitHub’s
-   * “Page not found” shell (stale `storageState`, incomplete account switcher, etc.).
-   * Re-establishes context via profile → retry; persists cookies when recovery fixes it.
+   * Loads `url`, with bounded in-session recovery if global `/pulls` returns
+   * GitHub’s “Page not found” shell. Vitest owns whole-test retries; this only
+   * handles the known active-account cookie flake without re-login pressure.
    */
   private async loadPullsPageWithRecovery(url: string): Promise<string> {
     console.log(`  [navigate] Going to ${url} ...`);
-    let { html, title: pageTitle, finalUrl: pageUrl } = await this.navigateToUrlAndCapture(url);
+    let { html, title: pageTitle, finalUrl: pageUrl, shell } =
+      await this.navigateToUrlAndCapture(url);
+    let recoveredSession = false;
+    let recoveryAttempts = 0;
 
     console.log(`  [navigate] Landed on: ${pageUrl}`);
     console.log(`  [navigate] Page title: "${pageTitle}"`);
     console.log(`  [html] Captured page HTML: ${html.length} bytes`);
 
-    const isPullsRoute = url.includes('/pulls');
-    const looks404 =
-      isPullsRoute &&
-      (isGitHubPageNotFoundDocument(html) || isGitHubPageNotFoundTitle(pageTitle));
+    for (let attempt = 0; attempt < RECOVERY_BACKOFF_MS.length; attempt++) {
+      if (shell !== 'page-not-found' || !this._isLoggedIn) break;
 
-    if (looks404 && this._isLoggedIn) {
-      console.warn(
-        '  [navigate] Global pulls URL returned GitHub’s Page-not-found shell — recovering session (profile/home + single retry)...'
-      );
+      console.warn(`  [navigate] 404 shell on ${url} — recovery attempt ${attempt + 1}`);
       await this.refreshActiveUserContextForStaleSession();
+      await new Promise((resolve) => setTimeout(resolve, RECOVERY_BACKOFF_MS[attempt]));
       console.log(`  [navigate] Retrying: ${url}`);
-      ({ html, title: pageTitle, finalUrl: pageUrl } = await this.navigateToUrlAndCapture(url));
+      ({ html, title: pageTitle, finalUrl: pageUrl, shell } =
+        await this.navigateToUrlAndCapture(url));
+      recoveredSession = true;
+      recoveryAttempts = attempt + 1;
       console.log(`  [navigate] After recovery — landed on: ${pageUrl}`);
       console.log(`  [navigate] After recovery — page title: "${pageTitle}"`);
       console.log(`  [html] Captured page HTML after recovery: ${html.length} bytes`);
+    }
 
-      const still404 =
-        isGitHubPageNotFoundDocument(html) || isGitHubPageNotFoundTitle(pageTitle);
-      if (still404) {
-        throw new Error(
-          `[canary] GitHub still returned "Page not found" for global pulls after session recovery. ` +
-            `Delete ${this.options.stateFile} locally, or in CI run the workflow with "force fresh login". ` +
-            `This is a browser/session issue, not a parser regression.`
-        );
-      }
+    if (shell === 'page-not-found') {
+      const label = this.failureLabelForUrl(url, 'page-not-found-after-recovery');
+      writeCanaryFailureSnapshot(html, label);
+      await stopAndSaveTrace(this.context, label);
+      throw new Error(
+        `[canary] /pulls returns "Page not found" after ${recoveryAttempts} recovery attempts ` +
+          `(multi-account active-cookie likely missing). HTML + Playwright trace saved under canary/.`,
+      );
+    }
 
+    if (shell === 'logged-out') {
+      const label = this.failureLabelForUrl(url, 'logged-out');
+      writeCanaryFailureSnapshot(html, label);
+      await stopAndSaveTrace(this.context, label);
+      throw new Error(
+        `[canary] ${url} returned a logged-out GitHub shell while Tier 2 believed it was authenticated. ` +
+          `HTML + Playwright trace saved under canary/.`,
+      );
+    }
+
+    if (recoveredSession) {
       try {
         await this.context.storageState({ path: this.options.stateFile });
         console.log(`  [state] Updated ${this.options.stateFile} after pulls 404 recovery (fixes next run’s cache)`);
@@ -200,26 +245,26 @@ export class GitHubSession {
   }
 
   /**
-   * Opens the bot profile (or github.com) so an active user context exists before `/pulls`.
-   * Same idea as {@link resolveAccountSwitcherIfPresent} but for cached sessions that 404 on pulls.
+   * 404 on `/pulls` means the active-account cookie was lost or never set.
+   * Only GitHub's account-switch endpoint re-mints that server-side routing cookie.
    */
   private async refreshActiveUserContextForStaleSession(): Promise<void> {
-    const username = this.options.username;
-    const profileUrl = `${GITHUB_BASE_URL}/${encodeURIComponent(username)}`;
-    try {
-      await this.page.goto(profileUrl, GOTO_OPTS);
-      const title = await this.page.title();
-      if (!isGitHubPageNotFoundTitle(title)) {
-        console.log(`  [navigate] Recovery: opened ${profileUrl}`);
-        return;
-      }
-      console.warn(`  [navigate] Recovery: profile URL still Page not found — trying ${GITHUB_BASE_URL}`);
-    } catch (err) {
-      console.warn(`  [navigate] Recovery: profile navigation failed: ${err}`);
-    }
+    await this.activateAccountForRouting(this.options.username);
+  }
 
-    await this.page.goto(GITHUB_BASE_URL, GOTO_OPTS);
-    console.log(`  [navigate] Recovery: opened ${GITHUB_BASE_URL}`);
+  private failureLabel(reason: string): string {
+    return `${reason}-${this.accountLabel()}`;
+  }
+
+  private failureLabelForUrl(url: string, reason: string): string {
+    const chapter = url.includes('/pulls/search') ? 'chapter2' : 'chapter1';
+    return `${chapter}-${reason}-${this.accountLabel()}`;
+  }
+
+  private accountLabel(): string {
+    return this.options.usernameEnvHint
+      .replace(/^GH_CANARY_USERNAME_/, '')
+      .toLowerCase();
   }
 
   /**
@@ -228,6 +273,7 @@ export class GitHubSession {
   async close(): Promise<void> {
     const { usernameEnvHint } = this.options;
     console.log(`\n── Tier 2: afterAll — Closing Playwright (${usernameEnvHint}) ──`);
+    await stopAndSaveTrace(this.context, `${usernameEnvHint}-session-close`);
     await this.context?.close();
     console.log('  [pw] Browser context closed');
     if (this.ownsBrowser) {
@@ -341,7 +387,7 @@ export class GitHubSession {
       return;
     }
 
-    await this.resolveAccountSwitcherIfPresent(username);
+    await this.activateAccountForRouting(username);
 
     this._isLoggedIn = true;
     console.log(`  ✓ [login] Successfully logged in as @${username} (fresh login)`);
@@ -354,31 +400,45 @@ export class GitHubSession {
   }
 
   /**
-   * After password login GitHub may land on `/switch_account` ("Your accounts").
-   * Saving storage in that state leaves global `/pulls` as "Page not found" until
-   * an account is active. Opening the bot’s profile establishes the session.
+   * Multi-account routing invariant: global `/pulls` resolves via an active-account
+   * cookie set by `/login/account_switch`. Opening `/<username>` reads that profile
+   * but does not promote it for global surfaces like `/pulls` or `/notifications`.
    */
-  private async resolveAccountSwitcherIfPresent(username: string): Promise<void> {
-    if (!this.page.url().includes('switch_account')) return;
+  private async activateAccountForRouting(username: string): Promise<void> {
+    console.log(`  [login] Activating @${username} for global GitHub routing...`);
+    const switchUrl = `${GITHUB_BASE_URL}/login/account_switch?login=${encodeURIComponent(username)}`;
+    const responsePromise = this.page.waitForResponse(
+      (response) => response.url().includes('/login/account_switch') && response.status() < 400,
+      { timeout: 15_000 },
+    ).catch((error: unknown) => error);
 
-    console.log(
-      '  [login] Account switcher detected — activating session (required for global /pulls)...'
-    );
-    const profileUrl = `${GITHUB_BASE_URL}/${encodeURIComponent(username)}`;
-    try {
-      await this.page.goto(profileUrl, GOTO_OPTS);
-      const title = await this.page.title();
-      if (!/Page not found/i.test(title)) {
-        console.log(`  [login] Opened ${profileUrl} — session context established`);
-        return;
-      }
-      console.warn(`  [login] Profile URL returned Page not found — trying github.com home`);
-    } catch (err) {
-      console.warn(`  [login] Profile navigation failed: ${err}`);
+    const switchResponse = await this.page.goto(switchUrl, GOTO_OPTS);
+    const switchResponseSeen = await responsePromise;
+    if (switchResponseSeen instanceof Error) {
+      const status = switchResponse?.status() ?? 'unknown';
+      console.warn(`  [login] Account-switch response wait did not observe <400 status (goto status: ${status})`);
     }
 
-    await this.page.goto(GITHUB_BASE_URL, GOTO_OPTS);
-    console.log(`  [login] Opened ${GITHUB_BASE_URL} as fallback after account switcher`);
+    await this.page.goto(`${GITHUB_BASE_URL}/pulls`, GOTO_OPTS);
+    await this.page.waitForLoadState('load', { timeout: 25_000 });
+    const probeFinalUrl = this.page.url();
+    const probeTitle = await this.page.title();
+    const probeHtml = await this.page.content();
+    const probeShell = this.classifyPullsShell(probeHtml, probeTitle, probeFinalUrl);
+
+    if (probeShell !== 'ok') {
+      const label = this.failureLabel('account-activation-failed');
+      writeCanaryFailureSnapshot(probeHtml, label);
+      await stopAndSaveTrace(this.context, label);
+      const shellDescription = probeShell === 'page-not-found' ? '404' : probeShell;
+      throw new Error(
+        `[canary] Account activation failed: /pulls still ${shellDescription} after ` +
+          `/login/account_switch?login=${username}. Bot may not be in this session's account list, ` +
+          `or GitHub changed activation semantics.`,
+      );
+    }
+
+    console.log(`  ✓ [login] Account routing active for @${username} (/pulls probe ok)`);
   }
 
   // ── Private: device verification ─────────────────────────────────────

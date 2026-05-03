@@ -104,11 +104,11 @@ The classification happens **once** per run and produces a single Discord messag
 
 ---
 
-## HTML snapshots on failure
+## HTML snapshots and traces on failure
 
-When a parser throws, [canary/utils/failure-snapshot.ts](../canary/utils/failure-snapshot.ts) writes the fetched HTML to `canary/snapshots/`. The snapshot is gitignored, but CI uploads its log (with the first 5,000 characters of the offending HTML already inlined) as part of the Discord run URL.
+When a parser throws, [canary/utils/failure-snapshot.ts](../canary/utils/failure-snapshot.ts) writes HTML to `canary/snapshots/`. Tier 2 navigation or activation failures also write snapshots plus Playwright **trace** zips under `canary/traces/` (screenshots inside the trace). Failed workflow runs upload `canary/snapshots/`, `canary/traces/`, `canary.log`, and the `playwright-state-*.json` files as the `canary-failure-<run_id>` artifact for `npx playwright show-trace`. Paths are gitignored locally.
 
-Why dump HTML rather than parsed output? Because the whole point of the failure is that the parser could not produce parsed output. A maintainer triaging the alert needs to see what GitHub actually served, not what the parser guessed it might have been. Five thousand characters is enough to spot a renamed class, a missing `data-testid`, or a login wall that came back instead of the expected list.
+Why dump HTML rather than parsed output? Because the whole point of the failure is that the parser could not produce parsed output. A maintainer triaging the alert needs to see what GitHub actually served, not what the parser guessed it might have been. Full HTML snapshots and Playwright traces (timeline + screenshots) make renamed classes, missing `data-testid`s, login walls, and multi-account 404 shells obvious.
 
 ---
 
@@ -145,9 +145,9 @@ The classification step checks `githubstatus.com/api/v2/status.json` after any f
 
 GitHub sometimes demands an OTP code sent to the bot's email. The canary's Gmail integration uses OAuth (`GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`) to poll the inbox via [canary/utils/gmail-fetcher.ts](../canary/utils/gmail-fetcher.ts), extract the code, and submit it. If the verification flow itself changes (new markup, new field), the login step fails and the canary reports a login error rather than a DOM change; the runbook's "force fresh login" workflow dispatch checkbox is a useful reproduction aid.
 
-### A cached Playwright session still hits a logged out shell
+### A cached Playwright session hits "Page not found" on global `/pulls`
 
-[getPageHTML in canary/utils/github-session.ts](../canary/utils/github-session.ts) has a one shot auto recovery: if a cached session lands on GitHub's "Page not found" for the global pulls route, it routes through the profile, retries `/pulls`, and rewrites `storageState` with the fresh cookies. Only one retry, because a genuinely invalid session should surface as a login error, not loop forever.
+[getPageHTML in canary/utils/github-session.ts](../canary/utils/github-session.ts) is **self-healing** for the usual multi-account routing flake: it classifies the HTML shell, and if GitHub served a global-pulls 404 while the context is still logged in, it runs **`activateAccountForRouting`** (navigate to `/login/account_switch?login=<bot>`, probe `/pulls`) with short backoff, then **rewrites `storageState`** when recovery succeeds so the **next** CI run inherits good cookies—no manual deletion of `playwright-state-*.json` required for that case. Fresh logins already activate before the first save. Bounded attempts avoid spinning forever; a genuinely bad session surfaces as login or `Account activation failed` (see [DOM_CHANGE_RUNBOOK.md § 404 after fresh login](../canary/DOM_CHANGE_RUNBOOK.md#404-after-fresh-login-multi-account-routing)).
 
 ### The hosted `patterns.json` is unreachable during the fix
 

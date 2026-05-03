@@ -13,8 +13,40 @@ When the canary test fails because GitHub changed their DOM, follow this runbook
 | Targets, headers, env diagnostics | [`canary/utils/config.ts`](utils/config.ts) — `loadCanaryEnv()` / `canaryEnv` discriminated union, `GITHUB_BASE_URL`, shared [`extension/common/github-url-utils.ts`](../extension/common/github-url-utils.ts) (`toPullsSearchUrl`) |
 | Playwright login, session cache | [`canary/utils/github-session.ts`](utils/github-session.ts) |
 | Entry tests | [`canary/parser.canary.test.ts`](parser.canary.test.ts) |
-| Failure HTML snapshots (gitignored) | `canary/snapshots/` — written on parse throw from [`canary/utils/failure-snapshot.ts`](utils/failure-snapshot.ts) |
-| 404 vs empty list | [`canary/utils/github-page-signals.ts`](utils/github-page-signals.ts) — `isGitHubPageNotFoundDocument`; Playwright runs [`resolveAccountSwitcherIfPresent`](utils/github-session.ts) after password login, and **`getPageHTML`** auto-recovers once (profile → retry `/pulls`, then rewrites `storageState`) if cached session still hits GitHub’s “Page not found” on global pulls |
+| Failure HTML snapshots + traces (gitignored) | `canary/snapshots/`, `canary/traces/` — written from [`canary/utils/failure-snapshot.ts`](utils/failure-snapshot.ts); CI uploads them as `canary-failure-<run_id>` on failed canary runs |
+| 404 vs empty list | [`canary/utils/github-page-signals.ts`](utils/github-page-signals.ts) — `isGitHubPageNotFoundDocument`; Playwright runs [`activateAccountForRouting`](utils/github-session.ts) after password login, probes `/pulls` before saving `storageState`, and **`getPageHTML`** performs bounded active-account recovery if cached sessions still hit GitHub’s “Page not found” on global pulls |
+
+---
+
+## 404 after fresh login (multi-account routing)
+
+This is not a parser pattern failure when the log contains either:
+
+- `/pulls returns "Page not found" after N recovery attempts`
+- `Account activation failed`
+
+**Cause:** GitHub can keep several `user_session_*` cookies in a browser context. Global surfaces such as `/pulls`, `/pulls/search`, and `/notifications` route through an active-account cookie that GitHub sets server-side from `/login/account_switch?login=<username>`. Reading `/<username>` confirms the profile is visible, but it does not promote that account for global routing.
+
+**Self-heal (no manual cache clear for this flake):** Fresh logins always run `activateAccountForRouting` before persisting `storageState`. If a **cached** session still hits a global-pulls 404, `getPageHTML` runs bounded recovery: it calls `activateAccountForRouting` again and, when `/pulls` succeeds afterward, **rewrites the same `playwright-state-*.json`** so the **next hourly run** starts from repaired cookies. You do not need to delete session files or use `force_fresh_login` for a one-off routing miss unless you are debugging or activation keeps failing (`Account activation failed` with good secrets).
+
+**Operator steps:**
+
+1. Open the failed GitHub Actions run and download `canary-failure-<run_id>`.
+2. From the extracted artifact, run:
+
+```bash
+npx playwright show-trace traces/*.zip
+```
+
+3. In the trace, find `/login/account_switch?login=...` and check the response status plus `Set-Cookie`.
+4. If the request is 4xx, the bot username probably does not match an account in the stored session. Re-run the workflow with `force_fresh_login=true`; if it repeats, rotate credentials or check 2FA/account membership.
+5. If the request is 200 but no active-account cookie is set, GitHub changed activation semantics. Update `activateAccountForRouting` in [`canary/utils/github-session.ts`](utils/github-session.ts).
+
+**Classification glossary:**
+
+- `page-not-found` means multi-account routing failed or the account cannot open that global surface.
+- `logged-out` means cookies expired mid-run or GitHub served a login shell despite cached auth.
+- DOM drift means selectors are absent on an `ok` shell. For `/pulls/search`, inspect the saved HTML and trace; if the shell is `ok` but `data-testid="results-count"` / `data-testid="listitem-title-link"` never attach, handle it like a Tier 1 parser or GitHub DOM escalation.
 
 ---
 
@@ -63,10 +95,10 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 | `canary/utils/config.ts` | Targets (`PUBLIC_TARGETS`, `AUTH_TARGETS`, `AUTH_TARGETS_SEARCH`), `BROWSER_HEADERS`, `loadCanaryEnv()` / `canaryEnv`, `GITHUB_BASE_URL`, `toPullsSearchUrl` via extension common |
 | `canary/utils/text-normalization.ts` | `normalizePullUrl`, `normalizeTitleForCompare`, etc. — JSON vs HTML row alignment in Chapter 2 |
 | `canary/utils/github-status.ts` | `isGitHubDegraded` — outage vs DOM ambiguity in `parse-orchestrator` |
-| `canary/utils/failure-snapshot.ts` | Writes `canary/snapshots/*.html` when parsing throws |
+| `canary/utils/failure-snapshot.ts` | Writes `canary/snapshots/*.html` on parse throw; `canary/traces/*.zip` via `stopAndSaveTrace` on Tier 2 navigate/activation failures |
 | `canary/utils/gmail-fetcher.ts` | Gmail OTP polling for Playwright device verification |
-| `canary/utils/github-session.ts` | Playwright login, cached `storageState`, optional shared `Browser`; uses `extension/common/github-html-session.ts` for an extra logged-in signal on `/login` |
-| `.github/workflows/canary-parser-test.yml` | Hourly cron; secrets for legacy/new usernames + password + Gmail; `tee canary.log`; grep markers → CRITICAL JSON drift vs NOTICE HTML degraded Discord; failure alert with outage disambiguation |
+| `canary/utils/github-session.ts` | Playwright login, `activateAccountForRouting` (`/login/account_switch` + `/pulls` probe before `storageState` save), classify-before-settle navigation, tracing, bounded 404 recovery |
+| `.github/workflows/canary-parser-test.yml` | Hourly cron; secrets for legacy/new usernames + password + Gmail; `tee canary.log`; grep markers → CRITICAL JSON drift / activation / NOTICE HTML degraded Discord; `upload-artifact` on failure |
 
 ### Remote Config (`patterns.json`)
 
@@ -89,6 +121,7 @@ When you receive a Discord alert (or see a failing canary run):
 1. **Read the Discord message.**
    - **"GitHub Outage Detected (Not a DOM Change)"** — wait for GitHub to recover; no pattern work.
    - **"CRITICAL: Embedded JSON drift"** — the new-dashboard SSR JSON path failed (`CANARY_EMBEDDED_JSON_DRIFT`); fix `GitHubEmbeddedJsonPullHarvest` and/or login/session (not always a regex issue).
+   - **"CRITICAL: Bot session activation failed"** — inspect the `canary-failure-<run_id>` artifact and follow [404 after fresh login (multi-account routing)](#404-after-fresh-login-multi-account-routing).
    - **"NOTICE: New experience HTML fallback degraded"** — tests **passed** but the log contains `CANARY_NEW_HTML_FALLBACK_DEGRADED`: embedded JSON still works, but `NewExperienceGitHubHTMLParser` row count or alignment is wrong; update `patterns.newExperience` before GitHub drops JSON.
    - **"Possible GitHub DOM Change"** (generic failure) — proceed with pattern / parser diagnosis below.
 2. **Check manually**: <https://www.githubstatus.com>

@@ -12,6 +12,7 @@ dist
 
 # Canary failure dumps (local / CI artifact)
 canary/snapshots
+canary/traces
 dist-ssr
 *.local
 
