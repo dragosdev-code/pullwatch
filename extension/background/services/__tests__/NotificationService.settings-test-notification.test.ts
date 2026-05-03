@@ -217,6 +217,38 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     expect(notificationsClear).toHaveBeenCalledWith('pr-alert-batch|merged|123');
   });
 
+  it('opens https://github.com URL on pr-alert click', async () => {
+    const svc = makeService(settingsWithPreviewEnabled());
+
+    await svc.handleNotificationClick('pr-alert|assigned|https://github.com/o/r/pull/2');
+
+    expect(tabsCreate).toHaveBeenCalledWith({
+      url: 'https://github.com/o/r/pull/2',
+      active: true,
+    });
+    expect(notificationsClear).toHaveBeenCalledWith(
+      'pr-alert|assigned|https://github.com/o/r/pull/2'
+    );
+  });
+
+  it('rejects non-https-github schemes embedded in pr-alert id (defense-in-depth)', async () => {
+    const svc = makeService(settingsWithPreviewEnabled());
+
+    const malicious = 'pr-alert|assigned|data:text/html,evil';
+    await svc.handleNotificationClick(malicious);
+
+    expect(tabsCreate).not.toHaveBeenCalled();
+    expect(notificationsClear).toHaveBeenCalledWith(malicious);
+  });
+
+  it('rejects http://github.com (forces https) on pr-alert click', async () => {
+    const svc = makeService(settingsWithPreviewEnabled());
+
+    await svc.handleNotificationClick('pr-alert|assigned|http://github.com/o/r/pull/2');
+
+    expect(tabsCreate).not.toHaveBeenCalled();
+  });
+
   it('throws CHROME_DENIED and never calls create when getPermissionLevel returns denied', async () => {
     getPermissionLevel.mockResolvedValue('denied');
     const svc = makeService(settingsWithPreviewEnabled());

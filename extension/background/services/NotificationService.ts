@@ -413,6 +413,10 @@ export class NotificationService implements INotificationService {
     // preserved rather than truncated.
     const url = notificationId.substring(secondPipe + 1);
     if (!url) return null;
+    // WHY [scheme allowlist]: defense-in-depth. PR url originates from parser output against
+    // github.com HTML, but a parser regression or upstream poisoning could yield data:/file:/etc.
+    // tabs.create with such a URL would open it; restrict to https://github.com/ before navigation.
+    if (!url.startsWith('https://github.com/')) return null;
     return { category, url };
   }
 
