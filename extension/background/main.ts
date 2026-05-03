@@ -1,11 +1,9 @@
 import { BackgroundManager } from './services/BackgroundManager';
 import { ServiceContainer } from './core/ServiceContainer';
 import type { IEventService } from './interfaces/IEventService';
-import type { RuntimeMessage, MessageResponse } from '@common/types';
-import {
-  chromeExtensionService,
-  type MessageSender,
-} from '@common/chrome-extension-service';
+import type { MessageResponse } from '@common/types';
+import { isRuntimeMessage } from '@common/runtime-message-schema';
+import { chromeExtensionService, type MessageSender } from '@common/chrome-extension-service';
 
 /**
  * Main entry point for the background service worker.
@@ -120,11 +118,35 @@ chromeExtensionService.runtime.onMessage.addListener(
     sender: MessageSender,
     sendResponse: (response?: unknown) => void
   ): boolean => {
+    // WHY [sender id check]: chrome.runtime.onMessage also receives messages from other installed
+    // extensions when they sendMessage(targetId). Pullwatch's dispatch table has no externally-safe
+    // actions today, but a future refactor could land one silently. Reject anything not from this
+    // extension's own contexts (popup/offscreen/background) before touching the dispatch path.
+    const ownExtensionId = chromeExtensionService.runtime.getExtensionId();
+    if (sender.id !== ownExtensionId) {
+      console.warn(
+        `[Main] Ignored runtime message from foreign sender id: ${sender.id ?? '(none)'}`
+      );
+      return false;
+    }
+
+    // WHY [shape guard]: complements the sender-id check. A typed cast lets the EventService
+    // dispatch on `action` even when the payload structure was never what we expected — a
+    // malformed message from our own popup (e.g. mid-rollout, after a refactor) could otherwise
+    // drive a code path with a wrong-shape payload. Narrow the action to the canonical set and
+    // hand a properly typed message to the dispatcher.
+    if (!isRuntimeMessage(message)) {
+      console.warn('[Main] Ignored runtime message with invalid shape:', message);
+      sendResponse({ success: false, error: 'Invalid message shape' });
+      return false;
+    }
+    const validatedMessage = message;
+
     initPromise
       .then(() => {
         const eventService = getEventService();
         eventService.handleMessage(
-          message as RuntimeMessage,
+          validatedMessage,
           sender,
           sendResponse as (response: MessageResponse) => void
         );

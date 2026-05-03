@@ -12,6 +12,8 @@ export interface RuntimeAdapter {
   sendMessage<T = unknown>(message: unknown): Promise<T>;
   getManifest(): RuntimeManifest;
   getURL(path: string): string;
+  /** Current extension's runtime id; used to filter out cross-extension senders. */
+  getExtensionId(): string;
   getContexts(filter: ContextFilter): Promise<ExtensionContext[]>;
   hasGetContexts(): boolean;
   readonly onMessage: ListenerBinding<RuntimeMessageListener>;
@@ -27,6 +29,7 @@ export function makeRuntimeAdapter(): RuntimeAdapter {
       chrome.runtime.sendMessage(message) as Promise<T>,
     getManifest: () => chrome.runtime.getManifest(),
     getURL: (path) => chrome.runtime.getURL(path),
+    getExtensionId: () => chrome.runtime.id,
     getContexts: (filter) => chrome.runtime.getContexts(filter),
     hasGetContexts: () => typeof chrome.runtime?.getContexts === 'function',
     onMessage: makeListenerBinding<RuntimeMessageListener>(
