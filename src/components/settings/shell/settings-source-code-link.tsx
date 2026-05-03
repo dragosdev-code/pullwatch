@@ -24,7 +24,7 @@ export const SettingsSourceCodeLink = ({ linkBehavior }: SettingsSourceCodeLinkP
     <a
       href={EXTENSION_SOURCE_REPOSITORY_URL}
       target="_blank"
-      rel="noreferrer"
+      rel="noopener noreferrer"
       onClick={handleClick}
       className={clsx(
         'tooltip tooltip-left tooltip-neutral group shrink-0',
