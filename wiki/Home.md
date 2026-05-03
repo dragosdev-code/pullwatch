@@ -16,7 +16,7 @@ The wiki has three tiers. You are free to jump around, but the tiers are meant t
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
 | **Welcome**         | [Home](Home), [Getting Started](Getting-Started)                                                                                                                                                                                                                                                                                                                                                                                                         | Anyone, including curious users.       |
 | **The big picture** | [Architecture Overview](Architecture-Overview)                                                                                                                                                                                                                                                                                                                                                                                                           | Engineers starting the tour.           |
-| **Deep dives**      | [The Service Worker Lifecycle](The-Service-Worker-Lifecycle), [The Parser Waterfall](The-Parser-Waterfall), [Remote Configuration](Remote-Configuration), [Data Hydration and Storage](Data-Hydration-and-Storage), [Popup and Background Communication](Popup-and-Background-Communication), [Onboarding and Session Gates](Onboarding-and-Session-Gates), [Notifications and Sound](Notifications-and-Sound), [The Canary Monitor](The-Canary-Monitor) | Engineers going one concept at a time. |
+| **Deep dives**      | [The Service Worker Lifecycle](The-Service-Worker-Lifecycle), [The Parser Waterfall](The-Parser-Waterfall), [GitHub Health and Outages](GitHub-Health-and-Outages) (with [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists) and [Outage Banner and Statuspage](Outage-Banner-and-Statuspage)), [Remote Configuration](Remote-Configuration), [Data Hydration and Storage](Data-Hydration-and-Storage), [Popup and Background Communication](Popup-and-Background-Communication), [Onboarding and Session Gates](Onboarding-and-Session-Gates), [Notifications and Sound](Notifications-and-Sound), [The Canary Monitor](The-Canary-Monitor) | Engineers going one concept at a time. |
 
 ---
 
@@ -124,3 +124,13 @@ If something is off, please open an issue at [github.com/dragosdev-code/pullwatc
 - A screenshot if it is a UI issue, and a console log from the service worker if it is a background issue.
 
 Thanks for taking the time. It really does help.
+
+---
+
+## Recent wiki changes
+
+- New **GitHub Health and Outages** cluster: hub plus [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists) and [Outage Banner and Statuspage](Outage-Banner-and-Statuspage). Documents the `GitHubOutageReason` taxonomy, the `PrListTrustAssessor` decision tree, the empty-confirmation streak, the tombstone window, and the popup banner copy and link gating.
+- [Architecture Overview](Architecture-Overview) supporting cast rewritten: `HealthStatusService` no longer described as a generic "last fetch summary"; new rows for `GitHubStatusClient`, `AlarmSeqClock`, and the list-trust domain. Storage table extended with the new keys.
+- [Notifications and Sound](Notifications-and-Sound) now carries a "When notifications are suppressed" section covering the outage gate, tombstone resurrection, the merged freshness floor, `forceRefresh`, and draft filtering.
+- [Data Hydration and Storage](Data-Hydration-and-Storage) inventory extended with `github_status_cache`, `last_untrusted_fetch_at`, `pr_list_trust_state`, `pr_tombstones_v1`, and `alarm_seq`.
+- [README](https://github.com/dragosdev-code/pullwatch) updated with a one-sentence outage-banner pointer and a link to the new wiki cluster.

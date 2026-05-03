@@ -232,6 +232,34 @@ Once the user saves, the final base64 blob is persisted to `chrome.storage.local
 
 ---
 
+## When notifications are suppressed
+
+`NotificationService.show*` is the only path to a Chrome toast, and `PRService` is the only caller. Five guards sit between "the parser produced a fresh `PullRequest[]`" and "the user hears a sound", and each one exists to defend against a specific false-positive shape.
+
+### The trust gate
+
+[List Trust and Suspect Lists](List-Trust-and-Suspect-Lists) is the integrity layer that decides whether a fresh fetch is allowed to replace the stored baseline. When it returns `suspect_partial` or `suspect_empty_corroborated`, [PRService](../extension/background/services/PRService.ts) returns `oldPRs` to the caller without touching `notificationService.show*`. The popup keeps the cached list and the outage banner explains the gap; nothing alerts because nothing was persisted.
+
+The same applies to `suspect_empty_pending`. The empty-only path is a confirmation period, not a veto, and a one-tick flake should not produce a notification storm when the list returns. The pending branch is silent for the streak window.
+
+### Tombstone resurrection
+
+`PRService.applyTombstoneFilter` runs on every persist branch. If a fresh key matches a tombstone still inside the four-alarm window, the key is stripped out of `newPRs` and its `isNew` flag is cleared before the persist. A PR that briefly disappeared and came back is therefore not classified as new and never produces a "new PR" notification. The same observation also signals `pr_list_churn`, so the popup banner reflects the integrity event even when no toast fires.
+
+### The merged freshness floor
+
+[MergedNotificationEligibility.filterFreshCandidates](../extension/background/domain/pr-list-trust/MergedNotificationEligibility.ts) drops merged candidates whose event timestamp is older than `lastTrustedAt - FETCH_INTERVAL_MS`, and drops candidates with unparseable timestamps when Statuspage is problematic. The freshness gate runs **before** the tombstone filter, which keeps `pr_list_churn` reserved for genuine flapping rather than for stale rows the freshness window would have suppressed anyway.
+
+### `forceRefresh` on install, startup, and manual refresh
+
+`persistAndNotifyAssigned` and the equivalent merged path skip every "new PR" notification when `forceRefresh: true`. That flag is passed by `EventService.handleInstallation`, `handleStartup`, and the manual refresh coordinator. Without it, the install-time hydration would fire one toast per assigned and merged PR the user already had at install time, which would be the worst possible first impression.
+
+### Draft filtering and the invalid combo guardrail
+
+`assigned.notifyOnDrafts` defaults to `false`, so draft PRs do not produce assigned notifications unless the user opts in. There is one explicit guard against an inconsistent settings combo (`notifyOnDrafts: true` with `showDraftsInList: false`); when that combo appears, [effectiveAssignedNotifyOnDrafts](../extension/common/effective-assigned-draft-notify.ts) treats it as off, because notifying on a PR the user cannot see in the list would be a dead-end click.
+
+---
+
 ## Edge cases and gotchas
 
 ### The notification ID includes a pipe character in the URL
@@ -262,6 +290,7 @@ The STOP handler bumps `playRequestGeneration` and calls `interruptActivePlaybac
 
 ## See also
 
+- [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists): the integrity layer behind every suppression rule above. Decides what is `suspect_partial`, `suspect_empty_*`, or trusted; emits `pr_component_degraded` and `pr_list_churn` signals.
 - [The Service Worker Lifecycle](The-Service-Worker-Lifecycle): why the worker cannot play audio itself, and why the offscreen document has to outlive a message round trip.
 - [Popup and Background Communication](Popup-and-Background-Communication): the `EVENT_PLAY_SOUND` and `PREVIEW_SOUND_ACTION.*` messages the popup uses to drive sound previews from the settings panel.
 - [Data Hydration and Storage](Data-Hydration-and-Storage): where custom sound blobs and their metadata live in `chrome.storage.local`, and how settings in `chrome.storage.sync` name them.

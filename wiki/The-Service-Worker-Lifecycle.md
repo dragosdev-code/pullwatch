@@ -119,7 +119,7 @@ If you ever find yourself tempted to add "one small fetch" to init, this is the 
 
 ---
 
-## The three services shaped by the lifecycle
+## The services shaped by the lifecycle
 
 ### AlarmService: the heartbeat
 
@@ -170,6 +170,14 @@ this.persist();
 
 Two things to notice. The backoff is capped at 30 minutes, so a persistent throttle never turns into a one hour silence. And the state is persisted to `chrome.storage.local`: when the worker wakes on the next alarm, `initialize()` reads the stored state back into memory, and `shouldSkipFetch()` can honour an earlier 429 even though every in memory variable was thrown away in between.
 
+### HealthStatusService: in-memory mirror, persisted flags
+
+[HealthStatusService.ts](../extension/background/services/HealthStatusService.ts) holds the parser-breakage and GitHub-outage flags in memory (`parserBroken`, `githubOutage`) and uses them to dedupe repeated signals. Without rehydration on every wake, a real fault after a wake would skip the storage write because the mirror still said "already signalled". `initialize()` reads both flags back from `chrome.storage.local` so the dedupe contract holds across cold starts. The full flag lifecycle, including how `lastSeenAt` is refreshed on repeat hits and why `clearGitHubOutage` also drops `STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT`, lives on [GitHub Health and Outages](GitHub-Health-and-Outages).
+
+### AlarmSeqClock: alarm-anchored counter
+
+[AlarmSeqClock.ts](../extension/background/domain/pr-list-trust/AlarmSeqClock.ts) is a monotonic counter persisted under `STORAGE_KEY_ALARM_SEQ`, advanced exactly once per completed alarm wave by [EventService.handleAlarm](../extension/background/services/EventService.ts) (after every list has finished writing). Manual refreshes deliberately do not advance the clock, otherwise a user mashing the refresh button would expire `PrTombstoneStore` entries early and miss flapping that the four-alarm window was set up to catch. The counter is read by `applyTombstoneFilter` to decide what is "still inside the window" on the next wave; see [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists) for how the window math works in practice.
+
 ---
 
 ## Edge cases and gotchas
@@ -196,4 +204,5 @@ All the `chrome.*` listeners in `main.ts` are `async` and they `await` the event
 
 - [Architecture Overview](Architecture-Overview): where this page fits into the broader system.
 - [Popup and Background Communication](Popup-and-Background-Communication): how the popup talks to the worker, including why data flows through storage instead of message replies.
+- [GitHub Health and Outages](GitHub-Health-and-Outages): the hub for `HealthStatusService`'s flags and the integrity layer that anchors `AlarmSeqClock`.
 - [Data Hydration and Storage](Data-Hydration-and-Storage): what survives a wake, and how the popup reads it back in.

@@ -149,6 +149,10 @@ GitHub sometimes demands an OTP code sent to the bot's email. The canary's Gmail
 
 [getPageHTML in canary/utils/github-session.ts](../canary/utils/github-session.ts) is **self-healing** for the usual multi-account routing flake: it classifies the HTML shell, and if GitHub served a global-pulls 404 while the context is still logged in, it runs **`activateAccountForRouting`** (select the real `/switch_account` row, then probe `/pulls`) with short backoff, then **rewrites `storageState`** when recovery succeeds so the **next** CI run inherits good cookies—no manual deletion of `playwright-state-*.json` required for that case. Fresh logins already activate before the first save. Bounded attempts avoid spinning forever; a genuinely bad session surfaces as login or `Account activation failed` (see [DOM_CHANGE_RUNBOOK.md § 404 after fresh login](../canary/DOM_CHANGE_RUNBOOK.md#404-after-fresh-login-multi-account-routing)).
 
+### Same upstream, opposite default
+
+Both the canary and the extension consult `https://www.githubstatus.com/api/v2/`, but they fail in opposite directions. [canary/utils/github-status.ts](../canary/utils/github-status.ts) is a boolean `isGitHubDegraded()` that fails CLOSED to `false`, so a flaky status endpoint cannot mask a real DOM-change alert. The extension's [GitHubStatusClient](../extension/common/github-status-client.ts) returns a full snapshot and fails OPEN to `'unknown'`, so a flaky status endpoint cannot silently *suppress* legitimate notifications by masking a healthy PR fetch as degraded. Same upstream, opposite default for the opposite reason. The full popup-side contract is on [Outage Banner and Statuspage](Outage-Banner-and-Statuspage); the role of `summary.json` in the integrity layer is on [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists).
+
 ### The hosted `patterns.json` is unreachable during the fix
 
 The production smoke test (`test:remote-patterns`) would fail even though the local edit is correct; that is a GitHub Pages/raw availability issue, not a config issue. The canary is unaffected because it uses bundled `DEFAULT_COMPILED_PATTERNS`, not the remote file. Live users are also unaffected in the short term: their cached registry keeps working, and the next 6 hour refresh retries the fetch.
@@ -159,4 +163,5 @@ The production smoke test (`test:remote-patterns`) would fail even though the lo
 
 - [The Parser Waterfall](The-Parser-Waterfall): the production code the canary exercises end to end. Every canary assertion maps to a stage of the waterfall.
 - [Remote Configuration](Remote-Configuration): the delivery system the fix path flows through. A canary alert becomes a commit to `pr-live-config` and reaches users on the next 6 hour refresh.
+- [GitHub Health and Outages](GitHub-Health-and-Outages): the extension-side counterpart to the canary's status check, plus the full reason taxonomy that the popup banner branches on.
 - [DOM_CHANGE_RUNBOOK.md](../canary/DOM_CHANGE_RUNBOOK.md): the full runbook the on call reads when an alert fires; this wiki page is its narrative companion.

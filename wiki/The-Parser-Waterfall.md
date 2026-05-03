@@ -156,7 +156,11 @@ Stage 1 returns `null`, stage 2 returns `null`, stage 3 throws `ParserBreakageEr
 
 ### GitHub is down, not changed
 
-HTTP 5xx and Cloudflare edge codes (520 through 530) are classified as [GitHubOutageError](../extension/common/errors.ts), not `ParserBreakageError`. Outage errors skip the route fallback because the other URL would hit the same infrastructure problem, and they intentionally preserve the cached PR lists in the popup with an "outage" banner instead of the misleading "parser broken" banner. Transient cases are also retried once after a 3 second delay, so the very common "blip" does not surface an error at all.
+HTTP 5xx and Cloudflare edge codes (520 through 530) are classified as [GitHubOutageError](../extension/common/errors.ts), not `ParserBreakageError`. Outage errors skip the route fallback because the other URL would hit the same infrastructure problem, and they intentionally preserve the cached PR lists in the popup with an "outage" banner instead of the misleading "parser broken" banner. Transient cases are also retried once after a 3 second delay, so the very common "blip" does not surface an error at all. Full classification, including the network-level failures that map to `GitHubOutageError`, lives on [GitHub Health and Outages](GitHub-Health-and-Outages).
+
+### 200 OK, parseable HTML, incomplete list
+
+The waterfall's job is "produce a `PullRequest[]` from the document". When GitHub returns 200 OK with HTML the parser is happy with, but the list is incomplete (a partial drop, or empty when storage held PRs), the parser cannot tell. The decision belongs to the layer above. [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists) describes the assessor and the empty-confirmation streak that catch this case before it can shrink storage and produce a notification storm on recovery.
 
 ### The session is expired, but the HTTP status is 200
 
@@ -176,4 +180,5 @@ If you sign out of GitHub and sign in as someone else, the cached PR lists would
 
 - [Remote Configuration](Remote-Configuration): how the patterns that drive stages 2 and 3 can be patched in live production.
 - [The Canary Monitor](The-Canary-Monitor): the hourly DOM change watcher that uses the waterfall's `observer` hook to catch breakages before users do.
+- [GitHub Health and Outages](GitHub-Health-and-Outages): the other side of the "is this an outage or a DOM change?" fork, including the full transport classification table and the recovery path.
 - [The Service Worker Lifecycle](The-Service-Worker-Lifecycle): where `PRService` lives, how the TTL cache and inflight dedup wrap these fetches, and why the route hint has to be persisted to survive a wake.

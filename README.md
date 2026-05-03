@@ -50,6 +50,8 @@ Pullwatch has two halves: a background service worker that fetches and parses pa
 
 The service worker wakes up on a Chrome alarm every 3 minutes, asks GitHub for your pulls list HTML using the cookie your browser already has, runs the HTML through a three stage parser (embedded JSON, then the new dashboard HTML, then the legacy HTML), and writes the result into `chrome.storage.local`. If GitHub returns a 429, an exponential backoff kicks in. The popup itself never calls GitHub. When you open it, it pulls the last persisted lists straight from `chrome.storage.local` before the first paint, then listens for storage updates while it stays open.
 
+When GitHub returns a transport error or its [Statuspage](https://www.githubstatus.com) reports a Pull Requests incident, Pullwatch keeps the last-known list and shows an outage banner over the top of it; the banner links to `githubstatus.com` only when the cached snapshot corroborates a real incident. The full reason taxonomy and the integrity layer that catches "200 OK with an incomplete list" are documented in the [GitHub Health and Outages](https://github.com/dragosdev-code/pullwatch/wiki/GitHub-Health-and-Outages) wiki cluster.
+
 ```mermaid
 flowchart LR
   subgraph ui [Popup]
