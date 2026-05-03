@@ -1,19 +1,17 @@
-const IS_DEVELOPMENT = true;
+// WHY: Always emit to console (including production builds). Unpacked installs and MV3
+// service-worker/offscreen logs are the main support surface; gating on DEV hid signal there.
 
 /**
- * Logs messages to the console only during development.
- * Supports multiple arguments, similar to console.log.
+ * Logs messages to the console. Supports multiple arguments, similar to console.log.
  * @param message - The primary message to log.
  * @param optionalParams - Additional parameters to log.
  */
 export function debugLog(message?: unknown, ...optionalParams: unknown[]): void {
-  if (IS_DEVELOPMENT) {
-    console.log('[DEBUG]', message, ...optionalParams);
-  }
+  console.log('[DEBUG]', message, ...optionalParams);
 }
 
 /**
- * Logs warning messages to the console only during development.
+ * Logs warning messages to the console.
  * @param message - The primary message to log.
  * @param optionalParams - Additional parameters to log.
  */
@@ -22,7 +20,7 @@ export function debugWarn(message?: unknown, ...optionalParams: unknown[]): void
 }
 
 /**
- * Logs error messages to the console only during development.
+ * Logs error messages to the console.
  * Also includes the stack trace if the message is an error object.
  * @param message - The primary message or error object to log.
  * @param optionalParams - Additional parameters to log.
@@ -43,11 +41,3 @@ export function initializeDebugTools(): void {
   // Example: integrate with a more sophisticated logging library
   // or set up specific debug flags in the window object for the popup/offscreen pages
 }
-
-// To make process.env.NODE_ENV available in Vite builds for web extension code,
-// you typically need to use Vite's `define` option in vite.config.ts.
-// For example:
-// define: {
-//   'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production')
-// }
-// This will replace process.env.NODE_ENV with its actual value at build time.
