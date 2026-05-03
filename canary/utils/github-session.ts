@@ -488,6 +488,10 @@ export class GitHubSession {
     const candidates = await this.routingLoginCandidates(username);
     const actionSelector = [
       'a[href*="/login/account_switch"]',
+      'form[action="/switch_account"] button',
+      'form[action="/switch_account"] input[type="submit"]',
+      'form[action*="/switch_account"] button',
+      'form[action*="/switch_account"] input[type="submit"]',
       'form[action*="/login/account_switch"] button',
       'form[action*="/login/account_switch"] input[type="submit"]',
     ].join(', ');
@@ -521,6 +525,20 @@ export class GitHubSession {
   }
 
   private async findAccountSwitcherAction(candidatePattern: RegExp): Promise<Locator | null> {
+    const labelledButton = this.page.getByRole('button', {
+      name: new RegExp(`^Select\\s+${candidatePattern.source}$`, 'i'),
+    }).first();
+    if (await labelledButton.isVisible().catch(() => false)) return labelledButton;
+
+    const rowButton = this.page
+      .locator('.Box-row')
+      .filter({ hasText: candidatePattern })
+      .locator(
+        'form[action="/switch_account"] button, form[action="/switch_account"] input[type="submit"], form[action*="/switch_account"] button, form[action*="/switch_account"] input[type="submit"], form[action*="/login/account_switch"] button, form[action*="/login/account_switch"] input[type="submit"]',
+      )
+      .first();
+    if (await rowButton.isVisible().catch(() => false)) return rowButton;
+
     const link = this.page
       .locator('a[href*="/login/account_switch"]')
       .filter({ hasText: candidatePattern })
@@ -539,7 +557,10 @@ export class GitHubSession {
 
   private async clickAccountSwitcherAction(action: Locator): Promise<void> {
     const responsePromise = this.page.waitForResponse(
-      (response) => response.url().includes('/login/account_switch') && response.status() < 400,
+      (response) =>
+        (response.url().includes('/switch_account') ||
+          response.url().includes('/login/account_switch')) &&
+        response.status() < 400,
       { timeout: 15_000 },
     ).catch((error: unknown) => error);
 
