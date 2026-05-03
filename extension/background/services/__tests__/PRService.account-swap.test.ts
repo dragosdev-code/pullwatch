@@ -386,6 +386,30 @@ describe('PRService.persistResolvedViewerIdentity — F3 partial-refresh swap', 
     );
   });
 
+  it('clears a list that refreshed before the final viewer changed', async () => {
+    getLastResolvedViewerLogin.mockReturnValue('alice');
+    const pr = makeService();
+    await pr.fetchAndUpdateAssignedPRs(false, true);
+
+    getLastResolvedViewerLogin.mockReturnValue('bob');
+    setStoredPRs.mockClear();
+    await pr.persistResolvedViewerIdentity();
+
+    const assignedClear = setStoredPRs.mock.calls.find((c) => c[0] === STORAGE_KEY_ASSIGNED_PRS);
+    const mergedClear = setStoredPRs.mock.calls.find((c) => c[0] === STORAGE_KEY_MERGED_PRS);
+    const authoredClear = setStoredPRs.mock.calls.find((c) => c[0] === STORAGE_KEY_AUTHORED_PRS);
+
+    expect(assignedClear).toBeDefined();
+    expect(assignedClear![1]).toEqual([]);
+    expect(mergedClear).toBeDefined();
+    expect(mergedClear![1]).toEqual([]);
+    expect(authoredClear).toBeDefined();
+    expect(authoredClear![1]).toEqual([]);
+    expect(setGitHubViewerIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({ login: 'bob' })
+    );
+  });
+
   it('does not clear any list when all three refreshed under the new account', async () => {
     const pr = makeService();
     await pr.fetchAndUpdateAssignedPRs(false, true);

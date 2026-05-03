@@ -80,13 +80,11 @@ export class PRService implements IPRService {
   private cycleBaselineLoaded = false;
   private clearedRouteHintForSwapKey: string | null = null;
   /**
-   * Lists whose stored PR array was successfully refreshed this cycle. Used by
-   * {@link persistResolvedViewerIdentity} to detect swap-with-partial-refresh: if a list errored
-   * (PrFetchErrorHandler returned `oldPRs` for a `GitHubOutageError` / `ParserBreakageError`) or
-   * never started (TTL cache hit with stale account data), it is absent from this set, so we wipe
-   * its storage to prevent the previous account's PRs from leaking under the new viewer identity.
+   * Viewer login observed when each PR list was successfully written during the current wave.
+   * Used by {@link persistResolvedViewerIdentity} to distinguish "refreshed for the final viewer"
+   * from "refreshed before the browser session crossed accounts".
    */
-  private cycleListsRefreshed = new Set<'assigned' | 'merged' | 'authored'>();
+  private cycleListRefreshLogins = new Map<'assigned' | 'merged' | 'authored', string | null>();
   /**
    * Set when {@link applyTombstoneFilter} signals `pr_list_churn` for this wave; blocks routine
    * `clearGitHubOutage` calls on **every** list until {@link beginPrListHealthWave} runs again so
@@ -160,11 +158,9 @@ export class PRService implements IPRService {
         return;
       }
 
-      // WHY [swap + partial refresh]: A wave can advance the viewer identity even if one list
-      // threw (PrFetchErrorHandler swallows GitHubOutageError / ParserBreakageError and returns
-      // oldPRs). Without this, storage ends up: identity = new account, list = old account's PRs.
-      // Clear any list missing from `cycleListsRefreshed` so the popup never shows cross-account
-      // data. Same-account churn skips this branch (`baselineLogin === login`).
+      // WHY [swap + partial refresh]: A wave can advance the viewer identity after only some
+      // list writes completed. Clear lists that did not write for the final resolved login so
+      // storage never pairs `github_viewer_identity` with another account's PR arrays.
       const baselineLogin = await this.getCycleBaselineLogin();
       if (baselineLogin && baselineLogin !== login) {
         await this.clearUnrefreshedListsAfterSwap(baselineLogin, login);
@@ -192,9 +188,14 @@ export class PRService implements IPRService {
       { kind: 'authored', key: STORAGE_KEY_AUTHORED_PRS },
     ];
     for (const { kind, key } of lists) {
-      if (this.cycleListsRefreshed.has(kind)) continue;
+      const didRefresh = this.cycleListRefreshLogins.has(kind);
+      const refreshLogin = this.cycleListRefreshLogins.get(kind);
+      if (refreshLogin === currentLogin) continue;
+      const refreshState = didRefresh
+        ? `refreshed for ${refreshLogin ?? 'no resolved login'}`
+        : 'did not refresh';
       this.debugService.warn(
-        `[PRService] Account swap (${baselineLogin} → ${currentLogin}) but ${kind} list did not refresh this cycle; clearing stale storage to avoid cross-account data leak.`
+        `[PRService] Account swap (${baselineLogin} → ${currentLogin}) but ${kind} list ${refreshState}; clearing stale storage to avoid cross-account data leak.`
       );
       await this.storageService.setStoredPRs(key, []);
     }
@@ -217,7 +218,12 @@ export class PRService implements IPRService {
     this.cycleBaselineLoaded = false;
     this.cycleBaselineLogin = null;
     this.clearedRouteHintForSwapKey = null;
-    this.cycleListsRefreshed.clear();
+    this.cycleListRefreshLogins.clear();
+  }
+
+  /** WHY [write provenance]: a successful list write only counts for swap cleanup if it belongs to the final viewer. */
+  private markListRefreshedForCurrentViewer(kind: 'assigned' | 'merged' | 'authored'): void {
+    this.cycleListRefreshLogins.set(kind, this.gitHubService.getLastResolvedViewerLogin());
   }
 
   /**
@@ -586,7 +592,6 @@ export class PRService implements IPRService {
             await this.persistAndNotifyAssigned([], 0, [], forceRefresh);
             await this.markRecoveryBaseline('assigned');
             await this.limboPromoter.recordTrustedFetch('assigned', 0);
-            this.cycleListsRefreshed.add('assigned');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
@@ -616,7 +621,6 @@ export class PRService implements IPRService {
             );
             await this.persistAndNotifyAssigned([], 0, [], forceRefresh);
             await this.limboPromoter.recordTrustedFetch('assigned', 0);
-            this.cycleListsRefreshed.add('assigned');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
@@ -686,7 +690,6 @@ export class PRService implements IPRService {
 
       await this.persistAndNotifyAssigned(allPRs, filteredPending.length, newPRs, forceRefresh);
       await this.limboPromoter.recordTrustedFetch('assigned', allPRs.length);
-      this.cycleListsRefreshed.add('assigned');
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
@@ -729,6 +732,7 @@ export class PRService implements IPRService {
     }
 
     await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRs);
+    this.markListRefreshedForCurrentViewer('assigned');
     await this.storageService.setLastFetchTime(Date.now());
     await this.badgeService.setPRCountBadge(filteredPendingCount);
   }
@@ -966,9 +970,9 @@ export class PRService implements IPRService {
               `[PRService] authored empty accepted after ${dispatch.streak} confirmations — persisting [].`
             );
             await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, []);
+            this.markListRefreshedForCurrentViewer('authored');
             await this.markRecoveryBaseline('authored');
             await this.limboPromoter.recordTrustedFetch('authored', 0);
-            this.cycleListsRefreshed.add('authored');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
@@ -994,8 +998,8 @@ export class PRService implements IPRService {
               '[PRService] authored empty under identity mismatch; trusting fresh as baseline.'
             );
             await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, []);
+            this.markListRefreshedForCurrentViewer('authored');
             await this.limboPromoter.recordTrustedFetch('authored', 0);
-            this.cycleListsRefreshed.add('authored');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
@@ -1040,8 +1044,8 @@ export class PRService implements IPRService {
       }
 
       await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, freshAuthoredPRs);
+      this.markListRefreshedForCurrentViewer('authored');
       await this.limboPromoter.recordTrustedFetch('authored', freshAuthoredPRs.length);
-      this.cycleListsRefreshed.add('authored');
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
@@ -1164,9 +1168,9 @@ export class PRService implements IPRService {
               `[PRService] merged empty accepted after ${dispatch.streak} confirmations — persisting [].`
             );
             await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, []);
+            this.markListRefreshedForCurrentViewer('merged');
             await this.markRecoveryBaseline('merged');
             await this.limboPromoter.recordTrustedFetch('merged', 0);
-            this.cycleListsRefreshed.add('merged');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
@@ -1192,8 +1196,8 @@ export class PRService implements IPRService {
               '[PRService] merged empty under identity mismatch; trusting fresh as baseline.'
             );
             await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, []);
+            this.markListRefreshedForCurrentViewer('merged');
             await this.limboPromoter.recordTrustedFetch('merged', 0);
-            this.cycleListsRefreshed.add('merged');
             this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
@@ -1263,7 +1267,7 @@ export class PRService implements IPRService {
       }
 
       await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, mergedPRsWithStatus);
-      this.cycleListsRefreshed.add('merged');
+      this.markListRefreshedForCurrentViewer('merged');
 
       this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
