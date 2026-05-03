@@ -145,6 +145,9 @@ export const RATE_LIMIT_MAX_BACKOFF_MS = 30 * 60 * 1000; // 30 minutes
 // Offscreen Document
 export const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html'; // Updated path to be relative to dist root
 export const OFFSCREEN_REASON_AUDIO_PLAYBACK = 'AUDIO_PLAYBACK';
+// WHY [lock recovery]: chrome.offscreen.createDocument has no abort signal; this bounds
+// SoundService's in-flight creation lock so a stuck Chrome call does not silence all future sounds.
+export const OFFSCREEN_CREATE_TIMEOUT_MS = 10_000;
 
 // Custom Sounds
 export const STORAGE_KEY_CUSTOM_SOUNDS_META = 'custom_sounds_meta';

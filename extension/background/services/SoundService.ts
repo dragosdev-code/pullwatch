@@ -4,6 +4,7 @@ import type { NotificationSound, CustomSoundMeta } from '@common/types';
 import {
   OFFSCREEN_DOCUMENT_PATH,
   OFFSCREEN_REASON_AUDIO_PLAYBACK,
+  OFFSCREEN_CREATE_TIMEOUT_MS,
   CUSTOM_SOUND_STORAGE_PREFIX,
   STORAGE_KEY_CUSTOM_SOUNDS_META,
 } from '@common/constants';
@@ -65,7 +66,10 @@ export class SoundService implements ISoundService {
    * Checks if an offscreen document with the specified path already exists.
    */
   private async hasOffscreenDocument(): Promise<boolean> {
-    if (!chromeExtensionService.offscreen.isAvailable() || !chromeExtensionService.runtime.hasGetContexts()) {
+    if (
+      !chromeExtensionService.offscreen.isAvailable() ||
+      !chromeExtensionService.runtime.hasGetContexts()
+    ) {
       this.debugService.warn(
         '[SoundService] offscreen or runtime.getContexts API is not available. Cannot check for offscreen document.'
       );
@@ -83,6 +87,36 @@ export class SoundService implements ISoundService {
         error
       );
       return false; // Assume not present if an error occurs during check
+    }
+  }
+
+  /**
+   * Races offscreen document creation against {@link OFFSCREEN_CREATE_TIMEOUT_MS}.
+   *
+   * WHY [no cancellation]: `chrome.offscreen.createDocument` cannot be aborted; if Chrome never
+   * settles the promise, callers waiting on {@link ensureOffscreenDocument}'s lock would never
+   * recover. This wrapper rejects after the deadline so `creatingOffscreenDocument` clears in
+   * `finally` and later sounds can retry. The hung browser call may still run to completion in the
+   * background — only our await is bounded.
+   *
+   * @param operation - Already-started creation work (typically {@link doEnsureOffscreenDocument}).
+   */
+  private async withOffscreenCreationTimeout(operation: Promise<void>): Promise<void> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(
+          new Error(`Offscreen document creation timed out after ${OFFSCREEN_CREATE_TIMEOUT_MS}ms`)
+        );
+      }, OFFSCREEN_CREATE_TIMEOUT_MS);
+    });
+
+    try {
+      return await Promise.race([operation, timeout]);
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
     }
   }
 
@@ -105,7 +139,11 @@ export class SoundService implements ISoundService {
       return this.creatingOffscreenDocument;
     }
 
-    this.creatingOffscreenDocument = this.doEnsureOffscreenDocument().finally(() => {
+    // WHY [timeout wrapper]: The Chrome offscreen API does not expose cancellation. Racing the
+    // creation promise lets the lock release for future sound attempts even if Chrome never settles.
+    this.creatingOffscreenDocument = this.withOffscreenCreationTimeout(
+      this.doEnsureOffscreenDocument()
+    ).finally(() => {
       this.creatingOffscreenDocument = null;
     });
     return this.creatingOffscreenDocument;
