@@ -141,4 +141,30 @@ describe('GitHub infrastructure blips', () => {
 
     expect(avatar.enrichPRsWithAvatars).not.toHaveBeenCalled();
   });
+
+  it('bounds a hung GitHub request by the overall retry deadline', async () => {
+    vi.mocked(fetch).mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      const signal = init?.signal;
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('GitHub request deadline exceeded', 'AbortError')),
+          { once: true }
+        );
+      });
+    });
+
+    const { debug, avatar, patterns } = createCollaborators();
+    const service = new GitHubService(debug, avatar, patterns);
+    await service.initialize();
+
+    const settled = service.fetchAssignedPRs().catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(18_000);
+    const err = await settled;
+
+    expect(err).toBeInstanceOf(GitHubOutageError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(debug.warn).not.toHaveBeenCalledWith(expect.stringContaining('retrying'));
+    expect(avatar.enrichPRsWithAvatars).not.toHaveBeenCalled();
+  });
 });

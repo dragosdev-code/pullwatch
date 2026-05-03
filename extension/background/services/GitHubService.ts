@@ -64,6 +64,10 @@ function isTransientStatus(status: number): boolean {
 // signal for real incidents — the next alarm tick handles those.
 const TRANSIENT_RETRY_DELAY_MS = 3_000;
 const TRANSIENT_MAX_RETRIES = 1;
+// WHY [MV3 budget]: A retrying list fetch must settle before Chrome's service-worker
+// idle window can interrupt the surrounding storage write cycle. Per-attempt timeout
+// still caps individual sockets; this caps retry delay + all attempts together.
+const GITHUB_FETCH_OVERALL_DEADLINE_MS = 18_000;
 
 /**
  * GitHubService handles GitHub HTTP operations for fetching pull requests.
@@ -137,10 +141,7 @@ export class GitHubService implements IGitHubService {
    * first non-empty `login` capture wins. Empty capture is ignored so logged-out metas do not
    * poison {@link PRService} account-swap detection.
    */
-  private static extractViewerLoginFromHtml(
-    html: string,
-    chain: CompiledPattern[]
-  ): string | null {
+  private static extractViewerLoginFromHtml(html: string, chain: CompiledPattern[]): string | null {
     for (const p of chain) {
       // WHY [lastIndex]: Compiled regex objects are shared across fetches. If remote config
       // ever introduces `g`, exec() mutates lastIndex and can skip later matches unless reset.
@@ -164,6 +165,8 @@ export class GitHubService implements IGitHubService {
    *
    * Retries once on transient errors (5xx, network failures) before giving up,
    * so brief GitHub blips don't immediately surface as errors to the user.
+   * The retry loop also has an overall deadline so one list cannot spend the
+   * full per-attempt timeout plus retry delay during a broader fetch wave.
    */
   private async fetchGitHubData<T>(
     url: string,
@@ -171,10 +174,19 @@ export class GitHubService implements IGitHubService {
     transform: (html: string) => T | Promise<T>
   ): Promise<T> {
     let lastError: unknown;
+    const deadlineAt = Date.now() + GITHUB_FETCH_OVERALL_DEADLINE_MS;
 
     for (let attempt = 0; attempt <= TRANSIENT_MAX_RETRIES; attempt++) {
+      const remainingBudgetMs = deadlineAt - Date.now();
+      if (remainingBudgetMs <= 0) {
+        throw new GitHubOutageError(context);
+      }
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), GITHUB_FETCH_TIMEOUT_MS);
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        Math.min(GITHUB_FETCH_TIMEOUT_MS, remainingBudgetMs)
+      );
 
       try {
         const response = await fetch(url, {
@@ -202,6 +214,9 @@ export class GitHubService implements IGitHubService {
           }
           if (isTransientStatus(response.status)) {
             if (attempt < TRANSIENT_MAX_RETRIES) {
+              if (Date.now() + TRANSIENT_RETRY_DELAY_MS >= deadlineAt) {
+                throw new GitHubOutageError(context, response.status);
+              }
               this.debugService.warn(
                 `[GitHubService] Transient HTTP ${response.status} during ${context} — retrying in ${TRANSIENT_RETRY_DELAY_MS}ms`
               );
@@ -256,6 +271,9 @@ export class GitHubService implements IGitHubService {
           error instanceof TypeError;
 
         if (isNetworkFailure && attempt < TRANSIENT_MAX_RETRIES) {
+          if (Date.now() + TRANSIENT_RETRY_DELAY_MS >= deadlineAt) {
+            throw new GitHubOutageError(context);
+          }
           this.debugService.warn(
             `[GitHubService] Network error during ${context} — retrying in ${TRANSIENT_RETRY_DELAY_MS}ms`
           );
@@ -587,10 +605,7 @@ export class GitHubService implements IGitHubService {
       if (error instanceof ParserBreakageError) throw error;
       if (error instanceof GitHubOutageError) throw error;
 
-      this.logListFetchFailure(
-        `[GitHubService] Error fetching ${authorReviewStatus} PRs:`,
-        error
-      );
+      this.logListFetchFailure(`[GitHubService] Error fetching ${authorReviewStatus} PRs:`, error);
 
       if (isGitHubWebSessionAuthError(error)) {
         throw error;
