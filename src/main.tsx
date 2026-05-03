@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './app.css';
 import App from './app';
+import { AppErrorBoundary } from './components/app-error-boundary';
 import { hydratePrQueriesFromStorage } from './hydrate-pr-queries-from-storage';
 
 // Create a client with extension-optimized settings
@@ -31,7 +32,9 @@ void (async () => {
     <div id="pw-app-root">
       <StrictMode>
         <QueryClientProvider client={queryClient}>
-          <App />
+          <AppErrorBoundary>
+            <App />
+          </AppErrorBoundary>
         </QueryClientProvider>
       </StrictMode>
     </div>

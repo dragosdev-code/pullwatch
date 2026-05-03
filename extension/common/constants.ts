@@ -13,6 +13,13 @@ export const STORAGE_KEY_PATTERN_REGISTRY = 'parser_pattern_registry';
 export const STORAGE_KEY_PARSER_BREAKAGE = 'parser_breakage';
 export const STORAGE_KEY_GITHUB_OUTAGE = 'github_outage';
 /**
+ * Last uncaught render error captured by the popup ErrorBoundary. Written by the boundary on
+ * componentDidCatch (truncated stack), read by support/diagnostics. Single-row replace each
+ * time so the key never grows. No PII beyond what React stack traces and the document URL
+ * already expose.
+ */
+export const STORAGE_KEY_LAST_RENDER_ERROR = 'last_render_error_v1';
+/**
  * WHY [metadata only]: Set when the outage gate ({@link PRService.isOutageSuspectedEmpty}) declines
  * to trust an empty fetch. Distinct from {@link STORAGE_KEY_LAST_FETCH} ("last *successful* fetch").
  * Cleared with the outage flag when `HealthStatusService` clears GitHub outage. The popup’s
