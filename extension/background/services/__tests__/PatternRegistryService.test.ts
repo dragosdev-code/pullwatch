@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { waitFor } from '@testing-library/react';
 import { PatternRegistryService } from '../PatternRegistryService';
-import { REMOTE_PATTERNS_MAX_BYTES, STORAGE_KEY_PATTERN_REGISTRY } from '@common/constants';
+import {
+  REMOTE_PATTERNS_MAX_BYTES,
+  REMOTE_PATTERNS_MAX_VERSION_DELTA,
+  STORAGE_KEY_PATTERN_REGISTRY,
+} from '@common/constants';
 import { DEFAULT_COMPILED_PATTERNS, DEFAULT_PATTERNS } from '@common/default-patterns';
 import { clone, makeValidRemoteConfig } from '@common/__tests__/schema-test-helpers';
 import type { IDebugService } from '../../interfaces/IDebugService';
@@ -176,6 +180,36 @@ describe('Remote pattern delivery', () => {
     });
 
     expect(text).not.toHaveBeenCalled();
+    expect(service.getPatterns()).toBe(DEFAULT_COMPILED_PATTERNS);
+    expect(storageSet).toHaveBeenCalledTimes(1);
+    const payload = storageSet.mock.calls[0][0] as Record<string, { version: number }>;
+    expect(payload[STORAGE_KEY_PATTERN_REGISTRY].version).toBe(0);
+  });
+
+  it('rejects remote pattern versions that jump beyond the allowed upgrade ceiling', async () => {
+    storageGet.mockResolvedValue({});
+
+    vi.mocked(fetch).mockResolvedValue(
+      okJsonResponse(
+        makeValidRemoteConfig({
+          version: REMOTE_PATTERNS_MAX_VERSION_DELTA + 1,
+          minExtensionVersion: '0.0.0',
+          patterns: DEFAULT_PATTERNS,
+        })
+      )
+    );
+
+    const debug = createDebugService();
+    const service = new PatternRegistryService(debug);
+
+    await expect(service.initialize()).resolves.toBeUndefined();
+
+    await waitFor(() => {
+      expect(debug.warn).toHaveBeenCalledWith(
+        expect.stringContaining('exceeds allowed upgrade ceiling')
+      );
+    });
+
     expect(service.getPatterns()).toBe(DEFAULT_COMPILED_PATTERNS);
     expect(storageSet).toHaveBeenCalledTimes(1);
     const payload = storageSet.mock.calls[0][0] as Record<string, { version: number }>;

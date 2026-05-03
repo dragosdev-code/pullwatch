@@ -92,6 +92,9 @@ export const PATTERN_REFRESH_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // WHY [supply-chain]: Remote regex config is data, not code, but a compromised
 // config host must not be able to make the service worker allocate unbounded JSON.
 export const REMOTE_PATTERNS_MAX_BYTES = 1 * 1024 * 1024; // 1 MiB
+// WHY [recovery]: A bounded jump keeps hotfix room while preventing a poisoned
+// remote version from pinning installs above all legitimate future releases.
+export const REMOTE_PATTERNS_MAX_VERSION_DELTA = 1000;
 
 // Route hint — remembers whether /pulls/search or /pulls last succeeded so
 // steady-state polling makes one request per list instead of probing both.

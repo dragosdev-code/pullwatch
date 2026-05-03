@@ -12,6 +12,7 @@ import {
   PATTERN_REFRESH_TTL_MS,
   REMOTE_FETCH_TIMEOUT_MS,
   REMOTE_PATTERNS_MAX_BYTES,
+  REMOTE_PATTERNS_MAX_VERSION_DELTA,
 } from '@common/constants';
 import {
   validateRemoteConfig,
@@ -142,6 +143,14 @@ export class PatternRegistryService implements IPatternRegistryService {
           `[PatternRegistry] Remote v${config.version} is not newer than local v${this.registryVersion} — skipping`
         );
         this.lastFetchTimestamp = Date.now();
+        return;
+      }
+
+      const maxAllowedVersion = this.registryVersion + REMOTE_PATTERNS_MAX_VERSION_DELTA;
+      if (config.version > maxAllowedVersion) {
+        this.debugService.warn(
+          `[PatternRegistry] Remote v${config.version} exceeds allowed upgrade ceiling v${maxAllowedVersion} — skipping`
+        );
         return;
       }
 
