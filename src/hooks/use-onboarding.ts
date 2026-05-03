@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_HAS_SEEN_ONBOARDING,
@@ -11,9 +12,16 @@ import {
   chromeExtensionService,
   type StorageChange,
 } from '@common/chrome-extension-service';
+import { queryKeys } from '@src/constants/query-keys';
 import { isExtensionContext } from '@src/utils/is-extension-context';
 
 export type OnboardingRefreshState = 'idle' | 'loading' | 'error';
+
+const VIEWER_SCOPED_PR_QUERY_KEYS = [
+  queryKeys.assignedPrs,
+  queryKeys.mergedPrs,
+  queryKeys.authoredPrs,
+] as const;
 
 function isAuthLikeErrorMessage(message: string): boolean {
   return (
@@ -87,6 +95,7 @@ async function persistOnboardingDismissal(): Promise<void> {
  * wipe may not have landed yet in the same tick as storage hydration).
  */
 export function useOnboarding() {
+  const queryClient = useQueryClient();
   const [storageReady, setStorageReady] = useState(false);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
   const [reauthGatePending, setReauthGatePending] = useState(false);
@@ -211,8 +220,21 @@ export function useOnboarding() {
         );
       }
       if (STORAGE_KEY_GITHUB_VIEWER_IDENTITY in changes) {
-        const next = changes[STORAGE_KEY_GITHUB_VIEWER_IDENTITY].newValue;
+        const identityChange = changes[STORAGE_KEY_GITHUB_VIEWER_IDENTITY];
+        const previousLogin = readViewerLogin({
+          [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: identityChange.oldValue,
+        });
+        const next = identityChange.newValue;
         const nextLogin = readViewerLogin({ [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: next });
+        if (previousLogin !== nextLogin) {
+          // WHY [account boundary]: PR query keys are shared across GitHub users, while their
+          // storage snapshots are viewer-scoped. Clear active observers immediately and drop
+          // inactive cache entries so an account swap cannot render the previous viewer's lists.
+          for (const queryKey of VIEWER_SCOPED_PR_QUERY_KEYS) {
+            queryClient.setQueryData(queryKey, []);
+            queryClient.removeQueries({ queryKey, exact: true, type: 'inactive' });
+          }
+        }
         setViewerLogin(nextLogin);
         // WHY [storage-driven re-auth]: the background can repopulate `github_viewer_identity`
         // after the user signs back into GitHub; clear `authWall` whenever storage carries a login.
@@ -227,7 +249,7 @@ export function useOnboarding() {
       cancelled = true;
       chromeExtensionService.storage.onChanged.removeListener(onStorageChanged);
     };
-  }, []);
+  }, [queryClient]);
 
   const isLoggedIn = Boolean(!authWall && viewerLogin);
 

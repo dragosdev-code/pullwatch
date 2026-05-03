@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { type ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_HAS_SEEN_ONBOARDING,
   STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
 } from '@common/constants';
+import { queryKeys } from '@src/constants/query-keys';
 import { useOnboarding } from '../use-onboarding';
 import {
   chromeExtensionService,
@@ -40,11 +43,27 @@ vi.mock('@common/chrome-extension-service', () => ({
 }));
 
 describe('useOnboarding', () => {
+  let queryClient: QueryClient;
   let storageListener:
     | ((changes: Record<string, StorageChange>, area: string) => void)
     | undefined;
 
+  const createWrapper = (client: QueryClient) => {
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    return Wrapper;
+  };
+
+  const renderOnboardingHook = () =>
+    renderHook(() => useOnboarding(), {
+      wrapper: createWrapper(queryClient),
+    });
+
   beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     getMock.mockReset();
     setMock.mockReset().mockResolvedValue(undefined);
     removeMock.mockReset().mockResolvedValue(undefined);
@@ -60,6 +79,7 @@ describe('useOnboarding', () => {
   });
 
   afterEach(() => {
+    queryClient.clear();
     vi.clearAllMocks();
   });
 
@@ -69,7 +89,7 @@ describe('useOnboarding', () => {
       [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: { login: 'alice' },
     });
 
-    const { result } = renderHook(() => useOnboarding());
+    const { result } = renderOnboardingHook();
 
     await waitFor(() => expect(result.current.storageReady).toBe(true));
 
@@ -85,7 +105,7 @@ describe('useOnboarding', () => {
       [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: { login: 'alice' },
     });
 
-    const { result } = renderHook(() => useOnboarding());
+    const { result } = renderOnboardingHook();
     await waitFor(() => expect(result.current.storageReady).toBe(true));
 
     await act(async () => {
@@ -106,7 +126,7 @@ describe('useOnboarding', () => {
       [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: undefined,
     });
 
-    const { result } = renderHook(() => useOnboarding());
+    const { result } = renderOnboardingHook();
     await waitFor(() => expect(result.current.storageReady).toBe(true));
 
     expect(result.current.isLoggedIn).toBe(false);
@@ -120,7 +140,7 @@ describe('useOnboarding', () => {
       [STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING]: true,
     });
 
-    const { result } = renderHook(() => useOnboarding());
+    const { result } = renderOnboardingHook();
     await waitFor(() => expect(result.current.storageReady).toBe(true));
 
     expect(result.current.isLoggedIn).toBe(true);
@@ -135,7 +155,7 @@ describe('useOnboarding', () => {
       [STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING]: false,
     });
 
-    const { result } = renderHook(() => useOnboarding());
+    const { result } = renderOnboardingHook();
     await waitFor(() => expect(result.current.showLoggedOutLayer).toBe(true));
 
     expect(storageListener).toBeDefined();
@@ -153,6 +173,37 @@ describe('useOnboarding', () => {
 
     await waitFor(() => expect(result.current.showFirstRunReveal).toBe(true));
     expect(result.current.showLoggedOutLayer).toBe(false);
+  });
+
+  it('clears viewer-scoped PR caches when viewer identity changes', async () => {
+    getMock.mockResolvedValueOnce({
+      [STORAGE_KEY_HAS_SEEN_ONBOARDING]: true,
+      [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: { login: 'alice' },
+    });
+    queryClient.setQueryData(queryKeys.assignedPrs, [{ id: 'assigned-alice' }]);
+    queryClient.setQueryData(queryKeys.mergedPrs, [{ id: 'merged-alice' }]);
+    queryClient.setQueryData(queryKeys.authoredPrs, [{ id: 'authored-alice' }]);
+
+    const { result } = renderOnboardingHook();
+    await waitFor(() => expect(result.current.storageReady).toBe(true));
+
+    expect(storageListener).toBeDefined();
+    await act(async () => {
+      storageListener!(
+        {
+          [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: {
+            oldValue: { login: 'alice', updatedAt: '2020-01-01T00:00:00.000Z' },
+            newValue: { login: 'bob', updatedAt: '2020-01-01T00:00:01.000Z' },
+          },
+        },
+        'local'
+      );
+    });
+
+    expect(queryClient.getQueryData(queryKeys.assignedPrs)).toBeUndefined();
+    expect(queryClient.getQueryData(queryKeys.mergedPrs)).toBeUndefined();
+    expect(queryClient.getQueryData(queryKeys.authoredPrs)).toBeUndefined();
+    expect(result.current.isLoggedIn).toBe(true);
   });
 
   it('sets friendly refresh info when session refresh rejects with NotLoggedIn', async () => {
@@ -175,7 +226,7 @@ describe('useOnboarding', () => {
       vi.mocked(chromeExtensionService.prs.fetchFreshMerged).mockRejectedValueOnce(authErr);
       vi.mocked(chromeExtensionService.prs.fetchFreshAuthored).mockRejectedValueOnce(authErr);
 
-      const { result } = renderHook(() => useOnboarding());
+      const { result } = renderOnboardingHook();
       await waitFor(() => expect(result.current.storageReady).toBe(true));
 
       await act(async () => {
