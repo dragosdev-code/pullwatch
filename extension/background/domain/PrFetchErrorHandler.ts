@@ -56,7 +56,7 @@ export class PrFetchErrorHandler {
       return oldPRs;
     }
     if (error instanceof RateLimitError) {
-      this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
+      await this.rateLimitService.recordRateLimitHit(error.retryAfterSeconds);
     }
     this.logTransportFailure(transportErrorLabel, error);
     if (updateBadgeOnError) await this.badgeService.setErrorBadge();

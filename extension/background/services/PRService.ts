@@ -592,7 +592,7 @@ export class PRService implements IPRService {
             await this.persistAndNotifyAssigned([], 0, [], forceRefresh);
             await this.markRecoveryBaseline('assigned');
             await this.limboPromoter.recordTrustedFetch('assigned', 0);
-            this.rateLimitService.recordSuccess();
+            await this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
@@ -621,7 +621,7 @@ export class PRService implements IPRService {
             );
             await this.persistAndNotifyAssigned([], 0, [], forceRefresh);
             await this.limboPromoter.recordTrustedFetch('assigned', 0);
-            this.rateLimitService.recordSuccess();
+            await this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
@@ -691,7 +691,7 @@ export class PRService implements IPRService {
       await this.persistAndNotifyAssigned(allPRs, filteredPending.length, newPRs, forceRefresh);
       await this.limboPromoter.recordTrustedFetch('assigned', allPRs.length);
 
-      this.rateLimitService.recordSuccess();
+      await this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
       await this.maybeClearGitHubOutageAfterListSuccess();
       this.debugService.log(`[PRService] Successfully updated ${allPRs.length} PRs`);
@@ -973,7 +973,7 @@ export class PRService implements IPRService {
             this.markListRefreshedForCurrentViewer('authored');
             await this.markRecoveryBaseline('authored');
             await this.limboPromoter.recordTrustedFetch('authored', 0);
-            this.rateLimitService.recordSuccess();
+            await this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
@@ -1000,7 +1000,7 @@ export class PRService implements IPRService {
             await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, []);
             this.markListRefreshedForCurrentViewer('authored');
             await this.limboPromoter.recordTrustedFetch('authored', 0);
-            this.rateLimitService.recordSuccess();
+            await this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
@@ -1047,7 +1047,7 @@ export class PRService implements IPRService {
       this.markListRefreshedForCurrentViewer('authored');
       await this.limboPromoter.recordTrustedFetch('authored', freshAuthoredPRs.length);
 
-      this.rateLimitService.recordSuccess();
+      await this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
       await this.maybeClearGitHubOutageAfterListSuccess();
       this.debugService.log(
@@ -1171,7 +1171,7 @@ export class PRService implements IPRService {
             this.markListRefreshedForCurrentViewer('merged');
             await this.markRecoveryBaseline('merged');
             await this.limboPromoter.recordTrustedFetch('merged', 0);
-            this.rateLimitService.recordSuccess();
+            await this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
@@ -1198,7 +1198,7 @@ export class PRService implements IPRService {
             await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, []);
             this.markListRefreshedForCurrentViewer('merged');
             await this.limboPromoter.recordTrustedFetch('merged', 0);
-            this.rateLimitService.recordSuccess();
+            await this.rateLimitService.recordSuccess();
             await this.healthStatusService.clearParserBreakage();
             await this.maybeClearGitHubOutageAfterListSuccess();
             return [];
@@ -1269,7 +1269,7 @@ export class PRService implements IPRService {
       await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, mergedPRsWithStatus);
       this.markListRefreshedForCurrentViewer('merged');
 
-      this.rateLimitService.recordSuccess();
+      await this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();
       await this.maybeClearGitHubOutageAfterListSuccess();
       this.debugService.log(

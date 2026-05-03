@@ -16,12 +16,12 @@ export interface IRateLimitService extends IService {
    * Records a 429 rate limit response. Increases backoff duration exponentially.
    * @param retryAfterSeconds - Value from the Retry-After header, if present.
    */
-  recordRateLimitHit(retryAfterSeconds?: number): void;
+  recordRateLimitHit(retryAfterSeconds?: number): Promise<void>;
 
   /**
    * Records a successful fetch. Resets the backoff counter.
    */
-  recordSuccess(): void;
+  recordSuccess(): Promise<void>;
 
   /**
    * Returns true if the extension should skip fetching due to active backoff.

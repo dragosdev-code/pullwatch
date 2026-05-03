@@ -39,7 +39,7 @@ export class RateLimitService implements IRateLimitService {
     this.debugService.log('[RateLimitService] Initialized');
   }
 
-  recordRateLimitHit(retryAfterSeconds = 0): void {
+  async recordRateLimitHit(retryAfterSeconds = 0): Promise<void> {
     this.state.consecutiveHits += 1;
     this.state.lastHitTimestamp = Date.now();
     this.state.isLimited = true;
@@ -61,10 +61,12 @@ export class RateLimitService implements IRateLimitService {
         `Next fetch eligible at ${new Date(this.state.retryAfterTimestamp).toISOString()}`
     );
 
-    this.persist();
+    // WHY [await]: service-worker termination between mutate and persist would lose backoff state,
+    // letting the next wake hammer GitHub right after a 429.
+    await this.persist();
   }
 
-  recordSuccess(): void {
+  async recordSuccess(): Promise<void> {
     if (this.state.consecutiveHits === 0 && !this.state.isLimited) return;
 
     this.debugService.log(
@@ -77,7 +79,7 @@ export class RateLimitService implements IRateLimitService {
       consecutiveHits: 0,
       lastHitTimestamp: null,
     };
-    this.persist();
+    await this.persist();
   }
 
   shouldSkipFetch(): boolean {
