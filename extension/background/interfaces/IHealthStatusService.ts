@@ -1,7 +1,11 @@
 import type { IService } from './IService';
+import type { GitHubOutageReason } from '@common/types';
 
 /**
- * Discriminator on the persisted outage payload.
+ * Re-exported from `@common/types` so the popup hook can branch on the same union without
+ * reaching into `@background/interfaces`.
+ *
+ * Reason semantics (kept here as the integration spec for signallers):
  *
  * - `'transport'`: thrown errors caught in `PrFetchErrorHandler` — network failure,
  *   `GitHubOutageError`, `ParserBreakageError`, session-invalid, rate-limit. Signaled
@@ -30,7 +34,7 @@ import type { IService } from './IService';
  * fires after a prior corroborated signal does NOT update the persisted
  * `context` string — first context wins for the active outage window.
  */
-export type GitHubOutageReason = 'transport' | 'pr_component_degraded' | 'pr_list_churn';
+export type { GitHubOutageReason };
 
 /**
  * Manages cross-cutting health status signals (parser breakage, GitHub outage)

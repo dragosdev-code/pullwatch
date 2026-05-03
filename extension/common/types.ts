@@ -230,6 +230,31 @@ export interface MinigameSessionCheckpoint {
   savedAt: number;
 }
 
+/**
+ * Discriminator on the persisted `STORAGE_KEY_GITHUB_OUTAGE` payload.
+ *
+ * - `'transport'`: GitHubOutageError caught in `PrFetchErrorHandler` (5xx, network, timeout).
+ *   Signaled regardless of Statuspage; popup may still hide the Statuspage link unless the cached
+ *   `STORAGE_KEY_GITHUB_STATUS_CACHE` snapshot independently corroborates an incident.
+ * - `'pr_component_degraded'`: PR-list integrity anomaly that Statuspage independently corroborates
+ *   (component partial/major outage, or a non-trivial `globalIndicator`); the only branch that also
+ *   sets `STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT`.
+ * - `'pr_list_churn'`: post-hoc tombstone resurrection signal — independent of Statuspage. The
+ *   popup must not invite users to githubstatus.com here, since the page is often green while
+ *   we are still showing this banner.
+ *
+ * Lives in `@common/` so the popup can branch on it without reaching into `@background/`.
+ */
+export type GitHubOutageReason = 'transport' | 'pr_component_degraded' | 'pr_list_churn';
+
+/** Persisted payload shape under `STORAGE_KEY_GITHUB_OUTAGE`; also the broadcast `data` for `githubOutageDetected`. */
+export interface GitHubOutagePayload {
+  detected: true;
+  timestamp: number;
+  context: string;
+  reason: GitHubOutageReason;
+}
+
 /** Request-style runtime message (`payload`; used by popup, background, offscreen). */
 export type RuntimeRequestMessage<T = unknown> = {
   action: RequestRuntimeAction;

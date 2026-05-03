@@ -7,6 +7,7 @@ import {
   STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT,
 } from '@common/constants';
 import type { StorageChange } from '@common/chrome-extension-service';
+import type { GitHubOutagePayload } from '@common/types';
 import { useParserBreakage } from '../use-parser-breakage';
 import { useGitHubOutage } from '../use-github-outage';
 
@@ -14,11 +15,12 @@ const chromeMocks = vi.hoisted(() => {
   const self: {
     storageGet: ReturnType<typeof vi.fn>;
     storageListener: null | ((changes: Record<string, StorageChange>, area: string) => void);
-    msgListener: null | ((message: { action: string }) => void);
+    msgListener: null | ((message: { action: string; data?: unknown }) => void);
     addListener: ReturnType<typeof vi.fn>;
     removeListener: ReturnType<typeof vi.fn>;
     subscribe: ReturnType<typeof vi.fn>;
-    fireMessage: (message: { action: string }) => void;
+    fireMessage: (message: { action: string; data?: unknown }) => void;
+    fireStorageChange: (changes: Record<string, StorageChange>) => void;
   } = {
     storageGet: vi.fn(),
     storageListener: null,
@@ -29,13 +31,16 @@ const chromeMocks = vi.hoisted(() => {
     fireMessage(message) {
       self.msgListener?.(message);
     },
+    fireStorageChange(changes) {
+      self.storageListener?.(changes, 'local');
+    },
   };
   self.addListener.mockImplementation(
     (cb: (changes: Record<string, StorageChange>, area: string) => void) => {
       self.storageListener = cb;
     }
   );
-  self.subscribe.mockImplementation((cb: (message: { action: string }) => void) => {
+  self.subscribe.mockImplementation((cb: (message: { action: string; data?: unknown }) => void) => {
     self.msgListener = cb;
     return () => {
       self.msgListener = null;
@@ -63,6 +68,25 @@ vi.mock('@common/chrome-extension-service', () => ({
     },
   },
 }));
+
+const transportPayload: GitHubOutagePayload = {
+  detected: true,
+  timestamp: 1_700_000_000_000,
+  context: 'transport boom',
+  reason: 'transport',
+};
+const componentDegradedPayload: GitHubOutagePayload = {
+  detected: true,
+  timestamp: 1_700_000_001_000,
+  context: 'PR component down',
+  reason: 'pr_component_degraded',
+};
+const listChurnPayload: GitHubOutagePayload = {
+  detected: true,
+  timestamp: 1_700_000_002_000,
+  context: 'tombstone resurrection',
+  reason: 'pr_list_churn',
+};
 
 describe('Status banners after a bad sync', () => {
   beforeEach(() => {
@@ -96,7 +120,10 @@ describe('Status banners after a bad sync', () => {
     });
 
     act(() => {
-      chromeMocks.fireMessage({ action: BROADCAST_ACTION.githubOutageDetected });
+      chromeMocks.fireMessage({
+        action: BROADCAST_ACTION.githubOutageDetected,
+        data: transportPayload,
+      });
     });
 
     expect(result.current).toBe(true);
@@ -119,6 +146,7 @@ describe('Status banners after a bad sync', () => {
 
     await waitFor(() => {
       expect(result.current.isActive).toBe(false);
+      expect(result.current.payload).toBe(null);
       expect(result.current.lastUntrustedAttemptAt).toBe(null);
     });
 
@@ -129,11 +157,16 @@ describe('Status banners after a bad sync', () => {
     expect(result.current.isActive).toBe(false);
 
     act(() => {
-      chromeMocks.fireMessage({ action: BROADCAST_ACTION.githubOutageDetected });
+      chromeMocks.fireMessage({
+        action: BROADCAST_ACTION.githubOutageDetected,
+        data: transportPayload,
+      });
     });
 
     await waitFor(() => {
       expect(result.current.isActive).toBe(true);
+      expect(result.current.payload?.reason).toBe('transport');
+      expect(result.current.payload?.context).toBe('transport boom');
     });
 
     act(() => {
@@ -148,13 +181,14 @@ describe('Status banners after a bad sync', () => {
 
     await waitFor(() => {
       expect(result.current.isActive).toBe(false);
+      expect(result.current.payload).toBe(null);
       expect(result.current.lastUntrustedAttemptAt).toBe(null);
     });
   });
 
-  it('reads last untrusted fetch time from storage when present', async () => {
+  it('reads last untrusted fetch time from storage when the persisted reason is pr_component_degraded', async () => {
     chromeMocks.storageGet.mockResolvedValue({
-      [STORAGE_KEY_GITHUB_OUTAGE]: { detected: true, timestamp: 1 },
+      [STORAGE_KEY_GITHUB_OUTAGE]: componentDegradedPayload,
       [STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT]: 12_000,
     });
 
@@ -162,7 +196,99 @@ describe('Status banners after a bad sync', () => {
 
     await waitFor(() => {
       expect(result.current.isActive).toBe(true);
+      expect(result.current.payload?.reason).toBe('pr_component_degraded');
       expect(result.current.lastUntrustedAttemptAt).toBe(12_000);
+    });
+  });
+
+  it('round-trips each reason through the broadcast handler', async () => {
+    chromeMocks.storageGet.mockResolvedValue({});
+    const { result } = renderHook(() => useGitHubOutage());
+
+    await waitFor(() => {
+      expect(result.current.isActive).toBe(false);
+    });
+
+    act(() => {
+      chromeMocks.fireMessage({
+        action: BROADCAST_ACTION.githubOutageDetected,
+        data: componentDegradedPayload,
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.payload?.reason).toBe('pr_component_degraded');
+    });
+
+    act(() => {
+      chromeMocks.fireMessage({
+        action: BROADCAST_ACTION.githubOutageDetected,
+        data: listChurnPayload,
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.payload?.reason).toBe('pr_list_churn');
+    });
+  });
+
+  it('falls back to a fresh storage read when the broadcast omits a payload', async () => {
+    chromeMocks.storageGet
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ [STORAGE_KEY_GITHUB_OUTAGE]: transportPayload });
+
+    const { result } = renderHook(() => useGitHubOutage());
+
+    await waitFor(() => {
+      expect(result.current.isActive).toBe(false);
+    });
+
+    act(() => {
+      chromeMocks.fireMessage({ action: BROADCAST_ACTION.githubOutageDetected });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isActive).toBe(true);
+      expect(result.current.payload?.reason).toBe('transport');
+    });
+  });
+
+  it('falls back to reason="transport" for legacy payloads missing the discriminator', async () => {
+    const legacyPayload = {
+      detected: true,
+      timestamp: 1_700_000_000_000,
+      context: 'pre-reason build',
+    };
+    chromeMocks.storageGet.mockResolvedValue({
+      [STORAGE_KEY_GITHUB_OUTAGE]: legacyPayload,
+    });
+
+    const { result } = renderHook(() => useGitHubOutage());
+
+    await waitFor(() => {
+      expect(result.current.isActive).toBe(true);
+      expect(result.current.payload?.reason).toBe('transport');
+      expect(result.current.payload?.context).toBe('pre-reason build');
+    });
+  });
+
+  it('storage onChanged with newValue undefined clears the banner', async () => {
+    chromeMocks.storageGet.mockResolvedValue({
+      [STORAGE_KEY_GITHUB_OUTAGE]: transportPayload,
+    });
+
+    const { result } = renderHook(() => useGitHubOutage());
+    await waitFor(() => {
+      expect(result.current.isActive).toBe(true);
+    });
+
+    act(() => {
+      chromeMocks.fireStorageChange({
+        [STORAGE_KEY_GITHUB_OUTAGE]: { newValue: undefined, oldValue: transportPayload },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isActive).toBe(false);
+      expect(result.current.payload).toBe(null);
     });
   });
 });
