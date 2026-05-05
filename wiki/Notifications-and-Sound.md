@@ -75,6 +75,8 @@ Why no toast for authored? Because the user owns those PRs. Notifying on "your o
 
 There is a guardrail against an inconsistent settings combo (`notifyOnDrafts: true` with `showDraftsInList: false`). When that combo appears, `effectiveAssignedNotifyOnDrafts` treats it as off, because notifying on a PR the user cannot see in the list would be a dead end click, and silently dropping the notification is less confusing than a notification that leads to an empty list.
 
+Hiding drafts from the assigned list is a display filter, not evidence that GitHub truncated the response. Tombstone drop recording skips draft keys removed only by that filter so `pr_list_churn` and the integrity banner do not fire when the user toggles visibility alone. The full rule lives on [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists).
+
 ---
 
 ## The click ID contract
@@ -257,6 +259,8 @@ The same applies to `suspect_empty_pending`. The empty-only path is a confirmati
 ### Draft filtering and the invalid combo guardrail
 
 `assigned.notifyOnDrafts` defaults to `false`, so draft PRs do not produce assigned notifications unless the user opts in. There is one explicit guard against an inconsistent settings combo (`notifyOnDrafts: true` with `showDraftsInList: false`); when that combo appears, [effectiveAssignedNotifyOnDrafts](../extension/common/effective-assigned-draft-notify.ts) treats it as off, because notifying on a PR the user cannot see in the list would be a dead-end click.
+
+The same `showDraftsInList` toggle also controls whether drafts are written into stored assigned PRs. That client-side omission is wired into tombstone drop recording so it does not produce a list-integrity signal by itself; see the assigned note under **Drop record** in [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists).
 
 ---
 
