@@ -10,6 +10,7 @@ export interface AssignedListMergeResult {
   allPRs: PullRequest[];
   filteredPending: PullRequest[];
   newPRs: PullRequest[];
+  clientFilteredDraftKeys: string[];
 }
 
 export function filterPendingAssignedByDraftSetting(
@@ -87,10 +88,14 @@ export function mergeAndFilterAssignedPRs(
   const filteredReviewed = showDrafts
     ? freshReviewed
     : freshReviewed.filter((pr) => pr.type !== 'draft');
+  const clientFilteredDraftKeys = showDrafts
+    ? []
+    : [...pendingPRsWithStatus, ...freshReviewed].filter((pr) => pr.type === 'draft').map(getPrKey);
 
   return {
     allPRs: [...filteredPending, ...filteredReviewed],
     filteredPending,
     newPRs,
+    clientFilteredDraftKeys,
   };
 }

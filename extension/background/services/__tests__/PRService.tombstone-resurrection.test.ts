@@ -56,6 +56,16 @@ function makePRList(prefix: string, count: number): PullRequest[] {
   );
 }
 
+function settingsWithDraftVisibility(showDraftsInList: boolean) {
+  return {
+    ...DEFAULT_EXTENSION_SETTINGS,
+    assigned: {
+      ...DEFAULT_EXTENSION_SETTINGS.assigned,
+      showDraftsInList,
+    },
+  };
+}
+
 describe('PRService tombstone resurrection', () => {
   let getStoredPRs: Mock;
   let setStoredPRs: Mock;
@@ -172,6 +182,36 @@ describe('PRService tombstone resurrection', () => {
     vi.useRealTimers();
   });
 
+  it('draft hidden by showDraftsInList is not tombstoned and does not signal churn when shown again', async () => {
+    const open = makePR({ id: 'a1', url: 'https://github.com/o/r/pull/a1' });
+    const draft = makePR({
+      id: 'd1',
+      url: 'https://github.com/o/r/pull/d1',
+      type: 'draft',
+    });
+    storedByKey[STORAGE_KEY_ASSIGNED_PRS] = { prs: [open, draft] };
+    fetchAssignedPRs.mockResolvedValue([open, draft]);
+
+    alarmSeqValue = 1;
+    getExtensionSettings.mockResolvedValue(settingsWithDraftVisibility(false));
+    let pr = makeService();
+    await pr.fetchAndUpdateAssignedPRs(false, true);
+
+    const tombstonesAfterHide = chromeStorageByKey[STORAGE_KEY_PR_TOMBSTONES] as
+      | { byList?: { assigned?: Array<{ prKey: string; droppedAtAlarmSeq: number }> } }
+      | undefined;
+    expect(tombstonesAfterHide?.byList?.assigned?.some((t) => t.prKey === 'd1')).not.toBe(true);
+
+    signalGitHubOutage.mockClear();
+    alarmSeqValue = 2;
+    getExtensionSettings.mockResolvedValue(settingsWithDraftVisibility(true));
+    fetchAssignedPRs.mockResolvedValue([open, draft]);
+    pr = makeService();
+    await pr.fetchAndUpdateAssignedPRs(false, true);
+
+    expect(signalGitHubOutage).not.toHaveBeenCalledWith(expect.anything(), 'pr_list_churn');
+  });
+
   it('flap within window: vanish at wave N, return at wave N+1 → pr_list_churn signaled, no new-PR notification', async () => {
     // Wave N (alarmSeq=0): persist 5 assigned PRs to seed oldPRs.
     storedByKey[STORAGE_KEY_ASSIGNED_PRS] = { prs: makePRList('a', 5) };
@@ -208,7 +248,9 @@ describe('PRService tombstone resurrection', () => {
       'pr_list_churn'
     );
     if (showAssignedPRNotifications.mock.calls.length > 0) {
-      const notifiedKeys = showAssignedPRNotifications.mock.calls[0][0].map((p: PullRequest) => p.id);
+      const notifiedKeys = showAssignedPRNotifications.mock.calls[0][0].map(
+        (p: PullRequest) => p.id
+      );
       expect(notifiedKeys).not.toContain('a3');
     }
   });
@@ -234,10 +276,7 @@ describe('PRService tombstone resurrection', () => {
     const pr = makeService();
     await pr.fetchAndUpdateAssignedPRs(false, true);
 
-    expect(signalGitHubOutage).not.toHaveBeenCalledWith(
-      expect.anything(),
-      'pr_list_churn'
-    );
+    expect(signalGitHubOutage).not.toHaveBeenCalledWith(expect.anything(), 'pr_list_churn');
   });
 
   it('records drops on operational shrink path so future returns are detected even when assessor trusted the shrink', async () => {

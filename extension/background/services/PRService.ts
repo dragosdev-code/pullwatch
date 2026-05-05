@@ -181,7 +181,10 @@ export class PRService implements IPRService {
   ): Promise<void> {
     const lists: ReadonlyArray<{
       kind: 'assigned' | 'merged' | 'authored';
-      key: typeof STORAGE_KEY_ASSIGNED_PRS | typeof STORAGE_KEY_MERGED_PRS | typeof STORAGE_KEY_AUTHORED_PRS;
+      key:
+        | typeof STORAGE_KEY_ASSIGNED_PRS
+        | typeof STORAGE_KEY_MERGED_PRS
+        | typeof STORAGE_KEY_AUTHORED_PRS;
     }> = [
       { kind: 'assigned', key: STORAGE_KEY_ASSIGNED_PRS },
       { kind: 'merged', key: STORAGE_KEY_MERGED_PRS },
@@ -656,12 +659,14 @@ export class PRService implements IPRService {
       const treatAsBaseline = accountSwap || recoveryBaseline;
       const oldPendingForCompare = treatAsBaseline ? [] : oldPendingPRs;
 
-      let { allPRs, filteredPending, newPRs } = mergeAndFilterAssignedPRs(
+      const assignedMerge = mergeAndFilterAssignedPRs(
         oldPendingForCompare,
         freshPendingPRsRaw,
         freshReviewedPRsRaw,
         showDrafts
       );
+      let { allPRs, filteredPending, newPRs } = assignedMerge;
+      const { clientFilteredDraftKeys } = assignedMerge;
 
       if (treatAsBaseline) {
         newPRs = [];
@@ -681,6 +686,7 @@ export class PRService implements IPRService {
           freshList: allPRs,
           newPRs,
           allPRsWithStatus: allPRs,
+          dropIgnoredKeys: clientFilteredDraftKeys,
         }));
         filteredPending = filterPendingAssignedByDraftSetting(
           allPRs.filter((pr) => pr.reviewStatus !== 'reviewed'),
@@ -755,6 +761,10 @@ export class PRService implements IPRService {
    * (trusted + trusted_operational_shrink) so flapping is detected even when the assessor would
    * have signed the same shrink off as legitimate.
    *
+   * Assigned may pass keys filtered by `showDraftsInList`; those drops are client-side display
+   * state, not evidence that GitHub omitted the row. Resurrection checks still use the persisted
+   * fresh list so existing real tombstones continue to signal churn when the key actually returns.
+   *
    * Returns the (possibly mutated) `newPRs` and `allPRsWithStatus` arrays — callers must use the
    * returned values for the actual notify + persist calls.
    */
@@ -764,6 +774,7 @@ export class PRService implements IPRService {
     freshList: PullRequest[];
     newPRs: PullRequest[];
     allPRsWithStatus: PullRequest[];
+    dropIgnoredKeys?: string[];
   }): Promise<{ newPRs: PullRequest[]; allPRsWithStatus: PullRequest[] }> {
     const { listKind, oldPRs, freshList } = args;
     const alarmSeq = await this.alarmSeqClock.current();
@@ -795,9 +806,13 @@ export class PRService implements IPRService {
       await this.tombstoneStore.clearKeys(listKind, resurrected);
     }
 
+    const dropIgnoredSet = new Set(args.dropIgnoredKeys ?? []);
+    const oldKeysForDropRecord =
+      dropIgnoredSet.size === 0 ? oldKeys : oldKeys.filter((key) => !dropIgnoredSet.has(key));
+
     await this.tombstoneStore.recordDrops({
       listKind,
-      oldKeys,
+      oldKeys: oldKeysForDropRecord,
       freshKeys,
       currentAlarmSeq: alarmSeq,
     });
