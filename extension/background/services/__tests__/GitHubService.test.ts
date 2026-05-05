@@ -7,6 +7,7 @@ import {
   isGitHubWebSessionAuthError,
 } from '@common/errors';
 import { DEFAULT_COMPILED_PATTERNS } from '@common/default-patterns';
+import type { PullRequest } from '@common/types';
 import type { IDebugService } from '../../interfaces/IDebugService';
 import type { IAvatarService } from '../../interfaces/IAvatarService';
 import type { IPatternRegistryService } from '../../interfaces/IPatternRegistryService';
@@ -166,5 +167,57 @@ describe('GitHub infrastructure blips', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(debug.warn).not.toHaveBeenCalledWith(expect.stringContaining('retrying'));
     expect(avatar.enrichPRsWithAvatars).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchAuthoredPRs dedupes overlapping buckets', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  function basePR(id: string): Omit<PullRequest, 'authorReviewStatus'> {
+    return {
+      id,
+      url: id,
+      title: `PR ${id}`,
+      number: null,
+      repoName: 'acme/repo',
+      author: [{ login: 'me' }],
+      type: 'draft',
+    };
+  }
+
+  it('returns a single draft row when the same PR appears in pending and draft buckets', async () => {
+    const { debug, avatar, patterns } = createCollaborators();
+    const service = new GitHubService(debug, avatar, patterns);
+    await service.initialize();
+
+    const sharedId = 'https://github.com/acme/repo/pull/1';
+    const fetchFromURL = vi
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .spyOn(service as any, 'fetchFromURL')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockImplementation((async (_url: string, status: PullRequest['authorReviewStatus']) => {
+        if (status === 'pending' || status === 'draft') {
+          return [{ ...basePR(sharedId), authorReviewStatus: status }];
+        }
+        return [];
+      }) as any);
+
+    const settled = service.fetchAuthoredPRs();
+    await vi.advanceTimersByTimeAsync(10_000);
+    const result = await settled;
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(sharedId);
+    expect(result[0].authorReviewStatus).toBe('draft');
+    expect(result[0].type).toBe('draft');
+    expect(fetchFromURL).toHaveBeenCalledTimes(4);
   });
 });

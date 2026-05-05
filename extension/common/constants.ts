@@ -214,8 +214,10 @@ export const GITHUB_AUTHORED_APPROVED_URL_TEMPLATE = (baseUrl: string) =>
 export const GITHUB_AUTHORED_CHANGES_REQUESTED_URL_TEMPLATE = (baseUrl: string) =>
   `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+author%3A%40me+review%3Achanges_requested`;
 
+// `-draft:true` excludes drafts so they only land in the draft bucket;
+// belt-and-suspenders alongside client-side dedupe in `mergeAuthoredPrLists`.
 export const GITHUB_AUTHORED_PENDING_URL_TEMPLATE = (baseUrl: string) =>
-  `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+author%3A%40me+review%3Anone`;
+  `${baseUrl}/pulls?q=is%3Aopen+is%3Apr+author%3A%40me+review%3Anone+-draft%3Atrue`;
 
 // Note: GitHub doesn't properly support the 'review:commented' filter yet - it may return empty results
 // This is a known limitation on GitHub's side, but we include it for future compatibility

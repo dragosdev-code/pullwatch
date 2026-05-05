@@ -32,6 +32,7 @@ import { parsePullsListHTML } from '@common/pulls-list-parser';
 import { toPullsSearchUrl } from '@common/github-url-utils';
 import { delay } from '@common/utils';
 import { isGitHubLoggedOutHtmlShell } from '@common/github-html-session';
+import { mergeAuthoredPrLists, type AuthorReviewBucket } from '@common/authored-merge';
 
 /**
  * Which pulls *list URL* shape {@link GitHubService.fetchPRs} prefers first
@@ -544,7 +545,7 @@ export class GitHubService implements IGitHubService {
 
     const fetchSequence: {
       url: string;
-      status: 'approved' | 'changes_requested' | 'pending' | 'draft';
+      status: AuthorReviewBucket;
     }[] = [
       { url: this.authoredApprovedURL, status: 'approved' },
       { url: this.authoredChangesRequestedURL, status: 'changes_requested' },
@@ -553,7 +554,12 @@ export class GitHubService implements IGitHubService {
     ];
 
     try {
-      const resultsByStatus: Record<string, PullRequest[]> = {};
+      const resultsByStatus: Record<AuthorReviewBucket, PullRequest[]> = {
+        approved: [],
+        changes_requested: [],
+        pending: [],
+        draft: [],
+      };
       for (let i = 0; i < fetchSequence.length; i++) {
         const { url, status } = fetchSequence[i];
         resultsByStatus[status] = await this.fetchFromURL(url, status);
@@ -562,11 +568,20 @@ export class GitHubService implements IGitHubService {
         }
       }
 
-      const allAuthoredPRs = fetchSequence.flatMap(({ status }) => resultsByStatus[status]);
+      const rawCount = fetchSequence.reduce(
+        (acc, { status }) => acc + resultsByStatus[status].length,
+        0
+      );
+      const allAuthoredPRs = mergeAuthoredPrLists(resultsByStatus);
 
       this.debugService.log(
-        `[GitHubService] Fetched ${allAuthoredPRs.length} total authored PRs:`,
+        `[GitHubService] Fetched ${rawCount} raw authored PRs across buckets:`,
         fetchSequence.map(({ status }) => `${status}=${resultsByStatus[status].length}`).join(', ')
+      );
+      this.debugService.log(
+        `[GitHubService] Merged authored PRs: ${allAuthoredPRs.length} (${
+          rawCount - allAuthoredPRs.length
+        } duplicates collapsed)`
       );
 
       return allAuthoredPRs;
