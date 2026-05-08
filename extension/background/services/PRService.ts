@@ -914,6 +914,63 @@ export class PRService implements IPRService {
     return stored?.prs || [];
   }
 
+  /**
+   * Returns the keys of currently-stored merged PRs as a Set, or an empty Set on failure.
+   * Best-effort read — cross-list pruning is a safety net, not a correctness invariant.
+   *
+   * WHY [snapshot once per authored update]: doUpdateMergedPRs runs before doUpdateAuthoredPRs
+   * in the alarm wave (EventService.handleAlarm), so this snapshot reflects the wave's merges.
+   * Manual authored refresh reads whatever the most recent alarm left in storage.
+   */
+  private async readMergedKeySet(): Promise<Set<string>> {
+    try {
+      const merged = await this.storageService.getStoredPRs(STORAGE_KEY_MERGED_PRS);
+      return new Set((merged?.prs ?? []).map(getPrKey));
+    } catch (err) {
+      this.debugService.warn(
+        '[PRService] readMergedKeySet failed; skipping cross-list prune.',
+        err
+      );
+      return new Set();
+    }
+  }
+
+  private pruneOldByMergedKeys(
+    oldPRs: PullRequest[],
+    mergedKeys: ReadonlySet<string>
+  ): PullRequest[] {
+    if (oldPRs.length === 0 || mergedKeys.size === 0) return oldPRs;
+    return oldPRs.filter((pr) => !mergedKeys.has(getPrKey(pr)));
+  }
+
+  /**
+   * Used by the suspect_partial / suspect_empty_pending / suspect_empty_corroborated /
+   * fetch-error branches in doUpdateAuthoredPRs. Returns the (possibly pruned) preserved
+   * list and writes storage iff it actually shrank.
+   *
+   * WHY [no markListRefreshedForCurrentViewer / recordTrustedFetch]: this is NOT a trusted
+   * fetch — we still reject the fresh authored response. We only acknowledge already-trusted
+   * merged evidence. Marking refresh would falsely advance the cycle.
+   *
+   * WHY [conditional write]: avoids spurious chrome.storage.onChanged events that would
+   * re-render the popup with no semantic delta.
+   */
+  private async preserveAuthoredWithMergedReconciliation(
+    oldPRs: PullRequest[],
+    mergedKeys: ReadonlySet<string>,
+    reasonLabel: string
+  ): Promise<PullRequest[]> {
+    const pruned = this.pruneOldByMergedKeys(oldPRs, mergedKeys);
+    if (pruned.length === oldPRs.length) {
+      return oldPRs;
+    }
+    this.debugService.log(
+      `[PRService] authored ${reasonLabel}: pruned ${oldPRs.length - pruned.length} PR(s) found in merged storage; persisting reconciled list (${pruned.length}).`
+    );
+    await this.storageService.setStoredPRs(STORAGE_KEY_AUTHORED_PRS, pruned);
+    return pruned;
+  }
+
   async updateAuthoredPRs(
     forceRefresh = false,
     bypassCache = false,
@@ -935,6 +992,11 @@ export class PRService implements IPRService {
 
     const stored = await this.storageService.getStoredPRs(STORAGE_KEY_AUTHORED_PRS);
     const oldPRs = stored?.prs || [];
+    // WHY [pre-fetch merged keys]: doUpdateMergedPRs runs before doUpdateAuthoredPRs in the
+    // alarm wave, so merged storage already reflects this wave's merges. The suspect / error
+    // branches below preserve `oldPRs` instead of writing fresh; this snapshot lets them still
+    // drop authored entries that are now in merged.
+    const mergedKeysForReconciliation = await this.readMergedKeySet();
 
     try {
       const cached = this.tryTtlCachedPrList(stored, forceRefresh, bypassCache, 'Authored');
@@ -961,7 +1023,7 @@ export class PRService implements IPRService {
         switch (dispatch.branch) {
           case 'suspect_partial': {
             this.debugService.warn(
-              `[PRService] Trust gate: partial-drop authored fetch (${authoredTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored authored PRs.`
+              `[PRService] Trust gate: partial-drop authored fetch (${authoredTrust.reasons.join(', ')}) — preserving ${oldPRs.length} stored authored PRs (may reconcile against merged storage).`
             );
             await this.limboPromoter.recordSuspiciousFetch(
               'authored',
@@ -972,13 +1034,21 @@ export class PRService implements IPRService {
             await this.persistUntrustedFetchMetadata(
               `Suspicious authored list: ${authoredTrust.reasons.join(', ')}`
             );
-            return oldPRs;
+            return await this.preserveAuthoredWithMergedReconciliation(
+              oldPRs,
+              mergedKeysForReconciliation,
+              'suspect_partial'
+            );
           }
           case 'suspect_empty_pending': {
             this.debugService.log(
               `[PRService] authored empty pending confirmation (streak=${dispatch.streak}/${dispatch.threshold})`
             );
-            return oldPRs;
+            return await this.preserveAuthoredWithMergedReconciliation(
+              oldPRs,
+              mergedKeysForReconciliation,
+              'suspect_empty_pending'
+            );
           }
           case 'suspect_empty_accept': {
             this.debugService.log(
@@ -995,7 +1065,7 @@ export class PRService implements IPRService {
           }
           case 'suspect_empty_corroborated': {
             this.debugService.warn(
-              `[PRService] Trust gate: empty authored fetch corroborated by Statuspage — preserving ${oldPRs.length} stored authored PRs.`
+              `[PRService] Trust gate: empty authored fetch corroborated by Statuspage — preserving ${oldPRs.length} stored authored PRs (may reconcile against merged storage).`
             );
             await this.limboPromoter.recordSuspiciousFetch(
               'authored',
@@ -1006,7 +1076,11 @@ export class PRService implements IPRService {
             await this.persistUntrustedFetchMetadata(
               `Suspicious authored list (corroborated): ${authoredTrust.reasons.join(', ')}`
             );
-            return oldPRs;
+            return await this.preserveAuthoredWithMergedReconciliation(
+              oldPRs,
+              mergedKeysForReconciliation,
+              'suspect_empty_corroborated'
+            );
           }
           case 'suspect_empty_reset_swap': {
             this.debugService.log(
@@ -1072,12 +1146,20 @@ export class PRService implements IPRService {
     } catch (error) {
       // WHY [updateBadgeOnError: false]: Authored is a secondary list — its failures must not
       // blow away a healthy assigned badge count.
-      return this.fetchErrorHandler.handle(error, {
+      const preserved = await this.fetchErrorHandler.handle(error, {
         listKind: 'authored',
         oldPRs,
         updateBadgeOnError: false,
         transportErrorLabel: 'Error updating authored PRs',
       });
+      // WHY [post-handle reconcile]: ParserBreakage / GitHubOutage paths return oldPRs
+      // unchanged. Same rationale as the suspect branches — known-merged PRs must come off
+      // the authored tab. Re-throwable errors throw before reaching here.
+      return await this.preserveAuthoredWithMergedReconciliation(
+        preserved,
+        mergedKeysForReconciliation,
+        'fetch_error'
+      );
     }
   }
 
