@@ -486,7 +486,12 @@ html.pw-dev-popup-sim body {
 
 .pw-sponsor-reveal-item {
   opacity: 0;
-  transform: translateY(14px) scale(0.98);
+  /* WHY [no scale]: scaling text mid-transition rasterizes glyphs at fractional sizes — produces a
+     visible blur/jump on small dense copy and on the CTA gradient. translateY-only keeps glyphs on
+     their pixel grid for a crisp reveal. */
+  transform: translateY(14px);
+  /* Hint to compositor so the entrance lives on its own layer, avoiding repaints of sibling text. */
+  will-change: transform, opacity;
   transition:
     opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
     transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
@@ -507,7 +512,9 @@ html.pw-dev-popup-sim body {
 
 .pw-sponsor-reveal-group--visible .pw-sponsor-reveal-item {
   opacity: 1;
-  transform: translateY(0) scale(1);
+  transform: translateY(0);
+  /* Drop layer hint once settled so static text doesn't pay the compositor tax forever. */
+  will-change: auto;
 }
 
 .pw-sponsor-cta {
@@ -602,6 +609,45 @@ html.pw-dev-popup-sim body {
     animation: none;
     opacity: 0;
   }
+}
+
+/* —— Ko-fi-branded sponsor CTA ——
+   Variant overrides the theme-primary palette so the button reads as Ko-fi (red coral) across every
+   theme. Keeps the base `.pw-sponsor-cta` shimmer/lift transitions; only the surface colors change. */
+.pw-sponsor-cta--kofi {
+  --pw-kofi-base: #ff5e5b;
+  --pw-kofi-hi: #ff8a87;
+  color: #fff;
+  background: linear-gradient(
+    110deg,
+    var(--pw-kofi-base) 0%,
+    var(--pw-kofi-hi) 50%,
+    var(--pw-kofi-base) 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 4px 20px -4px color-mix(in oklch, var(--pw-kofi-base) 55%, transparent);
+}
+
+.pw-sponsor-cta--kofi:hover {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.26),
+    0 8px 28px -4px color-mix(in oklch, var(--pw-kofi-base) 65%, transparent);
+}
+
+.pw-sponsor-cta--kofi:focus-visible {
+  outline-color: var(--pw-kofi-base);
+}
+
+/* WHY [theme-independent shimmer]: base shimmer derives from `--color-primary-content` so it shifts
+   per theme. Ko-fi CTA is brand-locked, so the traversing highlight is always white. */
+.pw-sponsor-cta--kofi::after {
+  background: linear-gradient(
+    95deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 48%,
+    transparent 100%
+  );
 }
 
 /* —— Preview-button bell wiggle ——

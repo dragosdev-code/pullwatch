@@ -1,16 +1,9 @@
-import type { MouseEvent } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { SPONSOR_URL } from '@src/constants/sponsor';
-import type { LinkOpenBehavior } from '@src/hooks/use-link-behavior';
-import { chromeExtensionService } from '@common/chrome-extension-service';
-import { isExtensionContext } from '@src/utils/is-extension-context';
+import { KoFiIcon } from '@src/components/ui/icons/ko-fi-icon';
 
-interface SettingsSponsorLoungeProps {
-  linkBehavior: LinkOpenBehavior;
-}
-
-export const SettingsSponsorLounge = ({ linkBehavior }: SettingsSponsorLoungeProps) => {
+export const SettingsSponsorLounge = () => {
   const sectionRef = useRef<HTMLElement>(null);
   const rawId = useId();
   const noiseFilterId = `pw-sponsor-noise-${rawId.replace(/:/g, '')}`;
@@ -61,15 +54,6 @@ export const SettingsSponsorLounge = ({ linkBehavior }: SettingsSponsorLoungePro
     };
   }, [revealed]);
 
-  // WHY [extension]: In the extension popup, `target=_blank` behavior is awkward; `chrome.tabs.create` honors
-  // settings’ “open links in background” without relying on the popup staying open.
-  const handleSponsorClick = (e: MouseEvent<HTMLAnchorElement>) => {
-    if (linkBehavior === 'background' && isExtensionContext()) {
-      e.preventDefault();
-      void chromeExtensionService.tabs.create({ url: SPONSOR_URL, active: false });
-    }
-  };
-
   return (
     <section ref={sectionRef} className="relative pt-2 shrink-0">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-base-content/50 mb-2 px-1">
@@ -111,27 +95,23 @@ export const SettingsSponsorLounge = ({ linkBehavior }: SettingsSponsorLoungePro
               Did Pullwatch save you time today?
             </h2>
             <p className="pw-sponsor-reveal-item text-xs leading-relaxed text-base-content/70">
-              If this extension helped you catch a PR faster or smoothed out your workflow, consider
-              buying me a coffee to support future updates.
+              If this extension helped you catch a PR faster or smoothed out your workflow, drop a
+              tip on Ko-fi to fuel future updates.
             </p>
             <div className="pw-sponsor-reveal-item pt-0.5">
+              {/* WHY [no background-link override]: Ko-fi CTA always opens in a foreground tab so the popup
+                  closes as the user expects and the user’s “open in background” preference does not silently
+                  swallow this rare, intentional click. Plain target=_blank is enough — popup focus loss
+                  dismisses the surface for free. */}
               <a
                 href={SPONSOR_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={handleSponsorClick}
-                className="pw-sponsor-cta no-underline"
+                className="pw-sponsor-cta pw-sponsor-cta--kofi no-underline"
               >
-                <span className="relative z-1 inline-flex items-center gap-[0.4rem]">
-                  <svg
-                    className="size-3.5 shrink-0 opacity-90"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    aria-hidden
-                  >
-                    <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17l-.022.012-.007.003-.002.001h-.002z" />
-                  </svg>
-                  Sponsor on GitHub
+                <span className="relative z-1 inline-flex items-center gap-[0.45rem]">
+                  <KoFiIcon className="size-4 shrink-0" />
+                  Support on Ko-fi
                 </span>
               </a>
             </div>

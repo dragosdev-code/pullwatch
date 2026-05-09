@@ -114,7 +114,7 @@ export const SettingsPage = ({ onClose }: SettingsPageProps) => {
 
           <SquashMinigameSection />
 
-          <SettingsSponsorLounge linkBehavior={linkBehavior} />
+          <SettingsSponsorLounge />
         </div>
       </div>
     </FormProvider>
