@@ -80,15 +80,7 @@ export function NeoTerminalLauncher({
   }
 
   return (
-    <div
-      data-testid="neo-terminal-menu"
-      className="rounded-xl border border-primary/40 bg-base-100/70 p-3 shadow-[0_0_24px_-12px_var(--color-primary)] backdrop-blur"
-    >
-      <header className="mb-2 flex items-center justify-between border-b border-primary/30 pb-1.5 font-mono text-[10px] uppercase tracking-widest text-primary sm:text-[11px]">
-        <span>squash the bugs</span>
-        <span className="text-accent">v0.42</span>
-      </header>
-
+    <div data-testid="neo-terminal-menu">
       <div className="grid grid-cols-2 gap-1.5">
         {MODE_METADATA.map((meta) => {
           const modeStats = stats.modes[meta.mode];
