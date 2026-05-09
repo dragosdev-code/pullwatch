@@ -10,10 +10,10 @@ export interface SettingsModeStatsPanelProps {
 }
 
 const labelClass =
-  'text-[9px] font-mono uppercase tracking-wide text-base-content/70 sm:text-[10px]';
+  'text-[11px] font-mono uppercase tracking-wide text-base-content/70';
 
 const pillBase =
-  'rounded border px-1 py-1 tabular-nums text-[10px] font-semibold leading-none sm:text-[11px]';
+  'rounded border px-1 py-1 tabular-nums text-xs font-semibold leading-none';
 
 /**
  * Lifetime stats for one mode in settings — mirrors {@link FinishRoundStats} row + pill layout.

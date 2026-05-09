@@ -101,17 +101,17 @@ export function NeoTerminalLauncher({
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-primary sm:text-xs">
+                  <span className="font-mono text-xs font-bold uppercase tracking-wider text-primary">
                     {meta.label}
                   </span>
                   {isLast && (
-                    <span className="rounded bg-accent px-1 py-0.5 font-mono text-[8px] uppercase leading-none text-accent-content sm:text-[9px]">
+                    <span className="rounded bg-accent px-1 py-0.5 font-mono text-[10px] uppercase leading-none text-accent-content">
                       last
                     </span>
                   )}
                 </div>
 
-                <p className="line-clamp-2 text-[10px] leading-snug text-base-content/70">
+                <p className="line-clamp-2 text-[11px] leading-snug text-base-content/70">
                   {meta.tagline}
                 </p>
               </div>
@@ -128,7 +128,7 @@ export function NeoTerminalLauncher({
 
       <footer
         data-testid="neo-terminal-overall"
-        className="mt-2 flex justify-between border-t border-primary/30 pt-1.5 font-mono text-[9px] uppercase tracking-wide text-base-content/60 sm:text-[10px]"
+        className="mt-2 flex justify-between border-t border-primary/30 pt-1.5 font-mono text-[11px] uppercase tracking-wide text-base-content/60"
       >
         <span>bugs {stats.overall.totalBugsSquashed}</span>
         <span>features {stats.overall.totalFeaturesBroken}</span>

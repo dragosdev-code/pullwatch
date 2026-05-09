@@ -86,13 +86,12 @@ export function SquashMinigameSection() {
         style={{
           height: open ? `${contentHeight}px` : '0px',
           opacity: open ? 1 : 0,
-          transform: open ? 'translateY(0)' : 'translateY(-8px)',
           transition: open
-            ? 'height 480ms cubic-bezier(0.22,1,0.36,1), opacity 320ms ease-out 80ms, transform 480ms cubic-bezier(0.22,1,0.36,1)'
-            : 'height 360ms cubic-bezier(0.4,0,0.2,1), opacity 200ms ease-in, transform 360ms cubic-bezier(0.4,0,0.2,1)',
+            ? 'height 480ms cubic-bezier(0.22,1,0.36,1), opacity 320ms ease-out 80ms'
+            : 'height 360ms cubic-bezier(0.4,0,0.2,1), opacity 200ms ease-in',
           overflow: 'hidden',
           pointerEvents: open ? 'auto' : 'none',
-          willChange: 'height, opacity, transform',
+          willChange: 'height, opacity',
         }}
       >
         <div ref={contentRef} className="border-t border-primary/30 px-3 pt-3 pb-3">
