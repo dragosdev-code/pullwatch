@@ -73,7 +73,7 @@ flowchart LR
   React --> Store
 ```
 
-For the longer tour of the service worker lifecycle, the parser waterfall, the remote pattern config, and the popup hydration flow, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For the longer tour of the service worker lifecycle, the parser waterfall, the remote pattern config, and the popup hydration flow, see the wiki's [Architecture Overview](https://github.com/dragosdev-code/pullwatch/wiki/Architecture-Overview).
 
 ## Canary monitor
 
