@@ -81,7 +81,7 @@ export function NeoTerminalLauncher({
 
   return (
     <div data-testid="neo-terminal-menu">
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className="grid grid-cols-2 gap-1">
         {MODE_METADATA.map((meta) => {
           const modeStats = stats.modes[meta.mode];
           const isLast = stats.lastPlayedMode === meta.mode;
@@ -94,24 +94,24 @@ export function NeoTerminalLauncher({
                 onRequestPlayMode ? onRequestPlayMode(meta.mode) : setActiveMode(meta.mode)
               }
               className={clsx(
-                'group flex flex-col justify-between gap-0.5 rounded-lg border border-base-300 bg-base-200/60 p-2 text-left transition',
+                'group flex flex-col justify-between gap-0.5 rounded-lg border border-base-300 bg-base-200/60 p-1.5 text-left transition',
                 'hover:border-primary hover:bg-primary/10 hover:shadow-[0_0_12px_-4px_var(--color-primary)]',
                 isLast && 'border-accent'
               )}
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold uppercase tracking-wider text-primary">
+                  <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-primary">
                     {meta.label}
                   </span>
                   {isLast && (
-                    <span className="rounded bg-accent px-1 py-0.5 font-mono text-[10px] uppercase leading-none text-accent-content">
+                    <span className="rounded bg-accent px-0.5 py-px font-mono text-[9px] uppercase leading-none text-accent-content">
                       last
                     </span>
                   )}
                 </div>
 
-                <p className="line-clamp-2 text-[11px] leading-snug text-base-content/70">
+                <p className="line-clamp-2 text-[10px] leading-snug text-base-content/70">
                   {meta.tagline}
                 </p>
               </div>
@@ -128,7 +128,7 @@ export function NeoTerminalLauncher({
 
       <footer
         data-testid="neo-terminal-overall"
-        className="mt-2 flex justify-between border-t border-primary/30 pt-1.5 font-mono text-[11px] uppercase tracking-wide text-base-content/60"
+        className="mt-1.5 flex justify-between border-t border-primary/30 pt-1 font-mono text-[10px] uppercase tracking-wide text-base-content/60"
       >
         <span>bugs {stats.overall.totalBugsSquashed}</span>
         <span>features {stats.overall.totalFeaturesBroken}</span>

@@ -51,21 +51,21 @@ export function SquashMinigameSection() {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={panelId}
-        style={{ display: 'flex', minHeight: '48px' }}
-        className="w-full items-center gap-2 bg-base-200 px-4 py-3 text-left transition-colors duration-200 hover:bg-base-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        style={{ display: 'flex', minHeight: '40px' }}
+        className="w-full items-center gap-1.5 bg-base-200 px-3 py-2 text-left transition-colors duration-200 hover:bg-base-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       >
         <span
           className={clsx(
-            'inline-flex size-6 items-center justify-center rounded border border-primary/50 bg-primary/15 text-primary transition-[transform,background-color,border-color] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+            'inline-flex size-5 items-center justify-center rounded border border-primary/50 bg-primary/15 text-primary transition-[transform,background-color,border-color] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
             open
               ? 'rotate-90 border-primary bg-primary/25'
               : 'group-hover/squash:scale-110 group-hover/squash:border-primary'
           )}
           aria-hidden="true"
         >
-          <PlayIcon className="size-4" />
+          <PlayIcon className="size-3.5" />
         </span>
-        <span className="font-mono text-sm font-semibold uppercase tracking-wider text-primary">
+        <span className="font-mono text-xs font-semibold uppercase tracking-wider text-primary">
           Squash the bugs
         </span>
         <span className="ml-auto flex items-center gap-2">
@@ -94,7 +94,7 @@ export function SquashMinigameSection() {
           willChange: 'height, opacity',
         }}
       >
-        <div ref={contentRef} className="border-t border-primary/30 px-3 pt-3 pb-3">
+        <div ref={contentRef} className="border-t border-primary/30 px-2.5 pb-2.5 pt-2.5">
           <NeoTerminalLauncher stats={stats} onRequestPlayMode={openSquashGame} />
         </div>
       </div>

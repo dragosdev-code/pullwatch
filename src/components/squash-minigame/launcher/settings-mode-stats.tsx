@@ -9,11 +9,9 @@ export interface SettingsModeStatsPanelProps {
   'data-testid': string;
 }
 
-const labelClass =
-  'text-[11px] font-mono uppercase tracking-wide text-base-content/70';
+const labelClass = 'text-[10px] font-mono uppercase tracking-wide text-base-content/70';
 
-const pillBase =
-  'rounded border px-1 py-1 tabular-nums text-xs font-semibold leading-none';
+const pillBase = 'rounded border px-0.5 py-px tabular-nums text-[10px] font-semibold leading-none';
 
 /**
  * Lifetime stats for one mode in settings — mirrors {@link FinishRoundStats} row + pill layout.
@@ -48,7 +46,7 @@ export function SettingsModeStatsPanel({
   return (
     <div
       data-testid={dataTestId}
-      className="mt-1.5 rounded-md border border-base-content/10 bg-base-200/40 p-1.5 text-left"
+      className="mt-1 rounded-md border border-base-content/10 bg-base-200/40 p-1 text-left"
     >
       <div className="flex flex-col gap-0.5">
         {rows.map((row) => (
