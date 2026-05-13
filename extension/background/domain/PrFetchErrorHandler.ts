@@ -10,6 +10,7 @@ import {
   RateLimitError,
 } from '@common/errors';
 import { isOfflineError } from '@common/network-utils';
+import { classifyTransportFailure, type SiteAccessProbe } from '@common/site-access-classifier';
 import type { ListKind } from './pr-list-trust';
 
 export interface PrFetchErrorHandlerParams {
@@ -24,7 +25,14 @@ export class PrFetchErrorHandler {
     private readonly debugService: IDebugService,
     private readonly badgeService: IBadgeService,
     private readonly healthStatusService: IHealthStatusService,
-    private readonly rateLimitService: IRateLimitService
+    private readonly rateLimitService: IRateLimitService,
+    /**
+     * WHY [probe injection]: `chrome.permissions.contains` is the only signal that can split a
+     * transport-shape `GitHubOutageError` (no HTTP status) into "GitHub actually down" vs "user
+     * disabled site access for the extension". Inject the probe so this handler stays unit-testable
+     * without a Chromium harness. See {@link classifyTransportFailure}.
+     */
+    private readonly siteAccessProbe: SiteAccessProbe
   ) {}
 
   /**
@@ -52,7 +60,21 @@ export class PrFetchErrorHandler {
         `[PrFetchErrorHandler] ${error.message} — preserving ${oldPRs.length} stored ${listKind} PRs.`
       );
       if (updateBadgeOnError) await this.badgeService.setErrorBadge();
-      await this.healthStatusService.signalGitHubOutage(error.message);
+      // WHY [reason classification]: A `GitHubOutageError` with no `httpStatus` is the
+      // transport-shape branch — TypeError/AbortError where the request never reached GitHub.
+      // That covers both genuine outages and the chrome://extensions "Allow access on click"
+      // case, which the popup needs to message differently. HTTP-status branches (5xx, Cloudflare
+      // edge codes) stay `'transport'` because GitHub did respond; the failure is on their side.
+      const reason =
+        error.httpStatus === null
+          ? await classifyTransportFailure(this.siteAccessProbe)
+          : 'transport';
+      if (reason === 'site_access_blocked') {
+        this.debugService.warn(
+          `[PrFetchErrorHandler] Classified ${listKind} transport failure as site_access_blocked (chrome://extensions site access is off for this extension).`
+        );
+      }
+      await this.healthStatusService.signalGitHubOutage(error.message, reason);
       return oldPRs;
     }
     if (error instanceof RateLimitError) {

@@ -12,6 +12,7 @@ const KNOWN_REASONS: ReadonlySet<GitHubOutageReason> = new Set<GitHubOutageReaso
   'transport',
   'pr_component_degraded',
   'pr_list_churn',
+  'site_access_blocked',
 ]);
 
 export type GitHubOutageUiState = {

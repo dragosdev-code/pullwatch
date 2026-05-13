@@ -42,6 +42,17 @@ import {
 } from '@background/domain/pr-list-trust';
 import type { GitHubStatusSnapshot } from '@background/interfaces/IGitHubStatusClient';
 import { PrFetchErrorHandler } from '@background/domain/PrFetchErrorHandler';
+import { GITHUB_ORIGIN_PATTERN, type SiteAccessProbe } from '@common/site-access-classifier';
+
+/**
+ * Backs {@link SiteAccessProbe} with `chrome.permissions.contains` via the shared adapter. Lives
+ * inline because it is the only consumer; lifting it into a separate module would only add an
+ * indirection without a second call site.
+ */
+const chromeSiteAccessProbe: SiteAccessProbe = {
+  hasGitHubOrigin: () =>
+    chromeExtensionService.permissions.contains({ origins: [GITHUB_ORIGIN_PATTERN] }),
+};
 
 /**
  * PRService handles pull request management and coordination between services.
@@ -122,7 +133,8 @@ export class PRService implements IPRService {
       this.debugService,
       this.badgeService,
       this.healthStatusService,
-      this.rateLimitService
+      this.rateLimitService,
+      chromeSiteAccessProbe
     );
   }
 

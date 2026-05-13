@@ -95,4 +95,80 @@ describe('HealthStatusService GitHub outage payloads', () => {
     });
     expect(chromeMocks.sendMessage).toHaveBeenCalledTimes(1);
   });
+
+  it('upgrades a deduped transport payload to site_access_blocked in-place and rebroadcasts', async () => {
+    const service = new HealthStatusService();
+    await service.initialize();
+
+    await service.signalGitHubOutage('assigned PR fetch', 'transport');
+    chromeMocks.sendMessage.mockClear();
+
+    vi.setSystemTime(T0 + 30_000);
+    await service.signalGitHubOutage(
+      'chrome://extensions site access revoked',
+      'site_access_blocked'
+    );
+
+    const stored = chromeMocks.storageState[STORAGE_KEY_GITHUB_OUTAGE] as GitHubOutagePayload;
+    expect(stored).toEqual({
+      detected: true,
+      // Original timestamp preserved so the banner does not claim a fresh outage cycle.
+      timestamp: T0,
+      lastSeenAt: T0 + 30_000,
+      context: 'chrome://extensions site access revoked',
+      reason: 'site_access_blocked',
+    });
+    expect(chromeMocks.sendMessage).toHaveBeenCalledWith({
+      action: BROADCAST_ACTION.githubOutageDetected,
+      data: stored,
+    });
+  });
+
+  it('does not downgrade an active site_access_blocked payload back to transport', async () => {
+    const service = new HealthStatusService();
+    await service.initialize();
+
+    await service.signalGitHubOutage(
+      'chrome://extensions site access revoked',
+      'site_access_blocked'
+    );
+    chromeMocks.sendMessage.mockClear();
+
+    vi.setSystemTime(T0 + 30_000);
+    await service.signalGitHubOutage('assigned PR fetch', 'transport');
+
+    const stored = chromeMocks.storageState[STORAGE_KEY_GITHUB_OUTAGE] as GitHubOutagePayload;
+    expect(stored.reason).toBe('site_access_blocked');
+    expect(stored.context).toBe('chrome://extensions site access revoked');
+    expect(chromeMocks.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('persists and broadcasts a site_access_blocked outage payload with the right discriminator', async () => {
+    const service = new HealthStatusService();
+    await service.initialize();
+
+    await service.signalGitHubOutage(
+      'chrome://extensions site access revoked',
+      'site_access_blocked'
+    );
+
+    const stored = chromeMocks.storageState[STORAGE_KEY_GITHUB_OUTAGE] as GitHubOutagePayload;
+    expect(stored).toEqual({
+      detected: true,
+      timestamp: T0,
+      lastSeenAt: T0,
+      context: 'chrome://extensions site access revoked',
+      reason: 'site_access_blocked',
+    });
+    expect(chromeMocks.sendMessage).toHaveBeenCalledWith({
+      action: BROADCAST_ACTION.githubOutageDetected,
+      data: {
+        detected: true,
+        timestamp: T0,
+        lastSeenAt: T0,
+        context: 'chrome://extensions site access revoked',
+        reason: 'site_access_blocked',
+      },
+    });
+  });
 });

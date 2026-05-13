@@ -14,6 +14,7 @@ import type { IPatternRegistryService } from '../interfaces/IPatternRegistryServ
 import type { IStorageService } from '../interfaces/IStorageService';
 import type { IHealthStatusService } from '../interfaces/IHealthStatusService';
 import type { IGitHubStatusClient } from '../interfaces/IGitHubStatusClient';
+import type { ISiteAccessWatcher } from '../interfaces/ISiteAccessWatcher';
 import type { AlarmSeqClock } from '../domain/pr-list-trust';
 
 /**
@@ -30,6 +31,7 @@ export interface ServiceMap {
   soundService: ISoundService;
   eventService: IEventService;
   healthStatusService: IHealthStatusService;
+  siteAccessWatcher: ISiteAccessWatcher;
   gitHubStatusClient: IGitHubStatusClient;
   patternRegistryService: IPatternRegistryService;
   gitHubService: IGitHubService;

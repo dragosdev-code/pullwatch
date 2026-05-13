@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import type { GitHubOutagePayload } from '@common/types';
 import type { GitHubStatusUiSnapshot } from '@src/hooks/use-github-status-snapshot';
 
@@ -13,6 +13,22 @@ const outageMock = vi.hoisted(() => ({
 
 const statusSnapshotMock = vi.hoisted(() => ({
   value: null as GitHubStatusUiSnapshot | null,
+}));
+
+const chromeMock = vi.hoisted(() => ({
+  tabsCreate: vi.fn().mockResolvedValue(undefined),
+  getExtensionId: vi.fn().mockReturnValue('test-extension-id'),
+}));
+
+vi.mock('@common/chrome-extension-service', () => ({
+  chromeExtensionService: {
+    runtime: {
+      getExtensionId: () => chromeMock.getExtensionId(),
+    },
+    tabs: {
+      create: (args: unknown) => chromeMock.tabsCreate(args),
+    },
+  },
 }));
 
 vi.mock('@src/hooks/use-github-outage', () => ({
@@ -55,6 +71,14 @@ const listChurnPayload: GitHubOutagePayload = {
   reason: 'pr_list_churn',
 };
 
+const siteAccessBlockedPayload: GitHubOutagePayload = {
+  detected: true,
+  timestamp: 1_700_000_003_000,
+  lastSeenAt: 1_700_000_003_000,
+  context: 'chrome://extensions site access revoked',
+  reason: 'site_access_blocked',
+};
+
 const corroboratingSnapshot: GitHubStatusUiSnapshot = {
   prComponentStatus: 'partial_outage',
   globalIndicator: 'minor',
@@ -82,6 +106,7 @@ describe('<GitHubOutageBanner />', () => {
     outageMock.state.payload = null;
     outageMock.state.lastUntrustedAttemptAt = null;
     statusSnapshotMock.value = null;
+    chromeMock.tabsCreate.mockClear();
   });
 
   afterEach(() => {
@@ -148,5 +173,27 @@ describe('<GitHubOutageBanner />', () => {
     render(<GitHubOutageBanner />);
 
     expect(screen.queryByText(/Last check/)).toBeNull();
+  });
+
+  it('renders the site-access-blocked variant without a Statuspage link', () => {
+    setActivePayload(siteAccessBlockedPayload);
+    statusSnapshotMock.value = corroboratingSnapshot;
+    render(<GitHubOutageBanner />);
+
+    expect(screen.getByText('Chrome is blocking Pullwatch from reaching GitHub.')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'githubstatus.com' })).toBeNull();
+    expect(document.querySelector('[data-variant-id="outage.site-access-blocked"]')).not.toBeNull();
+  });
+
+  it('opens chrome://extensions for this extension when the action button is clicked', () => {
+    setActivePayload(siteAccessBlockedPayload);
+    render(<GitHubOutageBanner />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open extension settings' }));
+
+    expect(chromeMock.getExtensionId).toHaveBeenCalled();
+    expect(chromeMock.tabsCreate).toHaveBeenCalledWith({
+      url: 'chrome://extensions/?id=test-extension-id',
+    });
   });
 });

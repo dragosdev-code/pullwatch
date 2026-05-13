@@ -22,6 +22,12 @@ import type { GitHubOutageReason } from '@common/types';
  *   is green, because the assessor by itself cannot distinguish "key briefly missing"
  *   from "key never existed" once it has been pruned from `oldPRs`.
  *
+ * - `'site_access_blocked'`: Chrome refused the request because the extension's per-site
+ *   access is disabled (chrome://extensions → "Allow access on click" / "On specific sites").
+ *   Two writers: `PrFetchErrorHandler` (classifies a transport-shape failure via
+ *   `chrome.permissions.contains`) and `SiteAccessWatcher` (fires on the runtime
+ *   `chrome.permissions.onRemoved` event before the next fetch wave).
+ *
  * INVARIANT: `'pr_component_degraded'` MUST NOT be signaled for a single-list
  * `empty_after_non_empty` whose Statuspage is operational, `degraded_performance`,
  * or `'unknown'` without a global incident. The legitimate-zero path stays silent

@@ -242,10 +242,22 @@ export interface MinigameSessionCheckpoint {
  * - `'pr_list_churn'`: post-hoc tombstone resurrection signal — independent of Statuspage. The
  *   popup must not invite users to githubstatus.com here, since the page is often green while
  *   we are still showing this banner.
+ * - `'site_access_blocked'`: Chrome is blocking github.com requests because the user disabled
+ *   per-site access for the extension (chrome://extensions → "Allow access on click" / "On
+ *   specific sites"). Two writers: `PrFetchErrorHandler` runs `chrome.permissions.contains`
+ *   against `https://github.com/*` at error time (see
+ *   `extension/common/site-access-classifier.ts`); `SiteAccessWatcher` listens for
+ *   `chrome.permissions.onRemoved` so a runtime toggle flips the banner before the next fetch
+ *   wave. Statuspage link is suppressed; the banner points the user at chrome://extensions
+ *   instead.
  *
  * Lives in `@common/` so the popup can branch on it without reaching into `@background/`.
  */
-export type GitHubOutageReason = 'transport' | 'pr_component_degraded' | 'pr_list_churn';
+export type GitHubOutageReason =
+  | 'transport'
+  | 'pr_component_degraded'
+  | 'pr_list_churn'
+  | 'site_access_blocked';
 
 /** Persisted payload shape under `STORAGE_KEY_GITHUB_OUTAGE`; also the broadcast `data` for `githubOutageDetected`. */
 export interface GitHubOutagePayload {

@@ -81,6 +81,19 @@ export class HealthStatusService implements IHealthStatusService {
   ): Promise<void> {
     const now = Date.now();
     if (this.githubOutage) {
+      // WHY [site_access_blocked upgrade]: Dedupe normally keeps the first context/reason stable
+      // for the active window, but `site_access_blocked` is the most actionable diagnosis we have
+      // — it tells the user exactly which setting to flip. Without this upgrade, a stored
+      // `'transport'` payload (e.g. left over from a service-worker restart that ran before the
+      // user turned site access off) would survive forever because the in-memory dedupe flag
+      // sticks across signals and `SiteAccessWatcher` only fires on a runtime toggle, not on a
+      // cold start where access was already off. Upgrade in-place and rebroadcast; we never
+      // downgrade out of `site_access_blocked` here — the reverse transition is handled by
+      // `clearGitHubOutage` when github.com is reachable again.
+      if (reason === 'site_access_blocked') {
+        const upgraded = await this.upgradeReasonToSiteAccessBlocked(now, context);
+        if (upgraded) return;
+      }
       // WHY [single banner]: Keep first context/reason stable for the active window, but refresh
       // liveness so the popup can distinguish a real ongoing outage from stale storage.
       await this.refreshGitHubOutageLastSeen(now);
@@ -101,6 +114,41 @@ export class HealthStatusService implements IHealthStatusService {
         data: payload,
       })
       .catch(() => {});
+  }
+
+  /**
+   * Rewrites the persisted payload to the `site_access_blocked` reason when the existing payload
+   * carries a different (less actionable) reason. Returns true when an upgrade happened so the
+   * caller can skip the regular lastSeenAt refresh. Preserves the original `timestamp` so the
+   * banner does not advertise a fresh outage on every fetch wave.
+   */
+  private async upgradeReasonToSiteAccessBlocked(
+    now: number,
+    context: string
+  ): Promise<boolean> {
+    const stored = await chromeExtensionService.storage.local.get(STORAGE_KEY_GITHUB_OUTAGE);
+    const current = stored[STORAGE_KEY_GITHUB_OUTAGE] as Partial<GitHubOutagePayload> | undefined;
+    if (!current || current.detected !== true) return false;
+    if (current.reason === 'site_access_blocked') return false;
+
+    const upgraded: GitHubOutagePayload = {
+      detected: true,
+      timestamp:
+        typeof current.timestamp === 'number' && Number.isFinite(current.timestamp)
+          ? current.timestamp
+          : now,
+      lastSeenAt: now,
+      context,
+      reason: 'site_access_blocked',
+    };
+    await chromeExtensionService.storage.local.set({ [STORAGE_KEY_GITHUB_OUTAGE]: upgraded });
+    chromeExtensionService.runtime
+      .sendMessage({
+        action: BROADCAST_ACTION.githubOutageDetected,
+        data: upgraded,
+      })
+      .catch(() => {});
+    return true;
   }
 
   async clearGitHubOutage(): Promise<void> {

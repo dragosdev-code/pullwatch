@@ -91,6 +91,13 @@ const listChurnPayload: GitHubOutagePayload = {
   context: 'tombstone resurrection',
   reason: 'pr_list_churn',
 };
+const siteAccessBlockedPayload: GitHubOutagePayload = {
+  detected: true,
+  timestamp: 1_700_000_003_000,
+  lastSeenAt: Date.now(),
+  context: 'chrome://extensions site access revoked',
+  reason: 'site_access_blocked',
+};
 
 describe('Status banners after a bad sync', () => {
   beforeEach(() => {
@@ -231,6 +238,17 @@ describe('Status banners after a bad sync', () => {
     });
     await waitFor(() => {
       expect(result.current.payload?.reason).toBe('pr_list_churn');
+    });
+
+    act(() => {
+      chromeMocks.fireMessage({
+        action: BROADCAST_ACTION.githubOutageDetected,
+        data: siteAccessBlockedPayload,
+      });
+    });
+    await waitFor(() => {
+      expect(result.current.payload?.reason).toBe('site_access_blocked');
+      expect(result.current.payload?.context).toBe('chrome://extensions site access revoked');
     });
   });
 

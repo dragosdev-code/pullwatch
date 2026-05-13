@@ -13,7 +13,9 @@ import { DevTestService } from '../services/DevTestService';
 import { PatternRegistryService } from '../services/PatternRegistryService';
 import { RateLimitService } from '../services/RateLimitService';
 import { HealthStatusService } from '../services/HealthStatusService';
+import { SiteAccessWatcher } from '../services/SiteAccessWatcher';
 import { GitHubStatusClient } from '@common/github-status-client';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 import { AlarmSeqClock } from '../domain/pr-list-trust';
 import { GITHUB_BASE_URL } from '@common/constants';
 import type { IService } from '../interfaces/IService';
@@ -47,6 +49,14 @@ export class ServiceContainer {
     this.registerService('soundService', new SoundService(this.getService('debugService')));
     this.registerService('healthStatusService', new HealthStatusService());
     this.registerService(
+      'siteAccessWatcher',
+      new SiteAccessWatcher(
+        this.getService('debugService'),
+        this.getService('healthStatusService'),
+        chromeExtensionService.permissions
+      )
+    );
+    this.registerService(
       'gitHubStatusClient',
       new GitHubStatusClient(this.getService('debugService'))
     );
@@ -67,7 +77,7 @@ export class ServiceContainer {
       new GitHubService(
         this.getService('debugService'),
         this.getService('avatarService'),
-        this.getService('patternRegistryService'),
+        this.getService('patternRegistryService')
       )
     );
     this.registerService('rateLimitService', new RateLimitService(this.getService('debugService')));

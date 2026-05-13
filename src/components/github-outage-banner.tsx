@@ -7,6 +7,7 @@ import {
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { formatLastFetchDetail } from '@src/utils/format-last-fetch-label';
 import type { GitHubOutageReason } from '@common/types';
+import { chromeExtensionService } from '@common/chrome-extension-service';
 
 /** WHY [30s]: Matches “minutes ago” granularity; avoids per-second timers on a non-critical banner. */
 const OUTAGE_SUBLINE_TICK_MS = 30_000;
@@ -14,7 +15,11 @@ const OUTAGE_SUBLINE_TICK_MS = 30_000;
 const STATUSPAGE_URL = 'https://www.githubstatus.com';
 
 interface VariantCopy {
-  variantId: 'outage.transport' | 'outage.component-degraded' | 'outage.list-churn';
+  variantId:
+    | 'outage.transport'
+    | 'outage.component-degraded'
+    | 'outage.list-churn'
+    | 'outage.site-access-blocked';
   title: string;
   body: string;
 }
@@ -33,6 +38,12 @@ function pickOutageVariant(reason: GitHubOutageReason): VariantCopy {
         title: 'A pull request briefly disappeared and came back.',
         body: 'Pullwatch held back the bouncing one to avoid duplicate alerts. Other list updates still flow through normally.',
       };
+    case 'site_access_blocked':
+      return {
+        variantId: 'outage.site-access-blocked',
+        title: 'Chrome is blocking Pullwatch from reaching GitHub.',
+        body: 'Site access for github.com is turned off in chrome://extensions. Pullwatch is showing your last known list, re-enable access to refresh it.',
+      };
     case 'transport':
     default:
       return {
@@ -41,6 +52,17 @@ function pickOutageVariant(reason: GitHubOutageReason): VariantCopy {
         body: 'Pullwatch will retry on its own. If this sticks around, a quick refresh or a check on your connection usually clears it.',
       };
   }
+}
+
+/**
+ * WHY [chrome.tabs.create vs anchor href]: Chrome blocks navigation to `chrome://` URLs from
+ * extension popups when the link is followed as a regular anchor click, but allows it through
+ * the tabs API. The popup also closes after `chrome.tabs.create` opens the destination tab,
+ * which is the right UX for "go fix this setting and come back".
+ */
+function openSiteAccessSettings(): void {
+  const id = chromeExtensionService.runtime.getExtensionId();
+  void chromeExtensionService.tabs.create({ url: `chrome://extensions/?id=${id}` });
 }
 
 export const GitHubOutageBanner = () => {
@@ -67,11 +89,14 @@ export const GitHubOutageBanner = () => {
   // dump users on an all-green page. `pr_component_degraded` is signalled for both corroborated
   // suspect-empty AND plain `suspect_partial` (e.g. a merged shrink ≥ threshold) — the latter does
   // NOT require Statuspage corroboration, so we gate the link on the cached snapshot the same way
-  // we gate it for `transport`. The reason narrows the *banner copy*; the snapshot decides whether
-  // pointing the user at githubstatus.com would line up with what they'll see there.
+  // we gate it for `transport`. `site_access_blocked` is local to the user's browser settings;
+  // sending them to githubstatus.com would be a false lead. The reason narrows the *banner copy*;
+  // the snapshot decides whether pointing the user at githubstatus.com would line up with what
+  // they'll see there.
   const showStatusLink =
     (payload.reason === 'pr_component_degraded' || payload.reason === 'transport') &&
     hasCorroboratingStatusCache(statusSnapshot);
+  const showSiteAccessAction = payload.reason === 'site_access_blocked';
 
   return (
     <div
@@ -93,6 +118,17 @@ export const GitHubOutageBanner = () => {
             >
               githubstatus.com
             </a>
+          </p>
+        ) : null}
+        {showSiteAccessAction ? (
+          <p className="text-[10px] text-base-content/70 leading-snug mt-0.5">
+            <button
+              type="button"
+              onClick={openSiteAccessSettings}
+              className="underline hover:text-base-content"
+            >
+              Open extension settings
+            </button>
           </p>
         ) : null}
         {/* WHY [formatLastFetchDetail]: Same relative-time wording as the header tooltip so staleness reads consistently. */}
