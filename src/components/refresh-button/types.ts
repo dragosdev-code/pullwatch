@@ -1,7 +1,9 @@
-export type RefreshRingPhase = 'fetching' | 'throttled' | 'cooldown' | 'ready';
+export type RefreshRingPhase = 'fetching' | 'background' | 'throttled' | 'cooldown' | 'ready';
 
 export interface RefreshButtonProps {
   manualFetchInProgress: boolean;
+  /** Alarm-driven fetch in progress. Disables the button without showing the manual fetch ring. */
+  backgroundFetchInProgress: boolean;
   onRefresh: () => void;
   fetchProgress01: number;
   fetchElapsedSeconds: number;

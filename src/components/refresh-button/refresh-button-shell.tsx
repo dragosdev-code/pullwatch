@@ -7,6 +7,7 @@ import { deriveRefreshDisplay } from './utils/derive-refresh-display';
 
 export function RefreshButtonShell({
   manualFetchInProgress,
+  backgroundFetchInProgress,
   onRefresh,
   fetchProgress01,
   fetchElapsedSeconds,
@@ -20,6 +21,7 @@ export function RefreshButtonShell({
     () =>
       deriveRefreshDisplay({
         manualFetchInProgress,
+        backgroundFetchInProgress,
         onRefresh,
         fetchProgress01,
         fetchElapsedSeconds,
@@ -31,6 +33,7 @@ export function RefreshButtonShell({
       }),
     [
       manualFetchInProgress,
+      backgroundFetchInProgress,
       onRefresh,
       fetchProgress01,
       fetchElapsedSeconds,

@@ -1,14 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { UseMutationResult } from '@tanstack/react-query';
-import {
-  MIN_REFRESH_INTERVAL_MS,
-  STORAGE_KEY_LAST_MANUAL_REFRESH_AT,
-} from '@common/constants';
+import { MIN_REFRESH_INTERVAL_MS } from '@common/constants';
 import type { PullRequest } from '@common/types';
-import {
-  chromeExtensionService,
-  type StorageChange,
-} from '@common/chrome-extension-service';
 
 /** Upper bound for indeterminate fetch ring progress (ms) — actual completion snaps to 100%. */
 const FETCH_RING_ESTIMATED_MAX_MS = 7000;
@@ -25,10 +18,14 @@ interface UseRateLimitedRefreshOptions {
   isLoadingAuthoredPRs: boolean;
   clearGlobalError: () => void;
   setGlobalError: (error: string) => void;
+  /** Last successful fetch completion timestamp (chrome.storage.local last_fetch_time). Drives cooldown + freshness on one clock. */
+  lastFetchMs: number | null;
+  /** True while the background service worker reports an alarm-driven (non-manual) fetch in flight. */
+  backgroundFetchInProgress: boolean;
 }
 
 interface UseRateLimitedRefreshResult {
-  /** Animation state - true when refresh button should show loading animation */
+  /** True while refresh button should show its loading animation (briefly after a manual click). */
   isRefreshing: boolean;
   /** Combined loading state - true when any refresh operation is in progress */
   isAnyLoading: boolean;
@@ -36,33 +33,32 @@ interface UseRateLimitedRefreshResult {
   handleRefresh: () => Promise<void>;
   /** Time remaining until next refresh is allowed (in milliseconds), updates on tick */
   timeRemainingMs: number;
-  /** Whether a refresh can be performed now (time limit has passed) */
+  /** Whether a refresh can be performed now (time limit has passed, no fetch in flight) */
   canRefresh: boolean;
-  /** True while the three manual refresh mutations are running */
+  /** True while the three manual-refresh mutations are running. Drives the fetch ring visual. */
   manualFetchInProgress: boolean;
-  /** 0–1 progress for fetch ring (capped until done, then brief 1) */
+  /** True while an alarm-driven background fetch is in flight. Disables the button without showing the fetch ring. */
+  backgroundFetchInProgress: boolean;
+  /** 0–1 progress for fetch ring (capped until done, then brief 1) — manual fetches only */
   fetchProgress01: number;
-  /** Elapsed seconds during fetch, for display */
+  /** Elapsed seconds during a manual fetch, for display */
   fetchElapsedSeconds: number;
   /** Duration of the last completed manual fetch (ms), 0 if none yet */
   lastFetchDurationMs: number;
-  /** 0–1 = fraction of the 30s cooldown window already elapsed */
+  /** 0–1 = fraction of the 30s cooldown window already elapsed since last fetch completion */
   cooldownProgress01: number;
   /** True briefly after a click that did not start a fetch (rate limited) */
   lastInteractionWasThrottled: boolean;
 }
 
 /**
- * Hook that provides rate-limited refresh functionality.
+ * Rate-limited refresh state.
  *
- * Features:
- * - Prevents GitHub rate limiting by enforcing minimum 30-second interval between actual fetches
- * - Always shows refresh animation for UX feedback, even when throttled
- * - Coordinates multiple PR type refreshes (assigned, merged, authored)
- * - Handles errors appropriately
- *
- * @param options - Configuration object containing mutations, loading states, and error handlers
- * @returns Rate-limited refresh state and handler
+ * Cooldown + freshness share one clock: `lastFetchMs` (last successful fetch completion, written
+ * to chrome.storage.local by the background for both alarm and manual paths). The button is
+ * disabled while ANY fetch is in flight (alarm or manual) and for `MIN_REFRESH_INTERVAL_MS` after
+ * completion. The fetch ring visual is reserved for manual fetches; alarm fetches show only a
+ * disabled state with a distinct tooltip.
  */
 export const useRateLimitedRefresh = ({
   refreshPRsMutation,
@@ -73,122 +69,100 @@ export const useRateLimitedRefresh = ({
   isLoadingAuthoredPRs,
   clearGlobalError,
   setGlobalError,
+  lastFetchMs,
+  backgroundFetchInProgress,
 }: UseRateLimitedRefreshOptions): UseRateLimitedRefreshResult => {
-  const hasSessionStorage = chromeExtensionService.isExtensionContext();
-
-  const [sessionHydrated, setSessionHydrated] = useState(!hasSessionStorage);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastAllowedRefreshAt, setLastAllowedRefreshAt] = useState(0);
-  const lastAllowedRefreshAtRef = useRef(0);
   const [tickNow, setTickNow] = useState(() => Date.now());
   const [lastInteractionWasThrottled, setLastInteractionWasThrottled] = useState(false);
   const [fetchCompleteFlash, setFetchCompleteFlash] = useState(false);
   const [lastFetchDurationMs, setLastFetchDurationMs] = useState(0);
+  // WHY [storage-lag fallback]: chrome.storage.onChanged for `last_fetch_time` can land after a
+  // mutateAsync resolves; without this we'd briefly read the OLD `lastFetchMs` after completion
+  // and let a second click slip through. Bumped on every fetch end edge (manual or alarm) so the
+  // cooldown engages immediately and converges with `lastFetchMs` once the storage write arrives.
+  const [optimisticLastFetchAtMs, setOptimisticLastFetchAtMs] = useState(0);
 
-  const fetchStartedAtRef = useRef<number>(0);
-  const prevManualFetchPendingRef = useRef(false);
+  const manualFetchStartedAtRef = useRef<number>(0);
+  const prevManualPendingRef = useRef(false);
+  const prevAnyFetchPendingRef = useRef(false);
 
   const manualFetchInProgress =
     refreshPRsMutation.isPending ||
     refreshMergedPRsMutation.isPending ||
     refreshAuthoredPRsMutation.isPending;
 
-  // WHY [backend-only timestamp]: `EventService` writes `last_manual_refresh_at` to `chrome.storage.session`.
-  // The popup hydrates and listens on `onChanged` — an optimistic popup write would make the service worker
-  // read that value and throttle the wave that just started.
-  useEffect(() => {
-    if (!hasSessionStorage) return;
+  const anyFetchInProgress = manualFetchInProgress || backgroundFetchInProgress;
 
-    let cancelled = false;
-    void chromeExtensionService.storage.session
-      .get(STORAGE_KEY_LAST_MANUAL_REFRESH_AT)
-      .then((sessionRecord) => {
-        if (cancelled) return;
-        const persistedLastManualRefreshAtMs = sessionRecord[STORAGE_KEY_LAST_MANUAL_REFRESH_AT] as
-          | number
-          | undefined;
-        const lastManualRefreshAtMs = persistedLastManualRefreshAtMs ?? 0;
-        setLastAllowedRefreshAt(lastManualRefreshAtMs);
-        lastAllowedRefreshAtRef.current = lastManualRefreshAtMs;
-        setSessionHydrated(true);
-      })
-      .catch(() => {
-        if (!cancelled) setSessionHydrated(true);
-      });
+  const effectiveLastFetchMs = Math.max(lastFetchMs ?? 0, optimisticLastFetchAtMs);
+  const hasFetchReference = effectiveLastFetchMs > 0;
+  const timeSinceLastFetch = hasFetchReference
+    ? tickNow - effectiveLastFetchMs
+    : Number.POSITIVE_INFINITY;
+  const timeRemainingMs = hasFetchReference
+    ? Math.max(0, MIN_REFRESH_INTERVAL_MS - timeSinceLastFetch)
+    : 0;
+  const canRefresh = !anyFetchInProgress && timeRemainingMs === 0;
 
-    return () => {
-      cancelled = true;
-    };
-  }, [hasSessionStorage]);
+  const cooldownProgress01 = hasFetchReference
+    ? Math.min(1, Math.max(0, timeSinceLastFetch / MIN_REFRESH_INTERVAL_MS))
+    : 0;
 
-  useEffect(() => {
-    if (!hasSessionStorage) return;
-
-    const listener = (
-      changes: Record<string, StorageChange>,
-      areaName: string
-    ) => {
-      if (areaName !== 'session') return;
-      const manualRefreshChange = changes[STORAGE_KEY_LAST_MANUAL_REFRESH_AT];
-      if (manualRefreshChange?.newValue != null) {
-        const lastManualRefreshAtMs = manualRefreshChange.newValue as number;
-        setLastAllowedRefreshAt(lastManualRefreshAtMs);
-        lastAllowedRefreshAtRef.current = lastManualRefreshAtMs;
-      }
-    };
-
-    chromeExtensionService.storage.onChanged.addListener(listener);
-    return () => chromeExtensionService.storage.onChanged.removeListener(listener);
-  }, [hasSessionStorage]);
-
-  // Only tick while a cooldown countdown or fetch-progress animation is active.
-  // When idle (no refresh triggered yet), the interval never starts — zero re-renders.
-  const needsTick = lastAllowedRefreshAt > 0 || manualFetchInProgress;
+  // Tick whenever the cooldown ring or the manual-fetch ring needs to animate.
+  // Pure-background fetches don't need ticking (no ring) — `canRefresh` flips on the next render
+  // because `anyFetchInProgress` is a derived input.
+  const needsTick = (hasFetchReference && timeRemainingMs > 0) || manualFetchInProgress;
   useEffect(() => {
     if (!needsTick) return;
     const cooldownTickIntervalId = window.setInterval(() => setTickNow(Date.now()), 250);
     return () => window.clearInterval(cooldownTickIntervalId);
   }, [needsTick]);
 
+  // Manual-only edge: records fetch start for the elapsed-seconds label, captures duration on
+  // completion (for tooltip), and triggers the brief 100% ring snap.
   useEffect(() => {
     if (manualFetchInProgress) {
-      if (!prevManualFetchPendingRef.current) {
-        fetchStartedAtRef.current = Date.now();
+      if (!prevManualPendingRef.current) {
+        manualFetchStartedAtRef.current = Date.now();
       }
-      prevManualFetchPendingRef.current = true;
-    } else {
-      if (prevManualFetchPendingRef.current) {
-        const fetchDurationMs = Date.now() - fetchStartedAtRef.current;
-        setLastFetchDurationMs(fetchDurationMs);
-        setFetchCompleteFlash(true);
-        const fetchCompleteFlashTimeoutId = window.setTimeout(
-          () => setFetchCompleteFlash(false),
-          FETCH_COMPLETE_FLASH_MS
-        );
-        prevManualFetchPendingRef.current = false;
-        return () => window.clearTimeout(fetchCompleteFlashTimeoutId);
-      }
-      prevManualFetchPendingRef.current = false;
+      prevManualPendingRef.current = true;
+      return;
     }
+    if (prevManualPendingRef.current) {
+      const fetchDurationMs = Date.now() - manualFetchStartedAtRef.current;
+      setLastFetchDurationMs(fetchDurationMs);
+      setFetchCompleteFlash(true);
+      const fetchCompleteFlashTimeoutId = window.setTimeout(
+        () => setFetchCompleteFlash(false),
+        FETCH_COMPLETE_FLASH_MS
+      );
+      prevManualPendingRef.current = false;
+      return () => window.clearTimeout(fetchCompleteFlashTimeoutId);
+    }
+    prevManualPendingRef.current = false;
   }, [manualFetchInProgress]);
 
-  const timeSinceLastRefresh = tickNow - lastAllowedRefreshAt;
-  const timeRemainingMs = Math.max(0, MIN_REFRESH_INTERVAL_MS - timeSinceLastRefresh);
-  // WHY [hydration gate]: Until `session.get` returns, do not allow a click that the backend would throttle —
-  // avoids a flash of “ready” before we know the persisted cooldown (see plan: defensive `canRefresh`).
-  const canRefresh =
-    sessionHydrated &&
-    (lastAllowedRefreshAt === 0 || timeSinceLastRefresh >= MIN_REFRESH_INTERVAL_MS);
-
-  const cooldownProgress01 =
-    lastAllowedRefreshAt === 0
-      ? 0
-      : Math.min(1, Math.max(0, timeSinceLastRefresh / MIN_REFRESH_INTERVAL_MS));
+  // Any-fetch edge: bumps the optimistic cooldown baseline whenever ANY fetch ends, so the
+  // button stays locked through the 30s window after alarm completions too. Also resyncs
+  // `tickNow` so cooldown math doesn't read a stale clock between the completion edge and the
+  // first interval tick.
+  useEffect(() => {
+    if (anyFetchInProgress) {
+      prevAnyFetchPendingRef.current = true;
+      return;
+    }
+    if (prevAnyFetchPendingRef.current) {
+      const endedAt = Date.now();
+      setOptimisticLastFetchAtMs(endedAt);
+      setTickNow(endedAt);
+      prevAnyFetchPendingRef.current = false;
+    }
+  }, [anyFetchInProgress]);
 
   let fetchProgress01 = 0;
   let fetchElapsedSeconds = 0;
-  if (manualFetchInProgress && fetchStartedAtRef.current > 0) {
-    const fetchElapsedMs = tickNow - fetchStartedAtRef.current;
+  if (manualFetchInProgress && manualFetchStartedAtRef.current > 0) {
+    const fetchElapsedMs = tickNow - manualFetchStartedAtRef.current;
     fetchElapsedSeconds = fetchElapsedMs / 1000;
     fetchProgress01 = Math.min(0.94, fetchElapsedMs / FETCH_RING_ESTIMATED_MAX_MS);
   } else if (fetchCompleteFlash) {
@@ -200,15 +174,13 @@ export const useRateLimitedRefresh = ({
 
     setIsRefreshing(true);
 
-    const clickTimeMs = Date.now();
-    const timeSinceLastManualRefreshMs = clickTimeMs - lastAllowedRefreshAtRef.current;
+    const referenceMs = Math.max(lastFetchMs ?? 0, optimisticLastFetchAtMs);
+    const clickAllowed =
+      !anyFetchInProgress &&
+      (referenceMs === 0 || Date.now() - referenceMs >= MIN_REFRESH_INTERVAL_MS);
 
-    if (timeSinceLastManualRefreshMs >= MIN_REFRESH_INTERVAL_MS) {
+    if (clickAllowed) {
       setLastInteractionWasThrottled(false);
-      // WHY [in-memory only]: Authoritative `last_manual_refresh_at` is written by EventService; `onChanged`
-      // reconciles. Do not write session here — it would race the backend gate (see hook hydration comment).
-      lastAllowedRefreshAtRef.current = clickTimeMs;
-      setLastAllowedRefreshAt(clickTimeMs);
       try {
         await Promise.all([
           refreshPRsMutation.mutateAsync(),
@@ -229,6 +201,9 @@ export const useRateLimitedRefresh = ({
       setIsRefreshing(false);
     }, 1000);
   }, [
+    anyFetchInProgress,
+    lastFetchMs,
+    optimisticLastFetchAtMs,
     clearGlobalError,
     refreshPRsMutation,
     refreshMergedPRsMutation,
@@ -252,6 +227,7 @@ export const useRateLimitedRefresh = ({
     timeRemainingMs,
     canRefresh,
     manualFetchInProgress,
+    backgroundFetchInProgress,
     fetchProgress01,
     fetchElapsedSeconds,
     lastFetchDurationMs,

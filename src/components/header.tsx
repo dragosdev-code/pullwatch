@@ -51,6 +51,8 @@ export const Header = () => {
     isLoadingAuthoredPRs,
     clearGlobalError,
     setGlobalError,
+    lastFetchMs,
+    backgroundFetchInProgress,
   });
 
   useEffect(() => {
@@ -117,6 +119,7 @@ export const Header = () => {
         ) : null}
         <RefreshButton
           manualFetchInProgress={manualFetchInProgress}
+          backgroundFetchInProgress={backgroundFetchInProgress}
           onRefresh={handleRefresh}
           fetchProgress01={fetchProgress01}
           fetchElapsedSeconds={fetchElapsedSeconds}
