@@ -244,6 +244,15 @@ export class EventService implements IEventService {
         if (details.reason === 'update') {
           this.debugService.log('[EventService] Extension updated');
         }
+        // WHY [reschedule before wave]: this `else` covers every non-install reason — `update`,
+        // `chrome_update`, `shared_module_update`, and developer reload (Chrome reports the last
+        // as `update`). `setupFetchAlarm` above early-returns when the existing alarm's cadence
+        // already matches, preserving its `scheduledTime` across the lifecycle event. Without
+        // pushing the next fire forward, that preserved alarm fires seconds-to-minutes later and
+        // re-runs the exact same wave with `bypassCache=true` — TTL cache won't collapse it and,
+        // because the two calls are sequential not concurrent, `PRService.withInflightDedup`
+        // won't either. Symmetric with `ManualPrRefreshCoordinator.coalescedPushBackFetchAlarm`.
+        await alarmService.rescheduleFetchAlarmFromNow();
         // WHY [forceRefresh only on install]: `false` here matches the periodic alarm so version
         // bumps behave as a plain refresh; install-time forceRefresh lives in the branch above.
         await this.withPrUiFetchIndicator(async () => {
@@ -277,6 +286,12 @@ export class EventService implements IEventService {
       // Handle startup logic
       await permissionService.checkAllPermissions();
       await alarmService.setupFetchAlarm();
+      // WHY [reschedule before wave]: Chrome persists alarms across browser sessions with their
+      // original `scheduledTime`, and `setupFetchAlarm` above early-returns when cadence already
+      // matches — symmetric with the `onInstalled` non-install path. Without pushing the next
+      // fire forward, a browser restart with an alarm due in <interval triggers an immediate
+      // duplicate wave on top of this startup hydration.
+      await alarmService.rescheduleFetchAlarmFromNow();
       await this.withPrUiFetchIndicator(async () => {
         prService.beginPrListHealthWave();
         await prService.fetchAndUpdateAssignedPRs(true, true);
