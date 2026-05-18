@@ -71,8 +71,10 @@ describe('PRService trust-policy split (operational partial drop)', () => {
   let fetchMergedPRs: Mock;
   let fetchAuthoredPRs: Mock;
   let getLastResolvedViewerLogin: Mock;
-  let showAssignedPRNotifications: Mock;
-  let showMergedPRNotifications: Mock;
+  let createAssignedPRVisuals: Mock;
+  let createMergedPRVisuals: Mock;
+  let playAssignedSound: Mock;
+  let playMergedSound: Mock;
   let setPRCountBadge: Mock;
   let getStatus: Mock;
   let signalGitHubOutage: Mock;
@@ -110,8 +112,12 @@ describe('PRService trust-policy split (operational partial drop)', () => {
         getLastResolvedViewerLogin,
       } as never,
       notificationService: {
-        showAssignedPRNotifications,
-        showMergedPRNotifications,
+        createAssignedPRVisuals,
+        createMergedPRVisuals,
+        playAssignedSound,
+        playMergedSound,
+        showAssignedPRNotifications: vi.fn(),
+        showMergedPRNotifications: vi.fn(),
       } as never,
       badgeService: {
         setPRCountBadge,
@@ -165,8 +171,10 @@ describe('PRService trust-policy split (operational partial drop)', () => {
     fetchMergedPRs = vi.fn().mockResolvedValue([]);
     fetchAuthoredPRs = vi.fn().mockResolvedValue([]);
     getLastResolvedViewerLogin = vi.fn().mockReturnValue('viewer');
-    showAssignedPRNotifications = vi.fn().mockResolvedValue(undefined);
-    showMergedPRNotifications = vi.fn().mockResolvedValue(undefined);
+    createAssignedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    createMergedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    playAssignedSound = vi.fn().mockResolvedValue(undefined);
+    playMergedSound = vi.fn().mockResolvedValue(undefined);
     setPRCountBadge = vi.fn().mockResolvedValue(undefined);
     getStatus = vi.fn().mockResolvedValue(snapshot('operational', 'none'));
     signalGitHubOutage = vi.fn().mockResolvedValue(undefined);
@@ -286,7 +294,7 @@ describe('PRService trust-policy split (operational partial drop)', () => {
     expect(out.every((p) => p.isNew === false)).toBe(true);
     expect(out.map((p) => p.url).sort()).toEqual(fresh.map((p) => p.url).sort());
     expect(signalGitHubOutage).not.toHaveBeenCalled();
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
     const mergedCall = setStoredPRs.mock.calls.find((c) => c[0] === STORAGE_KEY_MERGED_PRS);
     expect(mergedCall).toBeDefined();
     expect(mergedCall![1]).toHaveLength(2);

@@ -398,9 +398,9 @@ export class PRService implements IPRService {
    * only metadata (`STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT` + the outage flag) so the popup can render
    * "we did check, but didn't trust the result" without losing the last-known-good list.
    *
-   * If you change this, also check {@link persistAndNotifyAssigned} (the happy-path notify-before-
-   * persist invariant) and {@link HealthStatusService.signalGitHubOutage} (single-flag dedupe so
-   * we keep one banner, not two).
+   * If you change this, also check {@link persistAndNotifyAssigned} (the happy-path
+   * visual → persist → sound ordering invariant) and {@link HealthStatusService.signalGitHubOutage}
+   * (single-flag dedupe so we keep one banner, not two).
    */
   private async persistUntrustedFetchMetadata(context: string): Promise<void> {
     await chromeExtensionService.storage.local.set({
@@ -727,16 +727,26 @@ export class PRService implements IPRService {
   }
 
   /**
-   * Sends notifications for new assigned PRs, then persists the full list and
-   * updates the badge.
+   * Fires visual notifications for new assigned PRs, then persists the full list, then plays
+   * the sound. Updates the badge between persist and sound.
    *
-   * WHY notify before persist: If the MV3 service worker is terminated
-   * mid-execution (or an error is thrown after storage writes), the new PR
-   * would be marked as "seen" in chrome.storage.local without the user ever
-   * receiving a notification. On the next alarm wake, comparePRs would skip
-   * it because it is already in the stored list. By notifying first, a
-   * worst-case crash causes a duplicate notification on the next tick (safe)
-   * rather than a silently lost one (not safe).
+   * WHY [visual → persist → sound ordering]: An MV3 service worker can be torn down at any
+   * `await`. The dangerous suspensions are:
+   *
+   * 1. Crash **before visual create** — storage is untouched, next alarm re-detects and the user
+   *    gets both notification and sound. Safe (no silent miss).
+   * 2. Crash **between visual create and `setStoredPRs`** — storage is untouched, next alarm
+   *    re-detects and the user gets a duplicate visual + sound. The window is one
+   *    `chrome.notifications.create` round-trip, ≈ms on a healthy worker. Tolerable.
+   * 3. Crash **between `setStoredPRs` and sound** — PR is recorded as seen, original visual
+   *    already shown. Next alarm sees it in stored list and stays silent. User missed the sound
+   *    but saw the banner; visual is the user-facing guarantee.
+   * 4. Crash **during sound playback** (the previous worst case at up to 5 s for custom sounds) —
+   *    same as case 3 now. No duplicate sound on the next tick.
+   *
+   * The previous design called the combined `showAssignedPRNotifications` (visual + sound) before
+   * `setStoredPRs`, which extended the dangerous window across the full sound playback await.
+   * Splitting visual and sound around the persist collapses that window to case 2 above.
    */
   private async persistAndNotifyAssigned(
     allPRs: PullRequest[],
@@ -744,15 +754,23 @@ export class PRService implements IPRService {
     newPRs: PullRequest[],
     forceRefresh: boolean
   ): Promise<void> {
+    let visualFired = false;
     if (newPRs.length > 0 && !forceRefresh) {
       this.debugService.log(`[PRService] Showing notifications for ${newPRs.length} new PR(s)`);
-      await this.notificationService.showAssignedPRNotifications(newPRs);
+      const visual = await this.notificationService.createAssignedPRVisuals(newPRs);
+      visualFired = visual.fired;
     }
 
     await this.storageService.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRs);
     this.markListRefreshedForCurrentViewer('assigned');
     await this.storageService.setLastFetchTime(Date.now());
     await this.badgeService.setPRCountBadge(filteredPendingCount);
+
+    // WHY [sound last]: see ordering rationale above. Sound must follow `setStoredPRs` so a
+    // worker suspension during playback cannot resurrect the PR as "new" on the next alarm.
+    if (visualFired) {
+      await this.notificationService.playAssignedSound();
+    }
   }
 
   private markAsExistingBaseline(prs: PullRequest[]): PullRequest[] {
@@ -1360,15 +1378,17 @@ export class PRService implements IPRService {
       }
       this.debugService.log(`[PRService] Newly merged PRs detected: ${newPRs.length}`);
 
-      // WHY notify before persist: same rationale as persistAndNotifyAssigned.
-      // If the worker dies after storage is written but before the notification
-      // fires, the merged PR is permanently marked as "seen" with no alert.
-      // Notifying first means the worst case is a duplicate on the next tick.
+      // WHY [visual → persist → sound]: same rationale as persistAndNotifyAssigned. Visual fires
+      // before persist so a crash before persist still re-notifies on the next tick (no silent
+      // miss). Sound fires after persist so a crash during the long playback window does not
+      // resurrect the PR as "new" and replay the sound on the next alarm.
+      let visualFired = false;
       if (newPRs.length > 0 && !forceRefresh) {
         this.debugService.log(
           `[PRService] Triggering merged PR notifications for ${newPRs.length} PR(s)`
         );
-        await this.notificationService.showMergedPRNotifications(newPRs);
+        const visual = await this.notificationService.createMergedPRVisuals(newPRs);
+        visualFired = visual.fired;
       } else if (newPRs.length === 0) {
         this.debugService.log('[PRService] No new merged PRs detected, skipping notifications');
       } else if (forceRefresh) {
@@ -1377,6 +1397,10 @@ export class PRService implements IPRService {
 
       await this.storageService.setStoredPRs(STORAGE_KEY_MERGED_PRS, mergedPRsWithStatus);
       this.markListRefreshedForCurrentViewer('merged');
+
+      if (visualFired) {
+        await this.notificationService.playMergedSound();
+      }
 
       await this.rateLimitService.recordSuccess();
       await this.healthStatusService.clearParserBreakage();

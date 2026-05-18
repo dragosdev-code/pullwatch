@@ -35,8 +35,10 @@ describe('PRService account swap (silent baseline)', () => {
   let fetchMergedPRs: Mock;
   let fetchAuthoredPRs: Mock;
   let getLastResolvedViewerLogin: Mock;
-  let showAssignedPRNotifications: Mock;
-  let showMergedPRNotifications: Mock;
+  let createAssignedPRVisuals: Mock;
+  let createMergedPRVisuals: Mock;
+  let playAssignedSound: Mock;
+  let playMergedSound: Mock;
   let setPRCountBadge: Mock;
   let storedByKey: Record<string, StoredPRData>;
 
@@ -63,7 +65,9 @@ describe('PRService account swap (silent baseline)', () => {
 
     storedByKey = {
       [STORAGE_KEY_ASSIGNED_PRS]: {
-        prs: [makePR({ id: 'old-1', url: 'https://github.com/o/r/pull/99', reviewStatus: 'pending' })],
+        prs: [
+          makePR({ id: 'old-1', url: 'https://github.com/o/r/pull/99', reviewStatus: 'pending' }),
+        ],
         timestamp: 0,
       },
       [STORAGE_KEY_MERGED_PRS]: {
@@ -84,22 +88,30 @@ describe('PRService account swap (silent baseline)', () => {
     getExtensionSettings = vi.fn().mockResolvedValue(DEFAULT_EXTENSION_SETTINGS);
     remove = vi.fn().mockResolvedValue(undefined);
     setLastFetchTime = vi.fn().mockResolvedValue(undefined);
-    fetchAssignedPRs = vi.fn().mockResolvedValue([
-      makePR({ id: 'new-1', url: 'https://github.com/a/b/pull/1', title: 'PR one' }),
-      makePR({ id: 'new-2', url: 'https://github.com/a/b/pull/2', title: 'PR two' }),
-    ]);
+    fetchAssignedPRs = vi
+      .fn()
+      .mockResolvedValue([
+        makePR({ id: 'new-1', url: 'https://github.com/a/b/pull/1', title: 'PR one' }),
+        makePR({ id: 'new-2', url: 'https://github.com/a/b/pull/2', title: 'PR two' }),
+      ]);
     fetchReviewedPRs = vi.fn().mockResolvedValue([]);
-    fetchMergedPRs = vi.fn().mockResolvedValue([
-      makePR({ id: 'merged-1', url: 'https://github.com/a/b/pull/301', type: 'merged' }),
-      makePR({ id: 'merged-2', url: 'https://github.com/a/b/pull/302', type: 'merged' }),
-    ]);
-    fetchAuthoredPRs = vi.fn().mockResolvedValue([
-      makePR({ id: 'authored-1', url: 'https://github.com/a/b/pull/401', isNew: true }),
-      makePR({ id: 'authored-2', url: 'https://github.com/a/b/pull/402', isNew: true }),
-    ]);
+    fetchMergedPRs = vi
+      .fn()
+      .mockResolvedValue([
+        makePR({ id: 'merged-1', url: 'https://github.com/a/b/pull/301', type: 'merged' }),
+        makePR({ id: 'merged-2', url: 'https://github.com/a/b/pull/302', type: 'merged' }),
+      ]);
+    fetchAuthoredPRs = vi
+      .fn()
+      .mockResolvedValue([
+        makePR({ id: 'authored-1', url: 'https://github.com/a/b/pull/401', isNew: true }),
+        makePR({ id: 'authored-2', url: 'https://github.com/a/b/pull/402', isNew: true }),
+      ]);
     getLastResolvedViewerLogin = vi.fn().mockReturnValue('bob');
-    showAssignedPRNotifications = vi.fn().mockResolvedValue(undefined);
-    showMergedPRNotifications = vi.fn().mockResolvedValue(undefined);
+    createAssignedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    createMergedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    playAssignedSound = vi.fn().mockResolvedValue(undefined);
+    playMergedSound = vi.fn().mockResolvedValue(undefined);
     setPRCountBadge = vi.fn().mockResolvedValue(undefined);
   });
 
@@ -122,8 +134,12 @@ describe('PRService account swap (silent baseline)', () => {
         getLastResolvedViewerLogin,
       } as never,
       notificationService: {
-        showAssignedPRNotifications,
-        showMergedPRNotifications,
+        createAssignedPRVisuals,
+        createMergedPRVisuals,
+        playAssignedSound,
+        playMergedSound,
+        showAssignedPRNotifications: vi.fn(),
+        showMergedPRNotifications: vi.fn(),
       } as never,
       badgeService: {
         setPRCountBadge,
@@ -149,7 +165,7 @@ describe('PRService account swap (silent baseline)', () => {
     const pr = makeService();
     await pr.fetchAndUpdateAssignedPRs(false, true);
 
-    expect(showAssignedPRNotifications).not.toHaveBeenCalled();
+    expect(createAssignedPRVisuals).not.toHaveBeenCalled();
     expect(remove).toHaveBeenCalledWith(STORAGE_KEY_ROUTE_HINT);
 
     const assignedCall = setStoredPRs.mock.calls.find((c) => c[0] === STORAGE_KEY_ASSIGNED_PRS);
@@ -168,7 +184,7 @@ describe('PRService account swap (silent baseline)', () => {
     const assigned = await pr.fetchAndUpdateAssignedPRs(false, true);
 
     expect(assigned).toEqual([]);
-    expect(showAssignedPRNotifications).not.toHaveBeenCalled();
+    expect(createAssignedPRVisuals).not.toHaveBeenCalled();
     expect(healthStub.signalGitHubOutage).not.toHaveBeenCalled();
     expect(healthStub.clearGitHubOutage).toHaveBeenCalled();
     expect(setPRCountBadge).toHaveBeenCalledWith(0);
@@ -182,7 +198,7 @@ describe('PRService account swap (silent baseline)', () => {
     const pr = makeService();
     const merged = await pr.updateMergedPRs(false, true);
 
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
     expect(merged.every((p) => p.isNew !== true)).toBe(true);
   });
 
@@ -193,7 +209,7 @@ describe('PRService account swap (silent baseline)', () => {
     const merged = await pr.updateMergedPRs(false, true);
 
     expect(merged).toEqual([]);
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
     expect(healthStub.signalGitHubOutage).not.toHaveBeenCalled();
     expect(healthStub.clearGitHubOutage).toHaveBeenCalled();
 
@@ -233,7 +249,7 @@ describe('PRService account swap (silent baseline)', () => {
     const pr = makeService();
     await pr.fetchAndUpdateAssignedPRs(false, true);
 
-    expect(showAssignedPRNotifications).toHaveBeenCalledTimes(1);
+    expect(createAssignedPRVisuals).toHaveBeenCalledTimes(1);
     expect(remove).not.toHaveBeenCalledWith(STORAGE_KEY_ROUTE_HINT);
   });
 
@@ -242,7 +258,7 @@ describe('PRService account swap (silent baseline)', () => {
     const pr = makeService();
     await pr.fetchAndUpdateAssignedPRs(false, true);
 
-    expect(showAssignedPRNotifications).toHaveBeenCalledTimes(1);
+    expect(createAssignedPRVisuals).toHaveBeenCalledTimes(1);
     expect(remove).not.toHaveBeenCalledWith(STORAGE_KEY_ROUTE_HINT);
   });
 
@@ -251,7 +267,7 @@ describe('PRService account swap (silent baseline)', () => {
     const pr = makeService();
     await pr.fetchAndUpdateAssignedPRs(false, true);
 
-    expect(showAssignedPRNotifications).toHaveBeenCalledTimes(1);
+    expect(createAssignedPRVisuals).toHaveBeenCalledTimes(1);
     expect(remove).not.toHaveBeenCalledWith(STORAGE_KEY_ROUTE_HINT);
   });
 });
@@ -316,7 +332,9 @@ describe('PRService.persistResolvedViewerIdentity — F3 partial-refresh swap', 
       ]);
     fetchAuthoredPRs = vi
       .fn()
-      .mockResolvedValue([makePR({ id: 'fresh-authored', url: 'https://github.com/a/b/pull/401' })]);
+      .mockResolvedValue([
+        makePR({ id: 'fresh-authored', url: 'https://github.com/a/b/pull/401' }),
+      ]);
     getLastResolvedViewerLogin = vi.fn().mockReturnValue('bob');
   });
 
@@ -340,6 +358,10 @@ describe('PRService.persistResolvedViewerIdentity — F3 partial-refresh swap', 
         getLastResolvedViewerLogin,
       } as never,
       notificationService: {
+        createAssignedPRVisuals: vi.fn().mockResolvedValue({ fired: true }),
+        createMergedPRVisuals: vi.fn().mockResolvedValue({ fired: true }),
+        playAssignedSound: vi.fn(),
+        playMergedSound: vi.fn(),
         showAssignedPRNotifications: vi.fn(),
         showMergedPRNotifications: vi.fn(),
       } as never,
@@ -381,9 +403,7 @@ describe('PRService.persistResolvedViewerIdentity — F3 partial-refresh swap', 
     expect(authoredClear![1]).toEqual([]);
     expect(assignedClear).toBeUndefined();
 
-    expect(setGitHubViewerIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ login: 'bob' })
-    );
+    expect(setGitHubViewerIdentity).toHaveBeenCalledWith(expect.objectContaining({ login: 'bob' }));
   });
 
   it('clears a list that refreshed before the final viewer changed', async () => {
@@ -405,9 +425,7 @@ describe('PRService.persistResolvedViewerIdentity — F3 partial-refresh swap', 
     expect(mergedClear![1]).toEqual([]);
     expect(authoredClear).toBeDefined();
     expect(authoredClear![1]).toEqual([]);
-    expect(setGitHubViewerIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ login: 'bob' })
-    );
+    expect(setGitHubViewerIdentity).toHaveBeenCalledWith(expect.objectContaining({ login: 'bob' }));
   });
 
   it('does not clear any list when all three refreshed under the new account', async () => {
@@ -420,9 +438,7 @@ describe('PRService.persistResolvedViewerIdentity — F3 partial-refresh swap', 
     await pr.persistResolvedViewerIdentity();
 
     expect(setStoredPRs).not.toHaveBeenCalled();
-    expect(setGitHubViewerIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ login: 'bob' })
-    );
+    expect(setGitHubViewerIdentity).toHaveBeenCalledWith(expect.objectContaining({ login: 'bob' }));
   });
 
   it('does not clear lists on same-account refresh', async () => {

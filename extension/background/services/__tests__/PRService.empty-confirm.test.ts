@@ -77,8 +77,10 @@ describe('PRService empty-confirmation tracker', () => {
   let fetchMergedPRs: Mock;
   let fetchAuthoredPRs: Mock;
   let getLastResolvedViewerLogin: Mock;
-  let showAssignedPRNotifications: Mock;
-  let showMergedPRNotifications: Mock;
+  let createAssignedPRVisuals: Mock;
+  let createMergedPRVisuals: Mock;
+  let playAssignedSound: Mock;
+  let playMergedSound: Mock;
   let setPRCountBadge: Mock;
   let getStatus: Mock;
   let signalGitHubOutage: Mock;
@@ -120,8 +122,12 @@ describe('PRService empty-confirmation tracker', () => {
         getLastResolvedViewerLogin,
       } as never,
       notificationService: {
-        showAssignedPRNotifications,
-        showMergedPRNotifications,
+        createAssignedPRVisuals,
+        createMergedPRVisuals,
+        playAssignedSound,
+        playMergedSound,
+        showAssignedPRNotifications: vi.fn(),
+        showMergedPRNotifications: vi.fn(),
       } as never,
       badgeService: {
         setPRCountBadge,
@@ -214,8 +220,10 @@ describe('PRService empty-confirmation tracker', () => {
     fetchMergedPRs = vi.fn().mockResolvedValue([]);
     fetchAuthoredPRs = vi.fn().mockResolvedValue([]);
     getLastResolvedViewerLogin = vi.fn().mockReturnValue('viewer');
-    showAssignedPRNotifications = vi.fn().mockResolvedValue(undefined);
-    showMergedPRNotifications = vi.fn().mockResolvedValue(undefined);
+    createAssignedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    createMergedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    playAssignedSound = vi.fn().mockResolvedValue(undefined);
+    playMergedSound = vi.fn().mockResolvedValue(undefined);
     setPRCountBadge = vi.fn().mockResolvedValue(undefined);
     getStatus = vi.fn().mockResolvedValue(snapshot('operational', 'none'));
     signalGitHubOutage = vi.fn().mockResolvedValue(undefined);
@@ -276,7 +284,7 @@ describe('PRService empty-confirmation tracker', () => {
     expect(setStoredPRs).toHaveBeenCalledWith(STORAGE_KEY_ASSIGNED_PRS, []);
     expect(setPRCountBadge).toHaveBeenLastCalledWith(0);
     expect(signalGitHubOutage).not.toHaveBeenCalled();
-    expect(showAssignedPRNotifications).not.toHaveBeenCalled();
+    expect(createAssignedPRVisuals).not.toHaveBeenCalled();
     expect(trustState.lists?.assigned?.recoveryBaseline).toBe('accepted_empty');
   });
 
@@ -295,7 +303,7 @@ describe('PRService empty-confirmation tracker', () => {
     await pr.updateMergedPRs(false, true);
 
     expect(trustState.lists?.merged?.emptyConfirm).toBeUndefined();
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
     expect(signalGitHubOutage).not.toHaveBeenCalled();
   });
 
@@ -386,7 +394,7 @@ describe('PRService empty-confirmation tracker', () => {
     await pr.updateMergedPRs(false, true);
     expect(setStoredPRs).toHaveBeenCalledWith(STORAGE_KEY_MERGED_PRS, []);
     expect(signalGitHubOutage).not.toHaveBeenCalled();
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
   });
 
   it('H. account swap mid-streak — tracker cleared, no outage signal', async () => {

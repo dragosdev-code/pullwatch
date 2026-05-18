@@ -1,4 +1,7 @@
-import type { INotificationService } from '../interfaces/INotificationService';
+import type {
+  INotificationService,
+  PrNotifyVisualResult,
+} from '../interfaces/INotificationService';
 import type { IDebugService } from '../interfaces/IDebugService';
 import type { IStorageService } from '../interfaces/IStorageService';
 import type { ISoundService } from '../interfaces/ISoundService';
@@ -69,29 +72,40 @@ export class NotificationService implements INotificationService {
   }
 
   /**
-   * Shows notifications for new assigned pull requests.
-   * Respects assigned notification settings including draft filtering.
+   * Shows visual + sound for new assigned pull requests.
+   *
+   * WHY [thin wrapper]: External callers (including legacy tests) keep this single-call shape.
+   * `PRService.persistAndNotifyAssigned` calls {@link createAssignedPRVisuals} and
+   * {@link playAssignedSound} directly so it can interleave `storage.setStoredPRs` between them.
    */
-  async showAssignedPRNotifications(
+  async showAssignedPRNotifications(newPRs: PullRequest | PullRequest[]): Promise<void> {
+    const visual = await this.createAssignedPRVisuals(newPRs);
+    if (visual.fired) {
+      await this.playAssignedSound();
+    }
+  }
+
+  async createAssignedPRVisuals(
     newPRs: PullRequest | PullRequest[]
-  ): Promise<void> {
+  ): Promise<PrNotifyVisualResult> {
     try {
       const settings = await this.storageService.getExtensionSettings();
 
-      // Check if assigned notifications are enabled
       if (!settings.assigned.notificationsEnabled) {
-        this.debugService.log(
-          '[NotificationService] Assigned PR notifications disabled, skipping'
-        );
-        return;
+        this.debugService.log('[NotificationService] Assigned PR notifications disabled, skipping');
+        return { fired: false, reason: 'disabled' };
       }
 
-      // Normalize input to array
       const prsArray = Array.isArray(newPRs) ? newPRs : [newPRs];
+      if (prsArray.length === 0) {
+        return { fired: false, reason: 'empty_input' };
+      }
 
       const notifyDraftsEffective = effectiveAssignedNotifyOnDrafts(settings.assigned);
 
-      // Filter out drafts unless both notify-on-drafts AND show-drafts-in-list are on (invalid combo → treat as off).
+      // WHY [invalid combo guardrail]: `notifyOnDrafts: true` paired with `showDraftsInList: false`
+      // would lead the user to a notification for a PR they cannot see in the popup list. Treating
+      // the combo as off is documented in wiki/Notifications-and-Sound.md → "Drafts are off by default".
       const filteredPRs = notifyDraftsEffective
         ? prsArray
         : prsArray.filter((pr) => pr.type !== 'draft');
@@ -112,54 +126,77 @@ export class NotificationService implements INotificationService {
         this.debugService.log(
           '[NotificationService] All new PRs are drafts and draft notifications are off (or invalid draft settings), skipping notifications'
         );
-        return;
+        return { fired: false, reason: 'all_drafts_filtered' };
       }
 
       this.debugService.log(
         `[NotificationService] Showing assigned PR notifications for ${filteredPRs.length} PR(s)`
       );
 
-      // Show visual notifications for the filtered PR set
       await this.showPRNotificationsInternal(filteredPRs, 'assigned');
-
-      // Play sound based on assigned sound setting
-      await this.playNotificationSoundForCategory(settings.assigned.sound, 'assigned');
+      return { fired: true };
     } catch (error) {
-      this.debugService.error('[NotificationService] Error showing assigned PR notifications:', error);
+      this.debugService.error('[NotificationService] Error creating assigned PR visuals:', error);
       throw error;
     }
   }
 
+  async playAssignedSound(): Promise<void> {
+    const settings = await this.storageService.getExtensionSettings();
+    // WHY [re-check enabled]: callers (PRService) decide to play based on a `fired` flag returned
+    // by createAssignedPRVisuals, but settings can change between the visual create and the sound
+    // (e.g. user toggled off in popup during the persist await). Stay consistent with the visual.
+    if (!settings.assigned.notificationsEnabled) {
+      return;
+    }
+    await this.playNotificationSoundForCategory(settings.assigned.sound, 'assigned');
+  }
+
   /**
-   * Shows notifications for merged pull requests.
-   * Respects merged notification settings.
+   * Shows visual + sound for merged pull requests. Thin wrapper over
+   * {@link createMergedPRVisuals} + {@link playMergedSound}; see {@link showAssignedPRNotifications}.
    */
   async showMergedPRNotifications(mergedPRs: PullRequest | PullRequest[]): Promise<void> {
+    const visual = await this.createMergedPRVisuals(mergedPRs);
+    if (visual.fired) {
+      await this.playMergedSound();
+    }
+  }
+
+  async createMergedPRVisuals(
+    mergedPRs: PullRequest | PullRequest[]
+  ): Promise<PrNotifyVisualResult> {
     try {
       const settings = await this.storageService.getExtensionSettings();
 
-      // Check if merged notifications are enabled
       if (!settings.merged.notificationsEnabled) {
         this.debugService.log('[NotificationService] Merged PR notifications disabled, skipping');
-        return;
+        return { fired: false, reason: 'disabled' };
       }
 
-      // Normalize input to array
       const prsArray = Array.isArray(mergedPRs) ? mergedPRs : [mergedPRs];
+      if (prsArray.length === 0) {
+        return { fired: false, reason: 'empty_input' };
+      }
 
       this.debugService.log(
         `[NotificationService] Showing merged PR notifications for ${prsArray.length} PR(s)`
       );
 
-      // Show visual notifications for merged PRs
       await this.showPRNotificationsInternal(prsArray, 'merged');
-
-      // Play sound based on merged sound setting
-      await this.playNotificationSoundForCategory(settings.merged.sound, 'merged');
+      return { fired: true };
     } catch (error) {
-      this.debugService.error('[NotificationService] Error showing merged PR notifications:', error);
+      this.debugService.error('[NotificationService] Error creating merged PR visuals:', error);
       throw error;
     }
+  }
+
+  async playMergedSound(): Promise<void> {
+    const settings = await this.storageService.getExtensionSettings();
+    if (!settings.merged.notificationsEnabled) {
+      return;
+    }
+    await this.playNotificationSoundForCategory(settings.merged.sound, 'merged');
   }
 
   /**
@@ -221,7 +258,9 @@ export class NotificationService implements INotificationService {
 
     // WHY [macOS + native NC]: Distinct Chrome ids are not always enough for a new banner; the OS may key on body
     // text. Vary message + subtitle here only — PR toasts keep stable copy + ids for click routing and dedup.
-    const previewTimeLabel = new Intl.DateTimeFormat(undefined, { timeStyle: 'medium' }).format(new Date());
+    const previewTimeLabel = new Intl.DateTimeFormat(undefined, { timeStyle: 'medium' }).format(
+      new Date()
+    );
     const message = `${copy.message}\n\nPreview · ${previewTimeLabel}`;
     const contextMessage = `${copy.contextMessage} · ${previewTimeLabel}`;
 
@@ -352,7 +391,9 @@ export class NotificationService implements INotificationService {
         iconUrl: localIconUrl,
         title: isMerged ? `${prs.length} PRs were merged` : `${prs.length} new PR review requests`,
         message: `${visibleTitles.join('\n')}${suffix}`,
-        contextMessage: isMerged ? 'Pullwatch merged PR summary' : 'Pullwatch review request summary',
+        contextMessage: isMerged
+          ? 'Pullwatch merged PR summary'
+          : 'Pullwatch review request summary',
         requireInteraction: false,
         silent: true,
         priority: 2,
@@ -374,7 +415,9 @@ export class NotificationService implements INotificationService {
   ): Promise<void> {
     try {
       await this.soundService.playNotificationSound(sound);
-      this.debugService.log(`[NotificationService] ${category} notification sound played: ${sound}`);
+      this.debugService.log(
+        `[NotificationService] ${category} notification sound played: ${sound}`
+      );
     } catch (soundError) {
       this.debugService.error(
         `[NotificationService] Error playing ${category} notification sound:`,
@@ -389,7 +432,9 @@ export class NotificationService implements INotificationService {
    * Returns null for IDs that don't follow our format so that non-PR
    * notifications (if any are ever created) degrade gracefully.
    */
-  private static parseNotificationId(notificationId: string): { category: string; url: string } | null {
+  private static parseNotificationId(
+    notificationId: string
+  ): { category: string; url: string } | null {
     const d = NotificationService.NOTIFICATION_DELIMITER;
     const prefix = NotificationService.NOTIFICATION_PREFIX;
     const batchPrefix = NotificationService.NOTIFICATION_BATCH_PREFIX;
@@ -462,7 +507,11 @@ export class NotificationService implements INotificationService {
       // Clear first to work around a Chrome bug where dismissed notification IDs
       // fail to re-display on macOS (crbug #324115501)
       if (notificationId) {
-        try { await chromeExtensionService.notifications.clear(notificationId); } catch { /* ignore */ }
+        try {
+          await chromeExtensionService.notifications.clear(notificationId);
+        } catch {
+          /* ignore */
+        }
       }
 
       const id = notificationId
@@ -475,9 +524,7 @@ export class NotificationService implements INotificationService {
         );
       }
 
-      this.debugService.log(
-        `[NotificationService] Created notification: ${id} - ${options.title}`
-      );
+      this.debugService.log(`[NotificationService] Created notification: ${id} - ${options.title}`);
     } catch (error) {
       this.debugService.error('[NotificationService] Error creating notification:', error);
       throw error;

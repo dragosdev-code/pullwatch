@@ -42,8 +42,10 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
   let fetchMergedPRs: Mock;
   let fetchAuthoredPRs: Mock;
   let getLastResolvedViewerLogin: Mock;
-  let showAssignedPRNotifications: Mock;
-  let showMergedPRNotifications: Mock;
+  let createAssignedPRVisuals: Mock;
+  let createMergedPRVisuals: Mock;
+  let playAssignedSound: Mock;
+  let playMergedSound: Mock;
   let setPRCountBadge: Mock;
   let storedByKey: Record<string, StoredPRData | null>;
 
@@ -84,8 +86,12 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
         getLastResolvedViewerLogin,
       } as never,
       notificationService: {
-        showAssignedPRNotifications,
-        showMergedPRNotifications,
+        createAssignedPRVisuals,
+        createMergedPRVisuals,
+        playAssignedSound,
+        playMergedSound,
+        showAssignedPRNotifications: vi.fn(),
+        showMergedPRNotifications: vi.fn(),
       } as never,
       badgeService: {
         setPRCountBadge,
@@ -130,17 +136,23 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
     getGitHubViewerIdentity = vi.fn().mockResolvedValue({ login: 'viewer' });
     getExtensionSettings = vi.fn().mockResolvedValue(DEFAULT_EXTENSION_SETTINGS);
     setLastFetchTime = vi.fn().mockResolvedValue(undefined);
-    fetchAssignedPRs = vi.fn().mockResolvedValue([makePR({ id: 'fresh-a', url: 'https://github.com/o/r/pull/99' })]);
+    fetchAssignedPRs = vi
+      .fn()
+      .mockResolvedValue([makePR({ id: 'fresh-a', url: 'https://github.com/o/r/pull/99' })]);
     fetchReviewedPRs = vi.fn().mockResolvedValue([]);
-    fetchMergedPRs = vi.fn().mockResolvedValue([
-      makePR({ id: 'fresh-m', url: 'https://github.com/o/r/pull/199', type: 'merged' }),
-    ]);
-    fetchAuthoredPRs = vi.fn().mockResolvedValue([
-      makePR({ id: 'fresh-au', url: 'https://github.com/o/r/pull/299' }),
-    ]);
+    fetchMergedPRs = vi
+      .fn()
+      .mockResolvedValue([
+        makePR({ id: 'fresh-m', url: 'https://github.com/o/r/pull/199', type: 'merged' }),
+      ]);
+    fetchAuthoredPRs = vi
+      .fn()
+      .mockResolvedValue([makePR({ id: 'fresh-au', url: 'https://github.com/o/r/pull/299' })]);
     getLastResolvedViewerLogin = vi.fn().mockReturnValue('viewer');
-    showAssignedPRNotifications = vi.fn().mockResolvedValue(undefined);
-    showMergedPRNotifications = vi.fn().mockResolvedValue(undefined);
+    createAssignedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    createMergedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    playAssignedSound = vi.fn().mockResolvedValue(undefined);
+    playMergedSound = vi.fn().mockResolvedValue(undefined);
     setPRCountBadge = vi.fn().mockResolvedValue(undefined);
   });
 
@@ -159,7 +171,7 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
       expect(getExtensionSettings).not.toHaveBeenCalled();
       expect(setStoredPRs).not.toHaveBeenCalled();
       expect(setLastFetchTime).not.toHaveBeenCalled();
-      expect(showAssignedPRNotifications).not.toHaveBeenCalled();
+      expect(createAssignedPRVisuals).not.toHaveBeenCalled();
       expect(setPRCountBadge).not.toHaveBeenCalled();
       expect(rateLimitStub.recordSuccess).not.toHaveBeenCalled();
       expect(debugService.log).toHaveBeenCalledWith('[PRService] Returning cached Assigned PRs');
@@ -185,7 +197,9 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
       await pr.fetchAndUpdateAssignedPRs(false, true);
 
       expect(fetchAssignedPRs).toHaveBeenCalledTimes(1);
-      expect(debugService.log).not.toHaveBeenCalledWith('[PRService] Returning cached Assigned PRs');
+      expect(debugService.log).not.toHaveBeenCalledWith(
+        '[PRService] Returning cached Assigned PRs'
+      );
     });
 
     it('cache MISS: forceRefresh=true even when timestamp is fresh', async () => {
@@ -193,7 +207,9 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
       await pr.fetchAndUpdateAssignedPRs(true, false);
 
       expect(fetchAssignedPRs).toHaveBeenCalledTimes(1);
-      expect(debugService.log).not.toHaveBeenCalledWith('[PRService] Returning cached Assigned PRs');
+      expect(debugService.log).not.toHaveBeenCalledWith(
+        '[PRService] Returning cached Assigned PRs'
+      );
     });
 
     it('cache MISS: timestamp 0 is falsy — does not treat as valid TTL anchor', async () => {
@@ -205,7 +221,9 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
       await pr.fetchAndUpdateAssignedPRs(false, false);
 
       expect(fetchAssignedPRs).toHaveBeenCalled();
-      expect(debugService.log).not.toHaveBeenCalledWith('[PRService] Returning cached Assigned PRs');
+      expect(debugService.log).not.toHaveBeenCalledWith(
+        '[PRService] Returning cached Assigned PRs'
+      );
     });
 
     it('cache MISS: missing timestamp property', async () => {
@@ -266,7 +284,7 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
       expect(out).toEqual(storedByKey[STORAGE_KEY_MERGED_PRS]!.prs);
       expect(fetchMergedPRs).not.toHaveBeenCalled();
       expect(setStoredPRs).not.toHaveBeenCalled();
-      expect(showMergedPRNotifications).not.toHaveBeenCalled();
+      expect(createMergedPRVisuals).not.toHaveBeenCalled();
       expect(rateLimitStub.recordSuccess).not.toHaveBeenCalled();
       expect(debugService.log).toHaveBeenCalledWith('[PRService] Returning cached Merged PRs');
     });

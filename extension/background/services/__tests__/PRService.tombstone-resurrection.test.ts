@@ -77,8 +77,10 @@ describe('PRService tombstone resurrection', () => {
   let fetchMergedPRs: Mock;
   let fetchAuthoredPRs: Mock;
   let getLastResolvedViewerLogin: Mock;
-  let showAssignedPRNotifications: Mock;
-  let showMergedPRNotifications: Mock;
+  let createAssignedPRVisuals: Mock;
+  let createMergedPRVisuals: Mock;
+  let playAssignedSound: Mock;
+  let playMergedSound: Mock;
   let setPRCountBadge: Mock;
   let getStatus: Mock;
   let signalGitHubOutage: Mock;
@@ -110,8 +112,12 @@ describe('PRService tombstone resurrection', () => {
         getLastResolvedViewerLogin,
       } as never,
       notificationService: {
-        showAssignedPRNotifications,
-        showMergedPRNotifications,
+        createAssignedPRVisuals,
+        createMergedPRVisuals,
+        playAssignedSound,
+        playMergedSound,
+        showAssignedPRNotifications: vi.fn(),
+        showMergedPRNotifications: vi.fn(),
       } as never,
       badgeService: {
         setPRCountBadge,
@@ -170,8 +176,10 @@ describe('PRService tombstone resurrection', () => {
     fetchMergedPRs = vi.fn().mockResolvedValue([]);
     fetchAuthoredPRs = vi.fn().mockResolvedValue([]);
     getLastResolvedViewerLogin = vi.fn().mockReturnValue('viewer');
-    showAssignedPRNotifications = vi.fn().mockResolvedValue(undefined);
-    showMergedPRNotifications = vi.fn().mockResolvedValue(undefined);
+    createAssignedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    createMergedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    playAssignedSound = vi.fn().mockResolvedValue(undefined);
+    playMergedSound = vi.fn().mockResolvedValue(undefined);
     setPRCountBadge = vi.fn().mockResolvedValue(undefined);
     getStatus = vi.fn().mockResolvedValue(snap());
     signalGitHubOutage = vi.fn().mockResolvedValue(undefined);
@@ -234,7 +242,7 @@ describe('PRService tombstone resurrection', () => {
     expect(tombstones1?.byList?.assigned?.some((t) => t.prKey === 'a3')).toBe(true);
 
     // Wave N+2 (alarmSeq=2): a3 returns. Seed storage with current persisted state (without a3).
-    showAssignedPRNotifications.mockClear();
+    createAssignedPRVisuals.mockClear();
     signalGitHubOutage.mockClear();
     alarmSeqValue = 2;
     fetchAssignedPRs.mockResolvedValue(makePRList('a', 5)); // a1..a5 again
@@ -247,10 +255,8 @@ describe('PRService tombstone resurrection', () => {
       expect.stringContaining('List integrity'),
       'pr_list_churn'
     );
-    if (showAssignedPRNotifications.mock.calls.length > 0) {
-      const notifiedKeys = showAssignedPRNotifications.mock.calls[0][0].map(
-        (p: PullRequest) => p.id
-      );
+    if (createAssignedPRVisuals.mock.calls.length > 0) {
+      const notifiedKeys = createAssignedPRVisuals.mock.calls[0][0].map((p: PullRequest) => p.id);
       expect(notifiedKeys).not.toContain('a3');
     }
   });

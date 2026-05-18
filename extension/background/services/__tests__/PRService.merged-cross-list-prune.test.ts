@@ -78,8 +78,10 @@ describe('PRService cross-list prune (authored vs merged storage)', () => {
   let fetchMergedPRs: Mock;
   let fetchAuthoredPRs: Mock;
   let getLastResolvedViewerLogin: Mock;
-  let showAssignedPRNotifications: Mock;
-  let showMergedPRNotifications: Mock;
+  let createAssignedPRVisuals: Mock;
+  let createMergedPRVisuals: Mock;
+  let playAssignedSound: Mock;
+  let playMergedSound: Mock;
   let setPRCountBadge: Mock;
   let getStatus: Mock;
   let signalGitHubOutage: Mock;
@@ -121,8 +123,12 @@ describe('PRService cross-list prune (authored vs merged storage)', () => {
         getLastResolvedViewerLogin,
       } as never,
       notificationService: {
-        showAssignedPRNotifications,
-        showMergedPRNotifications,
+        createAssignedPRVisuals,
+        createMergedPRVisuals,
+        playAssignedSound,
+        playMergedSound,
+        showAssignedPRNotifications: vi.fn(),
+        showMergedPRNotifications: vi.fn(),
       } as never,
       badgeService: {
         setPRCountBadge,
@@ -191,8 +197,10 @@ describe('PRService cross-list prune (authored vs merged storage)', () => {
     fetchMergedPRs = vi.fn().mockResolvedValue([]);
     fetchAuthoredPRs = vi.fn().mockResolvedValue([]);
     getLastResolvedViewerLogin = vi.fn().mockReturnValue('viewer');
-    showAssignedPRNotifications = vi.fn().mockResolvedValue(undefined);
-    showMergedPRNotifications = vi.fn().mockResolvedValue(undefined);
+    createAssignedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    createMergedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    playAssignedSound = vi.fn().mockResolvedValue(undefined);
+    playMergedSound = vi.fn().mockResolvedValue(undefined);
     setPRCountBadge = vi.fn().mockResolvedValue(undefined);
     getStatus = vi.fn().mockResolvedValue(snapshot('operational'));
     signalGitHubOutage = vi.fn().mockResolvedValue(undefined);
@@ -226,7 +234,7 @@ describe('PRService cross-list prune (authored vs merged storage)', () => {
     );
     expect(setStoredPRs).toHaveBeenCalledWith(STORAGE_KEY_AUTHORED_PRS, []);
     expect(out).toEqual([]);
-    expect(showMergedPRNotifications).toHaveBeenCalledTimes(1);
+    expect(createMergedPRVisuals).toHaveBeenCalledTimes(1);
     expect(signalGitHubOutage).not.toHaveBeenCalled();
     // Streak math unchanged — the prune does not advance / clear the empty tracker.
     expect(trustState.lists?.authored?.emptyConfirm?.streak).toBe(1);
@@ -400,7 +408,7 @@ describe('PRService cross-list prune (authored vs merged storage)', () => {
     await pr.updateMergedPRs(false, true);
     await pr.updateAuthoredPRs(false, true);
 
-    expect(showMergedPRNotifications).toHaveBeenCalledTimes(1);
-    expect(showAssignedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).toHaveBeenCalledTimes(1);
+    expect(createAssignedPRVisuals).not.toHaveBeenCalled();
   });
 });

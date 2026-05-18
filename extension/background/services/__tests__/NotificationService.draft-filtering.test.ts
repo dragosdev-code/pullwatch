@@ -184,4 +184,63 @@ describe('NotificationService.showAssignedPRNotifications (draft filtering)', ()
     );
     expect(skipLogs).toHaveLength(0);
   });
+
+  // WHY [direct return-value tests]: PRService.persistAndNotifyAssigned branches on the
+  // `PrNotifyVisualResult.fired` flag to decide whether to call playAssignedSound. Asserting the
+  // contract here catches regressions before they reach the integration tests in PRService.
+  describe('createAssignedPRVisuals return value', () => {
+    it('returns { fired: false, reason: "disabled" } when assigned notifications are off', async () => {
+      const svc = makeService(
+        baseSettings({
+          notificationsEnabled: false,
+          notifyOnDrafts: true,
+          showDraftsInList: true,
+        })
+      );
+      const result = await svc.createAssignedPRVisuals(openPr());
+      expect(result).toEqual({ fired: false, reason: 'disabled' });
+      expect(notificationsCreate).not.toHaveBeenCalled();
+    });
+
+    it('returns { fired: false, reason: "empty_input" } when newPRs is an empty array', async () => {
+      const svc = makeService(
+        baseSettings({ notificationsEnabled: true, notifyOnDrafts: true, showDraftsInList: true })
+      );
+      const result = await svc.createAssignedPRVisuals([]);
+      expect(result).toEqual({ fired: false, reason: 'empty_input' });
+      expect(notificationsCreate).not.toHaveBeenCalled();
+    });
+
+    it('returns { fired: false, reason: "all_drafts_filtered" } when every PR is a draft and drafts are off', async () => {
+      const svc = makeService(
+        baseSettings({
+          notificationsEnabled: true,
+          notifyOnDrafts: false,
+          showDraftsInList: true,
+        })
+      );
+      const result = await svc.createAssignedPRVisuals([
+        draftPr({ id: 'd1' }),
+        draftPr({ id: 'd2' }),
+      ]);
+      expect(result).toEqual({ fired: false, reason: 'all_drafts_filtered' });
+      expect(notificationsCreate).not.toHaveBeenCalled();
+    });
+
+    it('returns { fired: true } and creates the banner when at least one PR survives filtering', async () => {
+      const svc = makeService(
+        baseSettings({
+          notificationsEnabled: true,
+          notifyOnDrafts: false,
+          showDraftsInList: true,
+        })
+      );
+      const result = await svc.createAssignedPRVisuals([draftPr(), openPr()]);
+      expect(result).toEqual({ fired: true });
+      expect(notificationsCreate).toHaveBeenCalledTimes(1);
+      // The split path does not play sound: that is playAssignedSound's job, and the wrapper
+      // (showAssignedPRNotifications) is what chains them.
+      expect(playSound).not.toHaveBeenCalled();
+    });
+  });
 });

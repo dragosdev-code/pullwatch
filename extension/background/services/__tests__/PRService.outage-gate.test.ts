@@ -65,8 +65,10 @@ describe('PRService outage gate', () => {
   let fetchMergedPRs: Mock;
   let fetchAuthoredPRs: Mock;
   let getLastResolvedViewerLogin: Mock;
-  let showAssignedPRNotifications: Mock;
-  let showMergedPRNotifications: Mock;
+  let createAssignedPRVisuals: Mock;
+  let createMergedPRVisuals: Mock;
+  let playAssignedSound: Mock;
+  let playMergedSound: Mock;
   let setPRCountBadge: Mock;
   let getStatus: Mock;
   let signalGitHubOutage: Mock;
@@ -104,8 +106,12 @@ describe('PRService outage gate', () => {
         getLastResolvedViewerLogin,
       } as never,
       notificationService: {
-        showAssignedPRNotifications,
-        showMergedPRNotifications,
+        createAssignedPRVisuals,
+        createMergedPRVisuals,
+        playAssignedSound,
+        playMergedSound,
+        showAssignedPRNotifications: vi.fn(),
+        showMergedPRNotifications: vi.fn(),
       } as never,
       badgeService: {
         setPRCountBadge,
@@ -180,8 +186,10 @@ describe('PRService outage gate', () => {
     fetchMergedPRs = vi.fn().mockResolvedValue([]);
     fetchAuthoredPRs = vi.fn().mockResolvedValue([]);
     getLastResolvedViewerLogin = vi.fn().mockReturnValue('viewer');
-    showAssignedPRNotifications = vi.fn().mockResolvedValue(undefined);
-    showMergedPRNotifications = vi.fn().mockResolvedValue(undefined);
+    createAssignedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    createMergedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    playAssignedSound = vi.fn().mockResolvedValue(undefined);
+    playMergedSound = vi.fn().mockResolvedValue(undefined);
     setPRCountBadge = vi.fn().mockResolvedValue(undefined);
     getStatus = vi.fn().mockResolvedValue(snapshot('operational', 'none'));
     signalGitHubOutage = vi.fn().mockResolvedValue(undefined);
@@ -200,10 +208,11 @@ describe('PRService outage gate', () => {
     const out = await pr.fetchAndUpdateAssignedPRs(false, true);
 
     expect(out).toBe(oldPRs);
-    // WHY [sound suppression]: notification fan-out is the single suppression point. Since
-    // showAssignedPRNotifications is the boundary that internally drives sound, asserting it was
-    // never called also proves the per-category sound is not played during the storm path.
-    expect(showAssignedPRNotifications).not.toHaveBeenCalled();
+    // WHY [sound suppression]: visual create is the gate that decides whether sound runs at all
+    // (PRService only calls playAssignedSound when createAssignedPRVisuals returned { fired: true }).
+    // Asserting it was never called proves both visual + sound stay silent during the storm path.
+    expect(createAssignedPRVisuals).not.toHaveBeenCalled();
+    expect(playAssignedSound).not.toHaveBeenCalled();
     expect(setStoredPRs).not.toHaveBeenCalled();
     expect(setLastFetchTime).not.toHaveBeenCalled();
     expect(setPRCountBadge).not.toHaveBeenCalled();
@@ -226,7 +235,7 @@ describe('PRService outage gate', () => {
     const out = await pr.updateMergedPRs(false, true);
 
     expect(out).toBe(oldPRs);
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
     expect(setStoredPRs).not.toHaveBeenCalled();
     expect(signalGitHubOutage).toHaveBeenCalledWith(
       expect.stringContaining('Suspicious merged list'),
@@ -250,7 +259,7 @@ describe('PRService outage gate', () => {
     const out = await pr.updateMergedPRs(false, true);
 
     expect(out).toBe(oldPRs);
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
     expect(setStoredPRs).not.toHaveBeenCalled();
     expect(signalGitHubOutage).not.toHaveBeenCalled();
     expect(storageSet).not.toHaveBeenCalledWith(
@@ -267,7 +276,7 @@ describe('PRService outage gate', () => {
     const pr = makeService();
     await pr.updateMergedPRs(false, true);
     expect(setStoredPRs).not.toHaveBeenCalled();
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
     expect(storedByKey[STORAGE_KEY_MERGED_PRS]!.prs).toBe(merged0);
 
     // tick2 — healthy, original 3 + 1 new
@@ -280,8 +289,8 @@ describe('PRService outage gate', () => {
 
     await pr.updateMergedPRs(false, true);
 
-    expect(showMergedPRNotifications).toHaveBeenCalledTimes(1);
-    const notifiedPRs = showMergedPRNotifications.mock.calls[0]![0] as PullRequest[];
+    expect(createMergedPRVisuals).toHaveBeenCalledTimes(1);
+    const notifiedPRs = createMergedPRVisuals.mock.calls[0]![0] as PullRequest[];
     expect(notifiedPRs).toHaveLength(1);
     expect(notifiedPRs[0]!.id).toBe('m-new');
   });
@@ -342,7 +351,7 @@ describe('PRService outage gate', () => {
     await pr.fetchAndUpdateAssignedPRs(true, true);
 
     // line-449 notify-skip on forceRefresh remains intact.
-    expect(showAssignedPRNotifications).not.toHaveBeenCalled();
+    expect(createAssignedPRVisuals).not.toHaveBeenCalled();
     // Persist still happens — gate is inactive.
     expect(setStoredPRs).toHaveBeenCalled();
     expect(signalGitHubOutage).not.toHaveBeenCalled();
@@ -434,14 +443,14 @@ describe('PRService outage gate', () => {
 
     const persistedAfterMiss = setStoredPRs.mock.calls.at(-1)![1] as PullRequest[];
     expect(persistedAfterMiss.map((p) => p.id)).toContain('m-3');
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
 
     vi.setSystemTime(T0 + 60_000);
     setStoredPRs.mockClear();
     fetchMergedPRs.mockResolvedValueOnce(oldPRs);
     await pr.updateMergedPRs(false, true);
 
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
     const persistedAfterRecovery = setStoredPRs.mock.calls.at(-1)![1] as PullRequest[];
     expect(persistedAfterRecovery).toHaveLength(4);
   });
@@ -463,7 +472,7 @@ describe('PRService outage gate', () => {
     const pr = makeService();
     await pr.updateMergedPRs(false, true);
 
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
     expect(setStoredPRs).toHaveBeenCalledWith(
       STORAGE_KEY_MERGED_PRS,
       expect.arrayContaining([expect.objectContaining({ id: 'm-stale' })])
@@ -482,15 +491,12 @@ describe('PRService outage gate', () => {
       type: 'merged',
       timestampParseFailed: true,
     });
-    fetchMergedPRs.mockResolvedValue([
-      storedByKey[STORAGE_KEY_MERGED_PRS]!.prs[0]!,
-      unknownTime,
-    ]);
+    fetchMergedPRs.mockResolvedValue([storedByKey[STORAGE_KEY_MERGED_PRS]!.prs[0]!, unknownTime]);
 
     const pr = makeService();
     await pr.updateMergedPRs(false, true);
 
-    expect(showMergedPRNotifications).not.toHaveBeenCalled();
+    expect(createMergedPRVisuals).not.toHaveBeenCalled();
     expect(setStoredPRs).toHaveBeenCalledWith(
       STORAGE_KEY_MERGED_PRS,
       expect.arrayContaining([expect.objectContaining({ id: 'm-unknown-time' })])

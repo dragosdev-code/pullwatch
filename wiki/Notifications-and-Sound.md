@@ -26,11 +26,14 @@ sequenceDiagram
     participant User
 
     Note over SW: New PRs detected in PRService
-    SW->>NS: showAssignedPRNotifications(newPRs)
+    SW->>NS: createAssignedPRVisuals(newPRs)
     NS->>NS: filter drafts (settings)
     loop one per PR
         NS->>Chrome: notifications.create("pr-alert|assigned|<url>", ...)
     end
+    NS-->>SW: { fired: true }
+    SW->>SW: storage.setStoredPRs(STORAGE_KEY_ASSIGNED_PRS, allPRs)
+    SW->>NS: playAssignedSound()
     NS->>SS: playNotificationSound(sound)
     SS->>SS: await playSoundGateTail (FIFO)
     SS->>OS: ensureOffscreenDocument()
@@ -46,7 +49,7 @@ sequenceDiagram
     NS->>Chrome: notifications.clear(id)
 ```
 
-Two things are worth noticing before zooming in. First, the click handler does not look anything up: the URL is right there in the notification ID, so a worker that was torn down between "notification shown" and "user clicked" can still route the click to the right tab. Second, `SoundService` awaits the offscreen's `sendResponse` until playback finishes, which keeps the service worker alive for the full sound duration.
+Three things are worth noticing before zooming in. First, the click handler does not look anything up: the URL is right there in the notification ID, so a worker that was torn down between "notification shown" and "user clicked" can still route the click to the right tab. Second, `SoundService` awaits the offscreen's `sendResponse` until playback finishes, which keeps the service worker alive for the full sound duration. Third, `PRService` writes the fresh PR list to `chrome.storage.local` between the visual create and the sound play; the "Crash duplicate trade-off" section below explains why that ordering matters more than it looks.
 
 ---
 
@@ -54,8 +57,9 @@ Two things are worth noticing before zooming in. First, the click handler does n
 
 [NotificationService.ts](../extension/background/services/NotificationService.ts) owns "turn a `PullRequest[]` into Chrome notifications." The public surface is small:
 
-- `showAssignedPRNotifications` — new assigned PRs. Respects the `assigned.notificationsEnabled` setting, and filters drafts unless `notifyOnDrafts` is on.
-- `showMergedPRNotifications` — PRs the user's changes were merged into. Respects `merged.notificationsEnabled`.
+- `createAssignedPRVisuals` / `playAssignedSound` — the visual half and the sound half of the assigned PR notification, exposed separately so `PRService` can persist storage between them (see the "Crash duplicate trade-off" section below). Both respect `assigned.notificationsEnabled`; the visual half also filters drafts unless `notifyOnDrafts` is on.
+- `createMergedPRVisuals` / `playMergedSound` — same shape for merged PRs.
+- `showAssignedPRNotifications` / `showMergedPRNotifications` — thin wrappers that call the visual half then the sound half in one go. Kept for callers that do not need to interleave other work.
 - `fireSettingsTestNotification(category)` — a throttled preview fired from the settings panel.
 - `handleNotificationClick(id)` — opens the PR in a new tab and clears the toast.
 
@@ -289,6 +293,14 @@ The STOP handler bumps `playRequestGeneration` and calls `interruptActivePlaybac
 ### The click fires but `chrome.tabs.create` fails
 
 `handleNotificationClick` wraps the tab creation in an inner try/catch so a tab failure does not prevent the notification from being cleared. Leaving the toast in the tray with no way to dismiss it programmatically is a worse outcome than failing to open the tab; the user can click the PR link from the popup directly if the tab path is blocked.
+
+### Crash duplicate trade-off (visual, persist, sound)
+
+`PRService.persistAndNotifyAssigned` and the inline notify branch in `doUpdateMergedPRs` order the work in three steps: create the visual banner, persist the fresh PR list to `chrome.storage.local`, then play the sound. The split exists because Chrome can suspend the MV3 service worker at any `await`, and sound playback awaits the offscreen `setTimeout(durationMs)` for up to five seconds when the user picked a custom WAV. If the worker is torn down during that long await, the PR list never makes it to storage, and the next alarm tick treats the PR as new again. The user would hear a second ping a few minutes later without an obvious banner to attach it to, because `chrome.notifications.create` is called with the same deterministic `pr-alert|…` id and macOS Notification Center collapses the duplicate.
+
+Putting the persist between the visual and the sound moves the risk into shapes the user can absorb. A crash before the visual fires is still safe: storage is untouched, the next alarm re-detects the PR, and the user gets both banner and sound. A crash between the visual and the persist still re-fires both on the next tick, but the window has shrunk to a single `chrome.notifications.create` round-trip, which is sub-millisecond on a healthy worker. A crash after the persist but during the sound await loses the original sound, but the visual already reached the user and the PR is recorded as seen, so the next alarm stays silent. The visual notification, not the sound, is the user-facing guarantee; anything that would silently drop a visual is unsafe, anything that drops only the sound is tolerable.
+
+The split is exposed on `NotificationService` as `createAssignedPRVisuals` and `playAssignedSound` (and the merged equivalents). The combined `showAssignedPRNotifications` / `showMergedPRNotifications` are kept as wrappers for callers that do not need to interleave anything between the two halves.
 
 ---
 
