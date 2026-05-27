@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { waitFor } from '@testing-library/react';
 import { PatternRegistryService } from '../PatternRegistryService';
 import {
+  BUNDLED_PATTERNS_REGISTRY_VERSION,
   REMOTE_PATTERNS_MAX_BYTES,
   REMOTE_PATTERNS_MAX_VERSION_DELTA,
   STORAGE_KEY_PATTERN_REGISTRY,
@@ -111,7 +112,9 @@ describe('Remote pattern delivery', () => {
     expect(serviceA.getPatterns()).toBe(DEFAULT_COMPILED_PATTERNS);
     expect(storageSet).toHaveBeenCalledTimes(1);
     const firstPayload = storageSet.mock.calls[0][0] as Record<string, { version: number }>;
-    expect(firstPayload[STORAGE_KEY_PATTERN_REGISTRY].version).toBe(0);
+    expect(firstPayload[STORAGE_KEY_PATTERN_REGISTRY].version).toBe(
+      BUNDLED_PATTERNS_REGISTRY_VERSION
+    );
     expect(debugA.warn).toHaveBeenCalled();
 
     vi.mocked(fetch).mockReset();
@@ -183,7 +186,37 @@ describe('Remote pattern delivery', () => {
     expect(service.getPatterns()).toBe(DEFAULT_COMPILED_PATTERNS);
     expect(storageSet).toHaveBeenCalledTimes(1);
     const payload = storageSet.mock.calls[0][0] as Record<string, { version: number }>;
-    expect(payload[STORAGE_KEY_PATTERN_REGISTRY].version).toBe(0);
+    expect(payload[STORAGE_KEY_PATTERN_REGISTRY].version).toBe(
+      BUNDLED_PATTERNS_REGISTRY_VERSION
+    );
+  });
+
+  it('does not downgrade to older remote patterns after a fresh bundled init', async () => {
+    storageGet.mockResolvedValue({});
+
+    vi.mocked(fetch).mockResolvedValue(
+      okJsonResponse(
+        makeValidRemoteConfig({
+          version: 4,
+          minExtensionVersion: '0.0.0',
+          patterns: DEFAULT_PATTERNS,
+        })
+      )
+    );
+
+    const debug = createDebugService();
+    const service = new PatternRegistryService(debug);
+
+    await service.initialize();
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled();
+    });
+
+    expect(service.getPatterns().prLink[0].compiled.source).toContain('[\\s\\S]*?');
+    expect(debug.log).toHaveBeenCalledWith(
+      expect.stringContaining('is not newer than local v6')
+    );
   });
 
   it('rejects remote pattern versions that jump beyond the allowed upgrade ceiling', async () => {
@@ -192,7 +225,8 @@ describe('Remote pattern delivery', () => {
     vi.mocked(fetch).mockResolvedValue(
       okJsonResponse(
         makeValidRemoteConfig({
-          version: REMOTE_PATTERNS_MAX_VERSION_DELTA + 1,
+          version:
+            BUNDLED_PATTERNS_REGISTRY_VERSION + REMOTE_PATTERNS_MAX_VERSION_DELTA + 1,
           minExtensionVersion: '0.0.0',
           patterns: DEFAULT_PATTERNS,
         })
@@ -213,6 +247,8 @@ describe('Remote pattern delivery', () => {
     expect(service.getPatterns()).toBe(DEFAULT_COMPILED_PATTERNS);
     expect(storageSet).toHaveBeenCalledTimes(1);
     const payload = storageSet.mock.calls[0][0] as Record<string, { version: number }>;
-    expect(payload[STORAGE_KEY_PATTERN_REGISTRY].version).toBe(0);
+    expect(payload[STORAGE_KEY_PATTERN_REGISTRY].version).toBe(
+      BUNDLED_PATTERNS_REGISTRY_VERSION
+    );
   });
 });

@@ -106,6 +106,17 @@ export const REMOTE_PATTERNS_MAX_BYTES = 1 * 1024 * 1024; // 1 MiB
 // WHY [recovery]: A bounded jump keeps hotfix room while preventing a poisoned
 // remote version from pinning installs above all legitimate future releases.
 export const REMOTE_PATTERNS_MAX_VERSION_DELTA = 1000;
+/**
+ * Version stamp for patterns shipped inside the extension build. Persisted on
+ * first run so production `main` patterns.json cannot downgrade a newer bundle
+ * after the user clears `chrome.storage.local` (e.g. main still on v4 while the
+ * bundle already includes v6 title-link fixes).
+ *
+ * Bump only when `default-patterns.ts` changes (extension release). Remote-only
+ * hotfixes bump `patterns.json` version on `main` only; they do not require
+ * changing this constant unless bundled defaults changed too.
+ */
+export const BUNDLED_PATTERNS_REGISTRY_VERSION = 6;
 
 // Route hint — remembers whether /pulls/search or /pulls last succeeded so
 // steady-state polling makes one request per list instead of probing both.

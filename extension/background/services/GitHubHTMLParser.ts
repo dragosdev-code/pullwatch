@@ -5,7 +5,11 @@ import {
   extractIsoTimestampFromPatterns,
   sortPullRequestsByEventTime,
 } from '@common/pull-request-timestamp';
-import { detectPRTypeFromEntries, extractBalancedBlocks } from '@background/utils/github-parser-utils';
+import {
+  detectPRTypeFromEntries,
+  extractBalancedBlocks,
+  stripHtmlTags,
+} from '@background/utils/github-parser-utils';
 
 /**
  * Pure static utility for parsing GitHub PR listing pages.
@@ -95,7 +99,7 @@ export class GitHubHTMLParser {
   static extractPRData(
     element: RegExpMatchArray,
     baseURL: string,
-    patterns: CompiledPatterns,
+    patterns: CompiledPatterns
   ): PullRequest | null {
     const elementHtml = element[0];
 
@@ -108,7 +112,7 @@ export class GitHubHTMLParser {
       const g = p.captureGroups!;
       if (match?.[g.url] && match[g.title]) {
         prUrl = match[g.url];
-        title = match[g.title].trim().replace(/\s+/g, ' ');
+        title = stripHtmlTags(match[g.title]);
         break;
       }
     }
@@ -180,7 +184,7 @@ export class GitHubHTMLParser {
    */
   static extractAssigneesFromAvatarStack(
     elementHtml: string,
-    patterns: CompiledPatterns,
+    patterns: CompiledPatterns
   ): PullRequestAuthor[] | null {
     const av = patterns.assigneeAvatar;
     const openTag = elementHtml.match(av.stackContainer.compiled);
@@ -208,7 +212,7 @@ export class GitHubHTMLParser {
 
   private static parseAssigneeAnchor(
     anchorHtml: string,
-    patterns: CompiledPatterns,
+    patterns: CompiledPatterns
   ): PullRequestAuthor | null {
     const av = patterns.assigneeAvatar;
     let login = '';

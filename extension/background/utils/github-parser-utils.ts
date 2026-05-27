@@ -1,5 +1,10 @@
 import type { CompiledPatternTypeEntry } from '@common/pattern-types';
 
+/** Plain text from link inner HTML (e.g. titles with `<code>` wrappers). */
+export function stripHtmlTags(html: string): string {
+  return html.replace(/<[^>]*>/g, '').trim().replace(/\s+/g, ' ');
+}
+
 export function detectPRTypeFromEntries(
   html: string,
   prType: CompiledPatternTypeEntry[]

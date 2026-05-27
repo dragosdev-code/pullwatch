@@ -174,6 +174,10 @@ Compiled regex objects live in the pattern registry and are reused across fetche
 
 If you sign out of GitHub and sign in as someone else, the cached PR lists would be the previous account's. `PRService` compares the viewer login extracted from every fetch against `github_viewer_identity` in storage; a mismatch clears the lists. The viewer login itself is extracted by the registry's `viewerLogin` pattern chain, not hardcoded.
 
+### Legacy titles with inline HTML (`<code>`, etc.)
+
+GitHub sometimes renders PR titles as markup inside the `markdown-title` link, for example `ABC-123: <code>WidgetLoader</code> as shared module`. The new-experience parser already captures inner HTML and strips tags via [`stripHtmlTags`](../extension/background/utils/github-parser-utils.ts). Legacy `prLink` patterns must use a non-greedy `([\s\S]*?)` capture before `</a>` and the same strip step. An older `([^<]+)</a>` pattern matches only plain text and drops the entire row when a tag appears in the title. JSON harvest uses plain `title` strings and is unaffected. See [Remote Configuration](Remote-Configuration) for how bundled and remote pattern versions interact when you test a fix locally.
+
 ---
 
 ## See also

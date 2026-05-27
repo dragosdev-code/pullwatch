@@ -126,12 +126,12 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
   // ── Fallback when no row selector matched ──
   prRowFallback: {
     linkScan: {
-      regex: '<a[^>]*href="[^"]*/pull/\\d+[^"]*"[^>]*>([^<]*)</a>',
+      regex: '<a[^>]*href="[^"]*/pull/\\d+[^"]*"[^>]*>([\\s\\S]*?)</a>',
       flags: 'gi',
     },
     containerExtract: {
       regex:
-        '<(?:div|article|li|tr)[^>]*>.*?<a[^>]*href="([^"]*/pull/\\d+)[^"]*"[^>]*>([^<]*)</a>.*?</(?:div|article|li|tr)>',
+        '<(?:div|article|li|tr)[^>]*>.*?<a[^>]*href="([^"]*/pull/\\d+)[^"]*"[^>]*>([\\s\\S]*?)</a>.*?</(?:div|article|li|tr)>',
       flags: 'gi',
     },
   },
@@ -140,18 +140,18 @@ export const DEFAULT_PATTERNS: PatternRegistry = {
   prLink: [
     {
       regex:
-        '<a[^>]*href="([^"]*/pull/\\d+)"[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*>([^<]+)</a>',
+        '<a[^>]*href="([^"]*/pull/\\d+)"[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*>([\\s\\S]*?)</a>',
       flags: 'i',
       captureGroups: { url: 1, title: 2 },
     },
     {
-      regex: '<a[^>]*href="([^"]*/pull/\\d+)"[^>]*>([^<]+)</a>',
+      regex: '<a[^>]*href="([^"]*/pull/\\d+)"[^>]*>([\\s\\S]*?)</a>',
       flags: 'i',
       captureGroups: { url: 1, title: 2 },
     },
     {
       regex:
-        '<a[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*href="([^"]*/pull/\\d+)"[^>]*>([^<]+)</a>',
+        '<a[^>]*class="[^"]*(?:markdown-title|js-navigation-open|Link--primary)[^"]*"[^>]*href="([^"]*/pull/\\d+)"[^>]*>([\\s\\S]*?)</a>',
       flags: 'i',
       captureGroups: { url: 1, title: 2 },
     },

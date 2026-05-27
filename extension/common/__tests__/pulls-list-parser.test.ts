@@ -97,4 +97,35 @@ describe('parsePullsListHTML', () => {
     expect(prs).toEqual([]);
     expect(seen).toEqual(['json:null', 'new:0']);
   });
+
+  it('falls through to legacy HTML when JSON and new experience are absent', () => {
+    const row = `
+      <div class="js-issue-row Box-row">
+        <a class="markdown-title Link--primary" href="/acme-corp/widgets/pull/42">
+          ABC-123: <code>WidgetLoader</code> as shared module
+        </a>
+        <span class="opened-by">#42 opened <relative-time datetime="2026-01-15T10:00:00Z"></relative-time> by
+          <a href="/issues?q=author">alice-writer</a>
+        </span>
+      </div>`;
+    const html = `<!DOCTYPE html><html><body><div class="js-navigation-container">${row}</div></body></html>`;
+
+    const seen: string[] = [];
+    const prs = parsePullsListHTML(html, baseURL, DEFAULT_COMPILED_PATTERNS, {
+      onJsonProbed(r) {
+        seen.push(`json:${r === null ? 'null' : r!.length}`);
+      },
+      onNewHtmlProbed(r) {
+        seen.push(`new:${r === null ? 'null' : r!.length}`);
+      },
+      onLegacyHtmlProbed(r) {
+        seen.push(`legacy:${r.length}`);
+      },
+    });
+
+    expect(prs).toHaveLength(1);
+    expect(prs[0].url).toBe('https://github.com/acme-corp/widgets/pull/42');
+    expect(prs[0].title).toBe('ABC-123: WidgetLoader as shared module');
+    expect(seen).toEqual(['json:null', 'new:null', 'legacy:1']);
+  });
 });

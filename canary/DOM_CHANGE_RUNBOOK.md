@@ -109,9 +109,12 @@ The extension parses GitHub HTML pages using regex patterns to extract PR data. 
 - **Schema**: `{ version: number, minExtensionVersion: string, updatedAt: string, patterns: PatternRegistry }`
 - **Version gating**: `PatternRegistryService` skips the update if `config.version <= this.registryVersion` — you **must bump `version`** for any change to take effect.
 - **Runtime validation**: Before compiling, the service runs `validateRemoteConfig()` (from `extension/common/pattern-registry-schema.ts`) against the raw JSON. If the structure is invalid, it is rejected immediately with a dotted-path error message logged to the extension console — e.g., `prRowSelectors.0.type: Expected 'class' | 'attribute' | 'balanced-div', received 'xpath'`. The current compiled patterns are preserved unchanged. This is a **structural** check; regex syntax is still validated by `safeCompile` (a second defense layer) after the schema passes.
-- **Two version numbers to keep straight**:
-  - `version` (integer, in `patterns.json`) — the **config revision**. Increment by 1 every time you push updated patterns. Starts at 1; the extension stores 0 locally for "no remote config loaded yet."
-  - `minExtensionVersion` (semver string, in `patterns.json`) — the **minimum extension build** that should apply this config. Set this if new patterns require new extension code; leave it at `"0.0.0"` if all builds can safely use them. This is compared against `chrome.runtime.getManifest().version`, not against the config `version` number.
+- **Two version numbers to keep straight** (plus the bundled floor):
+  - `version` (integer, in `patterns.json`): the config revision. Increment by 1 every time you push updated patterns. Starts at 1; the extension may still have `0` in storage from older installs.
+  - `BUNDLED_PATTERNS_REGISTRY_VERSION` (integer, in `extension/common/constants.ts`): the floor written when the extension falls back to bundled `default-patterns.ts`. Bump only when `default-patterns.ts` changes in the extension repo. Remote-only hotfixes bump `patterns.json` `version` only. See [Remote Configuration § When to bump which version](../wiki/Remote-Configuration.md#when-to-bump-which-version).
+  - `minExtensionVersion` (semver string, in `patterns.json`): the minimum extension build that should apply this config. Set this if new patterns require new extension code; leave it at `"0.0.0"` if all builds can safely use them. This is compared against `chrome.runtime.getManifest().version`, not against the config `version` number.
+- **Production reads `main`, not `staging`.** Smoke tests on `staging` do not change what live extensions fetch until you merge to `main`.
+- **Clearing extension storage while debugging:** After a rebuild with a newer bundle, a cache clear reloads bundled patterns at the floor version; outdated `main` configs (lower `version` than the floor) are skipped. Older builds reset storage to version `0`, so an outdated remote could overwrite the bundle. If you see that, rebuild with the floor constant or push a newer `patterns.json` to `main`.
 
 ---
 
@@ -341,7 +344,7 @@ These target GitHub-specific CSS classes and attributes that GitHub may rename:
 | `prRowSelectors[1]` | Alternative row class | `Box-row` class |
 | `prRowSelectors[2]` | Alternative row class | `issue-list-item` class |
 | `pageRecognition.knownSelectors` | Page recognition | `js-issue-row\|Box-row\|issue-list-item\|data-hovercard-type` |
-| `prLink[0]` | PR link with title | `markdown-title\|js-navigation-open\|Link--primary` class |
+| `prLink[0]` | PR link with title | `markdown-title\|…` class; title capture must be `([\s\S]*?)</a>` (not `([^<]+)</a>`) so inline `<code>` / spans do not drop the row; strip tags in `GitHubHTMLParser` |
 | `prType[0-2]` | PR type from aria-labels | `aria-label="...Draft/Open/Merged Pull Request..."` |
 | `prType[3-7]` | PR type from icons/colors | `octicon-git-pull-request-draft`, `color-fg-draft`, etc. |
 | `assigneeAvatar.stackContainer` | Assignee stack | `AvatarStack-body` class + `aria-label="Assigned to"` |
@@ -668,7 +671,7 @@ If you are an AI coding agent tasked with fixing a canary failure:
 
 Key constraints:
 - The `patterns.json` structure MUST match the `PatternRegistry` interface in `extension/common/pattern-types.ts` exactly. The Valibot schema in `extension/common/pattern-registry-schema.ts` is the enforced definition — any deviation is rejected before compilation with a dotted-path error in the extension console.
-- The `version` field in `patterns.json` MUST be a **number ≥ 1** and strictly greater than the current cached value or the extension will ignore the update. `0` is reserved as the "no remote config yet" sentinel.
+- The `version` field in `patterns.json` MUST be a **number ≥ 1** and strictly greater than the current cached value or the extension will ignore the update. `0` is reserved as the "no remote config yet" sentinel on legacy installs; new installs use `BUNDLED_PATTERNS_REGISTRY_VERSION` as the initial stored version.
 - The `minExtensionVersion` field is the **extension semver** gate, not the config version. Set it to `"0.0.0"` if all builds can use the config, or a specific version if the new patterns require new extension code.
 - Regex strings in JSON use double-escaped backslashes (`\\d` not `\d`).
 - The `captureGroups` map MUST be correct — the parser indexes into match results using these numbers. Values must be positive integers ≥ 1 (group 0 is the full match, which is never a named group).

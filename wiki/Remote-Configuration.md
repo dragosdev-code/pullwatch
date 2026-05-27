@@ -23,6 +23,25 @@ The parser reads from exactly one set of compiled patterns at runtime, but that 
 
 The bundled defaults are the floor. No matter what happens with the remote file, the extension can always compile and use the defaults; new installs start on them, and any failure in the remote path leaves them in place.
 
+### Bundled floor version
+
+Each extension build stamps a floor version in [`BUNDLED_PATTERNS_REGISTRY_VERSION`](../extension/common/constants.ts) (currently `6`). On first install, or after cached patterns are rejected, the service worker persists bundled `default-patterns.ts` under that number, not `0`. Remote config is applied only when `config.version` is strictly greater than the loaded version. That prevents an older `patterns.json` on `main` (for example v4) from replacing a newer bundle after someone clears `chrome.storage.local`.
+
+### When to bump which version
+
+Two numbers matter. They are related but you do not bump both on every change.
+
+| What changed | Bump in pullwatch | Bump in `pr-live-config` |
+| ------------ | ----------------- | ------------------------ |
+| Regex fix shipped only via remote (OTA, no store release) | Nothing | `patterns.json` `version` (+1) |
+| Regex fix in [`default-patterns.ts`](../extension/common/default-patterns.ts) (new extension build) | `BUNDLED_PATTERNS_REGISTRY_VERSION` (+1) | Same `version` on `main` (keep in sync) |
+
+**Remote-only hotfix.** Edit `patterns.json` on `staging`, smoke test, merge to `main`. Example: users are on floor `6`, you publish remote `7`. The extension picks up `7` on the next fetch because `7 > 6`. You do not need to touch `BUNDLED_PATTERNS_REGISTRY_VERSION` unless you also changed bundled defaults in the extension repo.
+
+**Extension release.** Change `default-patterns.ts`, bump `BUNDLED_PATTERNS_REGISTRY_VERSION`, and publish the same (or higher) `version` in `patterns.json` on `main`. That covers new installs (bundle), users who clear storage (floor), and users who still have an old cached remote (OTA).
+
+Keep `staging` and `main` aligned for anything you expect production to read. The extension never fetches `staging`.
+
 The `pr-live-config` repo has two branches worth knowing about:
 
 - `main` is what production extensions read, at `raw.githubusercontent.com/dragosdev-code/pr-live-config/main/patterns.json`.
@@ -45,7 +64,7 @@ sequenceDiagram
         SW->>SW: use compiled patterns
     else cached missing or invalid
         SW->>SW: use bundled defaults
-        SW->>Storage: persist bundled defaults (version 0)
+        SW->>Storage: persist bundled defaults<br/>(BUNDLED_PATTERNS_REGISTRY_VERSION)
     end
 
     Note over SW: Background: fire-and-forget refresh
@@ -132,6 +151,10 @@ if (config.version <= this.registryVersion) {
 
 Why `<=` rather than `!==`? Because a strict `!==` would let a misconfigured push (say, resetting the version to `1`) silently roll live users backward to an older, potentially broken config. The comparison is one way on purpose: a new config has no effect unless its version is bumped above the last one anyone saw.
 
+### When remote is older than the bundle
+
+“Older” here means a lower integer `version`, not an older git commit. A remote file can be recent in the repo but semantically stale (for example missing a regex fix that already shipped in the extension bundle). If `main` is still on v4 and the bundle floor is v6, the fetch logs `Remote v4 is not newer than local v6` and skips the update; the bundle wins. That is why a local rebuild can fix parsing without pushing `pr-live-config`, until you need OTA for users who still have cached v4 in storage.
+
 There is a second gate, optional but useful: `minExtensionVersion`. If the remote config names a minimum extension version that the running build does not satisfy, the config is skipped. This is how a new selector that depends on a new parser field can be staged without breaking users who have not yet updated.
 
 ---
@@ -161,7 +184,9 @@ export const StoredPatternDataSchema = v.object({
 
 Why validate the wrapper, not just the patterns? Because a corrupted `version` or `timestamp` would silently poison both the staleness check (`Date.now() - NaN` is `NaN`, which compares `false` to everything) and the version comparison (`NaN <= n` is `false`, which would pass the "newer than local" gate by accident). Storing the envelope with an explicit schema makes both fields tamper evident.
 
-Version `0` is only ever valid in storage; it is the sentinel the service writes after falling back to bundled defaults on a first install. The remote config schema requires `version >= 1`, so a production config cannot accidentally claim to be a "fresh install."
+Version `0` may still appear in storage from installs before the bundled floor existed; treat that as “no meaningful remote revision yet.” New installs persist `BUNDLED_PATTERNS_REGISTRY_VERSION` (see constants). The remote config schema requires `version >= 1`, so a production `patterns.json` cannot claim to be a fresh install.
+
+For releases, keep `staging` and `main` in sync. The extension always reads `main`. If you bump `version` on `staging` but forget to merge to `main`, production extensions keep fetching the old `main` file while laptop smoke tests pass against `staging`. That mismatch often shows up as “I thought remote was v5 but logs say v4.”
 
 ---
 
@@ -198,7 +223,17 @@ That is what `minExtensionVersion` is for. A config that names `minExtensionVers
 
 ### Storage is corrupted on first read
 
-`validateStoredPatternData` rejects the envelope, the service logs, and falls back to the bundled defaults, persisting them as version `0`. The next remote fetch then runs normally and can promote to a real remote version.
+`validateStoredPatternData` rejects the envelope, the service logs, and falls back to the bundled defaults at `BUNDLED_PATTERNS_REGISTRY_VERSION`. The next remote fetch runs normally but only promotes when remote `version` exceeds that floor.
+
+### Someone cleared extension local storage while testing
+
+Clearing storage wipes the pattern envelope. On the next startup the service loads bundled patterns at the floor version, then fetches remote. Before the bundled floor existed, a clear reset the stored version to `0`, so any remote `version >= 1` (even an outdated `main` v4) could overwrite a newer bundle. That was the opposite of what you want when debugging a parser fix. After the floor change, outdated remote configs are ignored until `pr-live-config` `main` catches up.
+
+If a PR still disappears after a clear and rebuild, check the service worker log for which patterns won (`Initialized with bundled default patterns v6` versus `Updated to remote patterns v4`) and confirm the PR appears on GitHub under the same query the extension uses (`user-review-requested:@me` for To Review).
+
+### Staging passed smoke tests but main was not updated
+
+Extensions never read the staging URL in production. Until `main` is updated, live users and production fetches stay on the previous `main` version regardless of what `npm run test:remote-patterns:staging` validated.
 
 ### The extension is offline at startup
 

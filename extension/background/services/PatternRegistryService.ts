@@ -13,6 +13,7 @@ import {
   REMOTE_FETCH_TIMEOUT_MS,
   REMOTE_PATTERNS_MAX_BYTES,
   REMOTE_PATTERNS_MAX_VERSION_DELTA,
+  BUNDLED_PATTERNS_REGISTRY_VERSION,
 } from '@common/constants';
 import {
   validateRemoteConfig,
@@ -87,10 +88,12 @@ export class PatternRegistryService implements IPatternRegistryService {
     }
 
     this.compiledPatterns = DEFAULT_COMPILED_PATTERNS;
-    this.registryVersion = 0;
+    this.registryVersion = BUNDLED_PATTERNS_REGISTRY_VERSION;
     this.lastFetchTimestamp = 0;
-    await this.persistToStorage(DEFAULT_PATTERNS, 0);
-    this.debugService.log('[PatternRegistry] Initialized with bundled default patterns');
+    await this.persistToStorage(DEFAULT_PATTERNS, BUNDLED_PATTERNS_REGISTRY_VERSION);
+    this.debugService.log(
+      `[PatternRegistry] Initialized with bundled default patterns v${BUNDLED_PATTERNS_REGISTRY_VERSION}`
+    );
     this.fetchRemotePatterns().catch(() => {});
   }
 

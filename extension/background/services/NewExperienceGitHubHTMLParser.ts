@@ -9,7 +9,11 @@ import {
   extractIsoTimestampFromPatterns,
   sortPullRequestsByEventTime,
 } from '@common/pull-request-timestamp';
-import { detectPRTypeFromEntries, extractBalancedBlocks } from '@background/utils/github-parser-utils';
+import {
+  detectPRTypeFromEntries,
+  extractBalancedBlocks,
+  stripHtmlTags,
+} from '@background/utils/github-parser-utils';
 
 /**
  * Pure static utility for parsing GitHub's **new** React-based global pulls
@@ -48,7 +52,7 @@ export class NewExperienceGitHubHTMLParser {
   static parseFromHTML(
     html: string,
     baseURL: string,
-    patterns: CompiledPatterns,
+    patterns: CompiledPatterns
   ): PullRequest[] | null {
     const ne = patterns.newExperience;
     if (!ne) return null;
@@ -70,7 +74,7 @@ export class NewExperienceGitHubHTMLParser {
 
     const advertised = NewExperienceGitHubHTMLParser.parseAdvertisedResultsCount(
       html,
-      ne.resultsCount,
+      ne.resultsCount
     );
     if (advertised !== null && advertised > 0 && prs.length === 0) {
       throw new ParserBreakageError('NewExperience row selectors broken');
@@ -107,7 +111,7 @@ export class NewExperienceGitHubHTMLParser {
   private static extractPRData(
     rowHtml: string,
     baseURL: string,
-    ne: CompiledNewExperiencePatterns,
+    ne: CompiledNewExperiencePatterns
   ): PullRequest | null {
     // ── URL + Title ──────────────────────────────────────────────────
     const titleMatch = rowHtml.match(ne.titleLink.compiled);
@@ -119,20 +123,16 @@ export class NewExperienceGitHubHTMLParser {
     if (!rawUrl || !titleHtml) return null;
 
     const url = rawUrl.startsWith('http') ? rawUrl : `${baseURL}${rawUrl}`;
-    const title = NewExperienceGitHubHTMLParser.stripHtmlTags(titleHtml);
+    const title = stripHtmlTags(titleHtml);
     if (!title) return null;
 
     // ── PR Number (from URL) ─────────────────────────────────────────
     const numMatch = rawUrl.match(ne.prNumber.compiled);
-    const number = numMatch
-      ? parseInt(numMatch[ne.prNumber.captureGroups!.number], 10)
-      : null;
+    const number = numMatch ? parseInt(numMatch[ne.prNumber.captureGroups!.number], 10) : null;
 
     // ── Repository Name (from URL) ───────────────────────────────────
     const repoMatch = rawUrl.match(ne.repoName.compiled);
-    const repoName = repoMatch
-      ? repoMatch[ne.repoName.captureGroups!.repoName]
-      : 'Unknown Repo';
+    const repoName = repoMatch ? repoMatch[ne.repoName.captureGroups!.repoName] : 'Unknown Repo';
 
     // ── Author ───────────────────────────────────────────────────────
     // WHY [login / loginAlt]: newExperience.author uses one alternation regex (filter button vs
@@ -166,14 +166,4 @@ export class NewExperienceGitHubHTMLParser {
       isNew: false,
     };
   }
-
-  /**
-   * Removes all HTML tags and collapses whitespace to recover plain text
-   * from an innerHTML fragment (e.g. the nested `<span>` wrappers inside
-   * the title link).
-   */
-  private static stripHtmlTags(html: string): string {
-    return html.replace(/<[^>]*>/g, '').trim().replace(/\s+/g, ' ');
-  }
-
 }

@@ -63,6 +63,8 @@ Everything below lives in [package.json](../package.json). You will reach for th
 
 > **Heads up on `npm run dev`:** the popup boots fine, but because the Chrome APIs are not available in a normal tab, anything that reads or writes `chrome.storage` or sends a runtime message will silently no op. That is expected. For end to end testing, always load the `dist/` build into `chrome://extensions`.
 
+> **Parser fixes and remote config:** A rebuilt extension ships updated regex in [`default-patterns.ts`](../extension/common/default-patterns.ts). You do not need a live `pr-live-config` push to verify locally if bundled patterns load (check the service worker log for `bundled default patterns v…`). Clearing extension storage reloads the bundle; outdated `main` `patterns.json` cannot downgrade a newer [`BUNDLED_PATTERNS_REGISTRY_VERSION`](../extension/common/constants.ts). Production OTA and users with old cached remote versions still need `staging` promoted to `main`; see [Remote Configuration](Remote-Configuration).
+
 ---
 
 ## Permissions, explained one by one
