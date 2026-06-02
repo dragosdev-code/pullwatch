@@ -42,7 +42,7 @@ export const modalBackdrop =
   "absolute inset-0 m-0 cursor-pointer border-0 bg-neutral/55 p-0";
 
 export const modalPanel =
-  "relative z-10 m-auto flex h-[min(92vh,900px)] w-[min(96vw,1200px)] flex-col rounded-box border border-base-300 bg-base-100 shadow-2xl";
+  "relative z-10 m-auto flex h-[min(96vh,1080px)] w-[min(98vw,1440px)] flex-col rounded-box border border-base-300 bg-base-100 shadow-2xl";
 
 export const modalHeader =
   "flex flex-wrap items-center justify-between gap-3 border-b border-base-300 px-4 py-3";

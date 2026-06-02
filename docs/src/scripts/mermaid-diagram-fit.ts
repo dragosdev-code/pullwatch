@@ -106,20 +106,25 @@ export function fitAndCenter(
   }
   if (bbox.width <= 0 || bbox.height <= 0) return null;
 
+  // Match layout size to viewBox so Panzoom pan limits align with fit math.
+  svg.style.width = `${bbox.width}px`;
+  svg.style.height = `${bbox.height}px`;
+  svg.style.display = "block";
+
   const fitScale = Math.min(vpW / bbox.width, vpH / bbox.height, maxScale);
   const scale = Math.max(
     SCALE_LIMITS.minScale,
     Math.min(SCALE_LIMITS.maxScale, fitScale),
   );
 
-  panzoom.zoom(scale, { animate: false });
+  panzoom.zoom(scale, { animate: false, force: true });
 
   const w = bbox.width * scale;
   const h = bbox.height * scale;
   panzoom.pan(
     (host.clientWidth - w) / 2,
     (host.clientHeight - h) / 2,
-    { animate: false },
+    { animate: false, force: true },
   );
 
   return scale;
