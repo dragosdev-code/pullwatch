@@ -2,17 +2,23 @@
 import { THEMES, THEME_STORAGE_KEY, DEFAULT_THEME } from '../lib/themes';
 
 const themeJson = JSON.stringify(THEMES);
+const themeLabels: Record<(typeof THEMES)[number], string> = {
+  light: 'Light',
+  dark: 'Dark',
+};
 ---
 
 <starlight-theme-select>
   <label class="sr-only" for="pw-docs-theme-select">Theme</label>
   <select
     id="pw-docs-theme-select"
-    class="select select-bordered select-sm w-36 capitalize max-w-40"
-    aria-label="DaisyUI theme"
+    class="select select-bordered select-sm w-28 max-w-32"
+    aria-label="Color theme"
     data-themes={themeJson}
   >
-    {THEMES.map((name) => <option value={name}>{name}</option>)}
+    {THEMES.map((name) => (
+      <option value={name}>{themeLabels[name]}</option>
+    ))}
   </select>
 </starlight-theme-select>
 
@@ -26,9 +32,8 @@ const themeJson = JSON.stringify(THEMES);
     }
     const select = document.getElementById('pw-docs-theme-select');
     if (select && select.value !== name) select.value = name;
-    const scheme = getComputedStyle(document.documentElement).colorScheme;
     document.documentElement.dataset.mermaidTheme =
-      name === 'light' || scheme === 'light' ? 'default' : 'dark';
+      name === 'light' ? 'default' : 'dark';
   }
 
   const select = document.getElementById('pw-docs-theme-select');

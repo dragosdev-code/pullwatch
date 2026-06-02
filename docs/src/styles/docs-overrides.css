@@ -8,8 +8,22 @@ body {
 }
 
 /* Starlight header actions align with DaisyUI controls */
-header .select {
+header .select,
+#pw-docs-theme-select {
   min-height: 2rem;
+  color: var(--color-base-content);
+  background-color: var(--color-base-100);
+  border-color: var(--color-base-300);
+}
+
+#pw-docs-theme-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+#pw-docs-theme-select option {
+  color: var(--color-base-content);
+  background-color: var(--color-base-100);
 }
 
 /* Hide raw Mermaid blocks until astro-mermaid has rendered SVG (avoids source flash). */

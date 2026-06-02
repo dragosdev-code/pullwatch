@@ -8,12 +8,15 @@ import { DEFAULT_THEME, THEME_STORAGE_KEY } from "../lib/themes";
   define:vars={{ THEME_STORAGE_KEY, DEFAULT_THEME }}
 >
   (function () {
+    function apply(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+    }
     try {
       var saved = localStorage.getItem(THEME_STORAGE_KEY);
-      if (saved) document.documentElement.setAttribute("data-theme", saved);
-      else document.documentElement.setAttribute("data-theme", DEFAULT_THEME);
+      if (saved === "light" || saved === "dark") apply(saved);
+      else apply(DEFAULT_THEME);
     } catch {
-      document.documentElement.setAttribute("data-theme", DEFAULT_THEME);
+      apply(DEFAULT_THEME);
     }
   })();
 </script>

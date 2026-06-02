@@ -31,7 +31,7 @@ node scripts/migrate-wiki.mjs
 
 ## Theming (DaisyUI)
 
-The docs site uses **DaisyUI 5.0.43** and **Tailwind CSS 4.2.2** — the same versions as the extension (`package.json` at repo root). All 35 themes from `src/components/settings/appearance/themes.ts` are available via the header theme dropdown.
+The docs site uses **DaisyUI 5.0.43** and **Tailwind CSS 4.2.2** — the same versions as the extension (`package.json` at repo root). Only **light** and **dark** are available via the header theme dropdown (`src/lib/themes.ts`).
 
 Theme choice is stored under `pr-extension-theme` in `localStorage` (same key as the extension popup).
 

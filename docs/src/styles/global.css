@@ -8,44 +8,9 @@
 /* Diagram enhancer utilities (applied in client TS). */
 @source "../scripts/**/*.ts";
 
-/* DaisyUI 5 — same theme set as extension src/app.css */
+/* DaisyUI 5 — light/dark only on the docs site */
 @plugin "daisyui" {
-  themes:
-    light --default,
-    dark --prefersdark,
-    cupcake,
-    bumblebee,
-    emerald,
-    corporate,
-    synthwave,
-    retro,
-    cyberpunk,
-    valentine,
-    halloween,
-    garden,
-    forest,
-    aqua,
-    lofi,
-    pastel,
-    fantasy,
-    wireframe,
-    black,
-    luxury,
-    dracula,
-    cmyk,
-    autumn,
-    business,
-    acid,
-    lemonade,
-    night,
-    coffee,
-    winter,
-    dim,
-    nord,
-    sunset,
-    caramellatte,
-    abyss,
-    silk;
+  themes: light --default, dark --prefersdark;
   root: ":root";
   logs: false;
 }
