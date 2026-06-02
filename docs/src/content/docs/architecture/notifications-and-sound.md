@@ -1,4 +1,8 @@
-# Notifications and Sound
+---
+title: Notifications and Sound
+description: Desktop alerts, offscreen audio, and suppression rules.
+---
+
 
 > **Summary.** When a new pull request arrives, two things happen: Chrome fires a visual notification, and a sound plays. The visual half is simple; the audio half is not, because Manifest V3 service workers are not allowed to use `AudioContext`. Pullwatch solves that by spinning up a hidden **offscreen document** on demand, passing sound instructions across a runtime message, and keeping the worker alive until playback finishes. A deterministic notification ID encodes the PR URL so clicks open the right tab even after a worker restart, and a FIFO promise gate in `SoundService` keeps concurrent sound requests from overlapping.
 
@@ -55,7 +59,7 @@ Three things are worth noticing before zooming in. First, the click handler does
 
 ## NotificationService: categories and draft filtering
 
-[NotificationService.ts](../extension/background/services/NotificationService.ts) owns "turn a `PullRequest[]` into Chrome notifications." The public surface is small:
+[NotificationService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/NotificationService.ts) owns "turn a `PullRequest[]` into Chrome notifications." The public surface is small:
 
 - `createAssignedPRVisuals` / `playAssignedSound` — the visual half and the sound half of the assigned PR notification, exposed separately so `PRService` can persist storage between them (see the "Crash duplicate trade-off" section below). Both respect `assigned.notificationsEnabled`; the visual half also filters drafts unless `notifyOnDrafts` is on.
 - `createMergedPRVisuals` / `playMergedSound` — same shape for merged PRs.
@@ -67,7 +71,7 @@ Notifications are per PR (one row per pull request, not one row per batch) so th
 
 | Category   | Default        | Produces a sound?             | Filters drafts?                                                                                                                       |
 | ---------- | -------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `assigned` | On             | Yes, `assigned.sound` setting | Yes unless `notifyOnDrafts` is on (see [effective-assigned-draft-notify.ts](../extension/common/effective-assigned-draft-notify.ts)). |
+| `assigned` | On             | Yes, `assigned.sound` setting | Yes unless `notifyOnDrafts` is on (see [effective-assigned-draft-notify.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/effective-assigned-draft-notify.ts)). |
 | `merged`   | On             | Yes, `merged.sound` setting   | No concept of drafts in merged PRs.                                                                                                   |
 | `authored` | Off (no toast) | n/a                           | `authored` is a visible list but does not notify; noise budget.                                                                       |
 
@@ -79,7 +83,7 @@ Why no toast for authored? Because the user owns those PRs. Notifying on "your o
 
 There is a guardrail against an inconsistent settings combo (`notifyOnDrafts: true` with `showDraftsInList: false`). When that combo appears, `effectiveAssignedNotifyOnDrafts` treats it as off, because notifying on a PR the user cannot see in the list would be a dead end click, and silently dropping the notification is less confusing than a notification that leads to an empty list.
 
-Hiding drafts from the assigned list is a display filter, not evidence that GitHub truncated the response. Tombstone drop recording skips draft keys removed only by that filter so `pr_list_churn` and the integrity banner do not fire when the user toggles visibility alone. The full rule lives on [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists).
+Hiding drafts from the assigned list is a display filter, not evidence that GitHub truncated the response. Tombstone drop recording skips draft keys removed only by that filter so `pr_list_churn` and the integrity banner do not fire when the user toggles visibility alone. The full rule lives on [List Trust and Suspect Lists](./github-health/list-trust/).
 
 ---
 
@@ -121,7 +125,7 @@ The preview notifications from `fireSettingsTestNotification` deliberately use a
 
 The service worker can receive two runtime messages at once: an alarm fired, and the popup clicked a sound preview. Both paths end up calling `SoundService.playNotificationSound`. Without coordination, both would send `EVENT_PLAY_SOUND` to the offscreen document in overlapping windows, and the user would hear two sounds at once.
 
-[SoundService.ts](../extension/background/services/SoundService.ts) serialises them with a promise chain:
+[SoundService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/SoundService.ts) serialises them with a promise chain:
 
 ```ts
 private playSoundGateTail: Promise<void> = Promise.resolve();
@@ -153,7 +157,7 @@ The mental model: every caller grabs the old tail to wait on, publishes a new ta
 
 MV3 service workers cannot call `new AudioContext()`. They have no DOM and no media APIs. Chrome's answer is the **offscreen document**: a hidden HTML page the worker can spawn, which has a real DOM, real `AudioContext`, and a message channel back to the worker.
 
-[extension/offscreen/offscreen.html](../extension/offscreen/offscreen.html) is a three line HTML file that loads [offscreenMain.ts](../extension/offscreen/offscreenMain.ts). `SoundService.ensureOffscreenDocument` spawns it on demand:
+[extension/offscreen/offscreen.html](https://github.com/dragosdev-code/pullwatch/blob/main/extension/offscreen/offscreen.html) is a three line HTML file that loads [offscreenMain.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/offscreen/offscreenMain.ts). `SoundService.ensureOffscreenDocument` spawns it on demand:
 
 ```ts
 async ensureOffscreenDocument(): Promise<void> {
@@ -175,7 +179,7 @@ Chrome decides when to close the offscreen document. Pullwatch does not try to c
 
 ## Inside the offscreen: one AudioContext, many plays
 
-[offscreenMain.ts](../extension/offscreen/offscreenMain.ts) holds a **singleton** `AudioContext` shared across every playback:
+[offscreenMain.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/offscreen/offscreenMain.ts) holds a **singleton** `AudioContext` shared across every playback:
 
 ```ts
 let sharedAudioContext: AudioContext | null = null;
@@ -225,10 +229,10 @@ The offscreen `decodeAudioData` path reads the base64, turns it into an `AudioBu
 
 ### The custom sound editor
 
-The editor UI (in [src/components/custom-sound-editor/](../src/components/custom-sound-editor/)) is the one place in the popup that reaches for **vanilla Zustand** instead of the app wide hook based stores:
+The editor UI (in [src/components/custom-sound-editor/](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/custom-sound-editor/)) is the one place in the popup that reaches for **vanilla Zustand** instead of the app wide hook based stores:
 
-- [audio-draft-store.ts](../src/components/custom-sound-editor/store/audio-draft-store.ts) — the loaded buffer, its waveform peaks, start/end trim in seconds.
-- [async-feedback-store.ts](../src/components/custom-sound-editor/store/async-feedback-store.ts) — decode and save errors, and the saving spinner.
+- [audio-draft-store.ts](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/custom-sound-editor/store/audio-draft-store.ts) — the loaded buffer, its waveform peaks, start/end trim in seconds.
+- [async-feedback-store.ts](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/custom-sound-editor/store/async-feedback-store.ts) — decode and save errors, and the saving spinner.
 
 Two stores instead of one because the trim geometry and the save pipeline are independent concerns: clicking a draft's delete button should not stomp the editor's trim range, and a decode error should not reset the trim. Keeping them split means each reset call only touches the UI it owns.
 
@@ -244,7 +248,7 @@ Once the user saves, the final base64 blob is persisted to `chrome.storage.local
 
 ### The trust gate
 
-[List Trust and Suspect Lists](List-Trust-and-Suspect-Lists) is the integrity layer that decides whether a fresh fetch is allowed to replace the stored baseline. When it returns `suspect_partial` or `suspect_empty_corroborated`, [PRService](../extension/background/services/PRService.ts) returns `oldPRs` to the caller without touching `notificationService.show*`. The popup keeps the cached list and the outage banner explains the gap; nothing alerts because nothing was persisted.
+[List Trust and Suspect Lists](./github-health/list-trust/) is the integrity layer that decides whether a fresh fetch is allowed to replace the stored baseline. When it returns `suspect_partial` or `suspect_empty_corroborated`, [PRService](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PRService.ts) returns `oldPRs` to the caller without touching `notificationService.show*`. The popup keeps the cached list and the outage banner explains the gap; nothing alerts because nothing was persisted.
 
 The same applies to `suspect_empty_pending`. The empty-only path is a confirmation period, not a veto, and a one-tick flake should not produce a notification storm when the list returns. The pending branch is silent for the streak window.
 
@@ -254,7 +258,7 @@ The same applies to `suspect_empty_pending`. The empty-only path is a confirmati
 
 ### The merged freshness floor
 
-[MergedNotificationEligibility.filterFreshCandidates](../extension/background/domain/pr-list-trust/MergedNotificationEligibility.ts) drops merged candidates whose event timestamp is older than `lastTrustedAt - FETCH_INTERVAL_MS`, and drops candidates with unparseable timestamps when Statuspage is problematic. The freshness gate runs **before** the tombstone filter, which keeps `pr_list_churn` reserved for genuine flapping rather than for stale rows the freshness window would have suppressed anyway.
+[MergedNotificationEligibility.filterFreshCandidates](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/MergedNotificationEligibility.ts) drops merged candidates whose event timestamp is older than `lastTrustedAt - FETCH_INTERVAL_MS`, and drops candidates with unparseable timestamps when Statuspage is problematic. The freshness gate runs **before** the tombstone filter, which keeps `pr_list_churn` reserved for genuine flapping rather than for stale rows the freshness window would have suppressed anyway.
 
 ### `forceRefresh` on install, startup, and manual refresh
 
@@ -262,9 +266,9 @@ The same applies to `suspect_empty_pending`. The empty-only path is a confirmati
 
 ### Draft filtering and the invalid combo guardrail
 
-`assigned.notifyOnDrafts` defaults to `false`, so draft PRs do not produce assigned notifications unless the user opts in. There is one explicit guard against an inconsistent settings combo (`notifyOnDrafts: true` with `showDraftsInList: false`); when that combo appears, [effectiveAssignedNotifyOnDrafts](../extension/common/effective-assigned-draft-notify.ts) treats it as off, because notifying on a PR the user cannot see in the list would be a dead-end click.
+`assigned.notifyOnDrafts` defaults to `false`, so draft PRs do not produce assigned notifications unless the user opts in. There is one explicit guard against an inconsistent settings combo (`notifyOnDrafts: true` with `showDraftsInList: false`); when that combo appears, [effectiveAssignedNotifyOnDrafts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/effective-assigned-draft-notify.ts) treats it as off, because notifying on a PR the user cannot see in the list would be a dead-end click.
 
-The same `showDraftsInList` toggle also controls whether drafts are written into stored assigned PRs. That client-side omission is wired into tombstone drop recording so it does not produce a list-integrity signal by itself; see the assigned note under **Drop record** in [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists).
+The same `showDraftsInList` toggle also controls whether drafts are written into stored assigned PRs. That client-side omission is wired into tombstone drop recording so it does not produce a list-integrity signal by itself; see the assigned note under **Drop record** in [List Trust and Suspect Lists](./github-health/list-trust/).
 
 ---
 
@@ -306,7 +310,7 @@ The split is exposed on `NotificationService` as `createAssignedPRVisuals` and `
 
 ## See also
 
-- [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists): the integrity layer behind every suppression rule above. Decides what is `suspect_partial`, `suspect_empty_*`, or trusted; emits `pr_component_degraded` and `pr_list_churn` signals.
-- [The Service Worker Lifecycle](The-Service-Worker-Lifecycle): why the worker cannot play audio itself, and why the offscreen document has to outlive a message round trip.
-- [Popup and Background Communication](Popup-and-Background-Communication): the `EVENT_PLAY_SOUND` and `PREVIEW_SOUND_ACTION.*` messages the popup uses to drive sound previews from the settings panel.
-- [Data Hydration and Storage](Data-Hydration-and-Storage): where custom sound blobs and their metadata live in `chrome.storage.local`, and how settings in `chrome.storage.sync` name them.
+- [List Trust and Suspect Lists](./github-health/list-trust/): the integrity layer behind every suppression rule above. Decides what is `suspect_partial`, `suspect_empty_*`, or trusted; emits `pr_component_degraded` and `pr_list_churn` signals.
+- [The Service Worker Lifecycle](./service-worker-lifecycle/): why the worker cannot play audio itself, and why the offscreen document has to outlive a message round trip.
+- [Popup and Background Communication](./popup-and-background-communication/): the `EVENT_PLAY_SOUND` and `PREVIEW_SOUND_ACTION.*` messages the popup uses to drive sound previews from the settings panel.
+- [Data Hydration and Storage](./data-hydration-and-storage/): where custom sound blobs and their metadata live in `chrome.storage.local`, and how settings in `chrome.storage.sync` name them.

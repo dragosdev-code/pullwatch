@@ -1,0 +1,55 @@
+---
+import { THEMES, THEME_STORAGE_KEY, DEFAULT_THEME } from '../lib/themes';
+
+const themeJson = JSON.stringify(THEMES);
+---
+
+<starlight-theme-select>
+  <label class="sr-only" for="pw-docs-theme-select">Theme</label>
+  <select
+    id="pw-docs-theme-select"
+    class="select select-bordered select-sm w-36 capitalize max-w-40"
+    aria-label="DaisyUI theme"
+    data-themes={themeJson}
+  >
+    {THEMES.map((name) => <option value={name}>{name}</option>)}
+  </select>
+</starlight-theme-select>
+
+<script is:inline define:vars={{ THEME_STORAGE_KEY, DEFAULT_THEME }}>
+  function applyDocsTheme(name) {
+    document.documentElement.setAttribute('data-theme', name);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, name);
+    } catch {
+      /* private mode */
+    }
+    const select = document.getElementById('pw-docs-theme-select');
+    if (select && select.value !== name) select.value = name;
+    const scheme = getComputedStyle(document.documentElement).colorScheme;
+    document.documentElement.dataset.mermaidTheme =
+      name === 'light' || scheme === 'light' ? 'default' : 'dark';
+  }
+
+  const select = document.getElementById('pw-docs-theme-select');
+  if (!select) return;
+  const themes = JSON.parse(select.dataset.themes || '[]');
+  const current = document.documentElement.getAttribute('data-theme');
+  if (current && themes.includes(current)) {
+    select.value = current;
+  } else {
+    applyDocsTheme(DEFAULT_THEME);
+  }
+
+  select.addEventListener('change', (e) => {
+    const value = e.target?.value;
+    if (value && themes.includes(value)) applyDocsTheme(value);
+  });
+</script>
+
+<style>
+  starlight-theme-select {
+    display: flex;
+    align-items: center;
+  }
+</style>

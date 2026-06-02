@@ -1,8 +1,11 @@
-# List Trust and Suspect Lists
+---
+title: List Trust and Suspect Lists
+description: PrListTrustAssessor, empty confirmation, and tombstones.
+---
 
 > **What this page is.** GitHub can return HTTP 200 with parseable HTML and an incomplete pull request list. List trust is the layer that decides whether a fresh fetch is allowed to replace the stored baseline, and what to do when it is not. This page covers the assessor, the empty-confirmation streak, the merged limbo promoter, the tombstone log, the merged freshness floor, and how those pieces compose into the six-branch dispatcher inside `PRService`.
 
-The whole layer lives under [extension/background/domain/pr-list-trust/](../extension/background/domain/pr-list-trust/). It exists between "the parser produced a `PullRequest[]`" and "this is the list the popup will read", and it is the reason a one-tick flake from GitHub does not turn into a notification storm five minutes later.
+The whole layer lives under [extension/background/domain/pr-list-trust/](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/). It exists between "the parser produced a `PullRequest[]`" and "this is the list the popup will read", and it is the reason a one-tick flake from GitHub does not turn into a notification storm five minutes later.
 
 ---
 
@@ -16,7 +19,7 @@ That is the failure mode the assessor was built to refuse. A suspicious read upd
 
 ## The six-branch dispatcher
 
-Every list fetch ([assigned](../extension/background/services/PRService.ts), merged, authored) runs the assessment through `PRService.dispatchPrListAssessment`, which routes one of six outcomes. The dispatcher is total, the discriminator is typed (no string-matching on reasons), and the policy split between assigned/authored and merged is the only behaviour difference between the three lists.
+Every list fetch ([assigned](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PRService.ts), merged, authored) runs the assessment through `PRService.dispatchPrListAssessment`, which routes one of six outcomes. The dispatcher is total, the discriminator is typed (no string-matching on reasons), and the policy split between assigned/authored and merged is the only behaviour difference between the three lists.
 
 | Branch                          | When                                                                                                                       | What `PRService` does                                                                                                                       |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -34,27 +37,27 @@ The split between assigned/authored and merged is deliberate. A sprint-end merge
 
 ## `PrListTrustAssessor` thresholds
 
-[PrListTrustAssessor.assess](../extension/background/domain/pr-list-trust/PrListTrustAssessor.ts) scores a successful fetch before it is allowed to replace the stored baseline. The decision tree is small but every branch matters.
+[PrListTrustAssessor.assess](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/PrListTrustAssessor.ts) scores a successful fetch before it is allowed to replace the stored baseline. The decision tree is small but every branch matters.
 
 ```mermaid
 flowchart TD
-    A[oldPRs.length, freshPRs.length, status] --> B{fresh.length === 0<br/>and old.length > 0?}
-    B -- yes --> C[reasons += empty_after_non_empty]
-    B -- no --> D{missing.length > 0?}
+    A[Inputs: old, fresh, status] --> B{Empty fresh<br/>and old had PRs?}
+    B -- yes --> C[empty_after_non_empty]
+    B -- no --> D{Any missing keys?}
     C --> Z
     D -- no --> Z[Decide kind]
-    D -- yes --> E{prComponentStatus}
-    E -- operational --> F{old.length >= 5<br/>and missing >= max 2, ceil 0.25 * old?}
-    E -- partial_outage<br/>or major_outage --> G[partial_drop_degraded]
-    E -- degraded_performance --> H{missing >= max 2, ceil 0.15 * old<br/>or dropRatio >= 0.15?}
-    E -- unknown --> I{old.length >= 5<br/>and missing >= max 2, ceil 0.25 * old?}
+    D -- yes --> E{Statuspage component}
+    E -- operational --> F["old >= 5 and missing<br/>>= max 2, 25% old"]
+    E -- partial or major --> G[partial_drop_degraded]
+    E -- degraded --> H["missing >= max 2, 15%<br/>or ratio >= 15%"]
+    E -- unknown --> I["old >= 5 and missing<br/>>= max 2, 25% old"]
     F -- yes --> J[partial_drop_operational]
     H -- yes --> G
     I -- yes --> K[partial_drop_unknown_status]
     J --> Z
     G --> Z
     K --> Z
-    Z --> R[kind: trusted vs suspect_partial vs suspect_empty]
+    Z --> R[trusted / suspect_partial / suspect_empty]
 ```
 
 The `partial_drop_*` branches require a non-empty fresh response on purpose. An empty fresh response is not a partial drop; it is the `empty_after_non_empty` branch above. Without that guard, an empty fresh under any non-operational status would route through `suspect_partial` and signal `pr_component_degraded`, reintroducing the false positive on legitimate-zero for users with five or more cleared review requests.
@@ -65,23 +68,23 @@ The `partial_drop_*` branches require a non-empty fresh response on purpose. An 
 
 ## `EmptyConfirmationTracker` streak
 
-The empty-only path is a confirmation period, not a veto. [EmptyConfirmationTracker.observeEmpty](../extension/background/domain/pr-list-trust/EmptyConfirmationTracker.ts) takes one observation and returns one of four outcomes.
+The empty-only path is a confirmation period, not a veto. [EmptyConfirmationTracker.observeEmpty](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/EmptyConfirmationTracker.ts) takes one observation and returns one of four outcomes.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Trusted
-    Trusted --> EmptyPending: empty_after_non_empty<br/>status not actively bad
-    Trusted --> EmptyCorroborated: empty + actively bad<br/>(partial_outage / major_outage / unknown+global)
-    EmptyPending --> EmptyPending: still empty<br/>status not actively bad<br/>streak < threshold
-    EmptyPending --> AcceptedEmpty: streak >= threshold<br/>(assigned/authored: 2, merged: 3)
-    EmptyPending --> EmptyCorroborated: status flips actively bad
-    EmptyPending --> ResetSwap: identityAtStart != currentLogin
-    AcceptedEmpty --> [*]: persist []<br/>arm recoveryBaseline
-    EmptyCorroborated --> [*]: preserve oldPRs<br/>signal pr_component_degraded
-    ResetSwap --> [*]: persist []<br/>no outage (identity change)
+    Trusted --> EmptyPending: empty, status OK
+    Trusted --> EmptyCorroborated: empty + bad status
+    EmptyPending --> EmptyPending: streak below threshold
+    EmptyPending --> AcceptedEmpty: streak reached
+    EmptyPending --> EmptyCorroborated: status turns bad
+    EmptyPending --> ResetSwap: identity mismatch
+    AcceptedEmpty --> [*]: persist empty + recoveryBaseline
+    EmptyCorroborated --> [*]: keep oldPRs + degraded signal
+    ResetSwap --> [*]: persist empty, no outage
 ```
 
-Per-list thresholds live in [empty-confirmation-policy.ts](../extension/background/domain/pr-list-trust/empty-confirmation-policy.ts):
+Per-list thresholds live in [empty-confirmation-policy.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/empty-confirmation-policy.ts):
 
 ```ts
 export const EMPTY_CONFIRM_THRESHOLDS = {
@@ -109,7 +112,7 @@ This is the same shape used by the account-swap branch, on purpose: both are "tr
 
 ## `MergedLimboPromoter` confirmation horizon
 
-The merged list is append-heavy and rows that disappear are rare. [MergedLimboPromoter](../extension/background/domain/pr-list-trust/MergedLimboPromoter.ts) keeps a per-key limbo entry for any merged PR present in `oldPRs` and absent from `freshPRs`, and only prunes after `missConfirmationsRequired` consecutive misses.
+The merged list is append-heavy and rows that disappear are rare. [MergedLimboPromoter](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/MergedLimboPromoter.ts) keeps a per-key limbo entry for any merged PR present in `oldPRs` and absent from `freshPRs`, and only prunes after `missConfirmationsRequired` consecutive misses.
 
 A suspicious fetch (`recordSuspiciousFetch`) records the limbo entries with the assessment reasons and clears any in-flight `emptyConfirm` bucket on the same list. A trusted fetch (`promoteTrustedMergedList` or `recordTrustedFetch`) does the same reset on the empty streak: a successful trusted update is the canonical "list is healthy" signal, and any prior empty streak is logically broken by it.
 
@@ -119,20 +122,20 @@ A suspicious fetch (`recordSuspiciousFetch`) records the limbo entries with the 
 
 ## `PrTombstoneStore` and `pr_list_churn`
 
-Trust assessment decides what list to persist; tombstones decide notification eligibility on top of it. They are orthogonal: an operational shrink can also be a flap. [PrTombstoneStore](../extension/background/domain/pr-list-trust/PrTombstoneStore.ts) keeps a per-list bounded log of dropped PR keys with their `droppedAtAlarmSeq`. `applyTombstoneFilter` runs on every persist branch (trusted and trusted_operational_shrink), in two halves:
+Trust assessment decides what list to persist; tombstones decide notification eligibility on top of it. They are orthogonal: an operational shrink can also be a flap. [PrTombstoneStore](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/PrTombstoneStore.ts) keeps a per-list bounded log of dropped PR keys with their `droppedAtAlarmSeq`. `applyTombstoneFilter` runs on every persist branch (trusted and trusted_operational_shrink), in two halves:
 
 1. **Resurrection check.** Any fresh key whose tombstone is still inside the `TOMBSTONE_ALARM_WINDOW = 4` wave is a flap. The key is removed from `newPRs`, its `isNew` flag is cleared, and `signalGitHubOutage('pr_list_churn')` fires. Wave-level clear suppression turns on (`suppressGitHubOutageClearForListChurnWave = true`) so a clean merged or authored fetch later in the same wave cannot erase the integrity flag.
 2. **Drop record.** Keys present in `oldKeys` but missing from `freshKeys` are tombstoned at the current `alarmSeq`. Recording happens after the resurrection check, so a key that just reappeared is not re-tombstoned by the same `oldKeys` snapshot.
 
-On **assigned** only, `freshKeys` is the list after [`mergeAndFilterAssignedPRs`](../extension/background/utils/pull-request-list-utils.ts) applies `assigned.showDraftsInList`. When that setting is false, draft rows can drop out of the persisted array even though GitHub still returned them in the pending/reviewed HTML parse. Those draft keys are excluded from tombstone drop recording [inside `applyTombstoneFilter`](../extension/background/services/PRService.ts), so toggling "Show drafts in list" does not look like a fetch-side disappearance and does not drive `pr_list_churn` when the draft comes back on the next persist. If GitHub truly omits a draft from the fetched lists, it is not in that exclusion set and the normal tombstone rules apply.
+On **assigned** only, `freshKeys` is the list after [`mergeAndFilterAssignedPRs`](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/utils/pull-request-list-utils.ts) applies `assigned.showDraftsInList`. When that setting is false, draft rows can drop out of the persisted array even though GitHub still returned them in the pending/reviewed HTML parse. Those draft keys are excluded from tombstone drop recording [inside `applyTombstoneFilter`](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PRService.ts), so toggling "Show drafts in list" does not look like a fetch-side disappearance and does not drive `pr_list_churn` when the draft comes back on the next persist. If GitHub truly omits a draft from the fetched lists, it is not in that exclusion set and the normal tombstone rules apply.
 
-The window is anchored to alarm waves, not wall-clock milliseconds. [AlarmSeqClock](../extension/background/domain/pr-list-trust/AlarmSeqClock.ts) is advanced exactly once per completed alarm wave by `EventService.handleAlarm`, after all three lists have persisted. Manual refreshes between alarms deliberately do not advance the clock, otherwise a user mashing the refresh button would expire tombstones early. The bound on the log is `PR_TOMBSTONE_MAX_ENTRIES_PER_LIST = 200`, LRU by `droppedAtAlarmSeq`.
+The window is anchored to alarm waves, not wall-clock milliseconds. [AlarmSeqClock](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/AlarmSeqClock.ts) is advanced exactly once per completed alarm wave by `EventService.handleAlarm`, after all three lists have persisted. Manual refreshes between alarms deliberately do not advance the clock, otherwise a user mashing the refresh button would expire tombstones early. The bound on the log is `PR_TOMBSTONE_MAX_ENTRIES_PER_LIST = 200`, LRU by `droppedAtAlarmSeq`.
 
 ---
 
 ## `MergedNotificationEligibility` freshness floor
 
-Even after trust says "persist this merged list" and tombstones say "no flapping", a merged candidate still has to pass the freshness gate before a notification fires. [MergedNotificationEligibility.filterFreshCandidates](../extension/background/domain/pr-list-trust/MergedNotificationEligibility.ts) drops:
+Even after trust says "persist this merged list" and tombstones say "no flapping", a merged candidate still has to pass the freshness gate before a notification fires. [MergedNotificationEligibility.filterFreshCandidates](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/MergedNotificationEligibility.ts) drops:
 
 - Candidates whose event timestamp is older than `lastTrustedAt - FETCH_INTERVAL_MS`. After a long quiet window followed by a recovery, the merged list can balloon back; without the floor, every restored row would alert.
 - Candidates whose event timestamp cannot be parsed at all, but only when Statuspage is problematic (`isProblematicPRStatus`). Under operational status, an unparseable timestamp is not enough to suppress.
@@ -143,7 +146,7 @@ The freshness gate runs **before** the tombstone filter, which is what reserves 
 
 ## The single Statuspage snapshot per wave
 
-`PrListTrustAssessor.assess` accepts an optional `preFetchedStatus`, and the call sites pass one through deliberately. [EventService.handleAlarm](../extension/background/services/EventService.ts) prefetches the snapshot once with `bypassCache: true` at the top of every alarm wave and threads it into all three list fetches:
+`PrListTrustAssessor.assess` accepts an optional `preFetchedStatus`, and the call sites pass one through deliberately. [EventService.handleAlarm](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts) prefetches the snapshot once with `bypassCache: true` at the top of every alarm wave and threads it into all three list fetches:
 
 ```ts
 const waveStatus = await gitHubStatusClient.getStatus({ bypassCache: true });
@@ -165,7 +168,7 @@ Both `detectAccountSwap` (the primary pre-empt) and the `reset_swap` branch in `
 
 ### `lastSeenAt` refresh on repeat outage signals
 
-A wave that re-asserts the same outage reason does not produce a new banner; `HealthStatusService.signalGitHubOutage` calls `refreshGitHubOutageLastSeen` instead. The popup's stale-flag expiry (see [Outage Banner and Statuspage](Outage-Banner-and-Statuspage)) keys on `lastSeenAt`, so this refresh is what keeps a genuinely ongoing outage from ageing out.
+A wave that re-asserts the same outage reason does not produce a new banner; `HealthStatusService.signalGitHubOutage` calls `refreshGitHubOutageLastSeen` instead. The popup's stale-flag expiry (see [Outage Banner and Statuspage](./outage-banner/)) keys on `lastSeenAt`, so this refresh is what keeps a genuinely ongoing outage from ageing out.
 
 ### Wave suppression survives one full wave at most
 
@@ -179,7 +182,7 @@ The `trusted_operational_shrink` branch is the freshness-wins side of the merged
 
 ## See also
 
-- [GitHub Health and Outages](GitHub-Health-and-Outages): the hub. The `GitHubOutageReason` taxonomy and the wave-suppression rule for `pr_list_churn`.
-- [Outage Banner and Statuspage](Outage-Banner-and-Statuspage): the popup-side contract. How `pr_component_degraded` and `pr_list_churn` produce different banner copy and different Statuspage-link visibility.
-- [The Parser Waterfall](The-Parser-Waterfall): the layer below this one. The parser produces the `PullRequest[]` that the assessor scores.
-- [Notifications and Sound](Notifications-and-Sound): the gates this layer feeds. Most of the suppression rules in that page point at this one.
+- [GitHub Health and Outages](./): the hub. The `GitHubOutageReason` taxonomy and the wave-suppression rule for `pr_list_churn`.
+- [Outage Banner and Statuspage](./outage-banner/): the popup-side contract. How `pr_component_degraded` and `pr_list_churn` produce different banner copy and different Statuspage-link visibility.
+- [The Parser Waterfall](../parser-waterfall/): the layer below this one. The parser produces the `PullRequest[]` that the assessor scores.
+- [Notifications and Sound](../notifications-and-sound/): the gates this layer feeds. Most of the suppression rules in that page point at this one.

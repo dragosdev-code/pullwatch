@@ -1,4 +1,7 @@
-# Onboarding and Session Gates
+---
+title: Onboarding and Session Gates
+description: Install flow, identity, and reveal overlay phases.
+---
 
 > **Summary.** Pullwatch has no login of its own. It relies on whatever GitHub session the browser already holds, which means the popup has to be graceful about three states it can find itself in: "we don't know yet" (install is still running the first fetch), "there's no session" (signed out or cookie expired), and "fresh session, hasn't seen the welcome yet" (re auth after a session wipe). One overlay shell, one hook (`useOnboarding`), and four storage keys coordinate all three. A single `react-focus-lock` wraps the shell so keyboard users cannot tab past the gate into lists that are not yet safe to show.
 
@@ -42,7 +45,7 @@ Every decision `useOnboarding` makes comes from reading and watching four keys i
 | `onboarding_reauth_gate_pending` | `StorageService.clearGitHubWebSessionCaches`    | Set when the worker wipes the session after an auth failure. Forces the welcome overlay on next sign in. |
 | `install_session_check_complete` | `EventService.handleInstallation` (try/finally) | True once the install time probe settles. Used to distinguish "still checking" from "checked and empty." |
 
-The popup treats `chrome.storage.local` as the source of truth. It hydrates once on mount and then subscribes to `chrome.storage.onChanged` for live updates, the same pattern as PR list hydration ([Data Hydration and Storage](Data-Hydration-and-Storage)).
+The popup treats `chrome.storage.local` as the source of truth. It hydrates once on mount and then subscribes to `chrome.storage.onChanged` for live updates, the same pattern as PR list hydration ([Data Hydration and Storage](./data-hydration-and-storage/)).
 
 ---
 
@@ -85,7 +88,7 @@ Twelve seconds is a balance: long enough that a slow but working network still r
 
 ### The install flag's try/finally
 
-The service worker cooperates from the other side. [EventService.handleInstallation](../extension/background/services/EventService.ts) wraps the install fetch in a try/finally so the install flag settles to `true` even when the fetch throws:
+The service worker cooperates from the other side. [EventService.handleInstallation](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts) wraps the install fetch in a try/finally so the install flag settles to `true` even when the fetch throws:
 
 ```ts
 try {
@@ -194,7 +197,7 @@ Two invariants come out of this shape:
 
 ## Why the overlay is focus locked
 
-The single `FocusLock` wrapper in [onboarding-overlay.tsx](../src/components/onboarding/onboarding-overlay.tsx) matters for one specific failure mode: a keyboard user pressing Tab while the overlay is up. Without focus containment, Tab would move focus into the lists tree behind the overlay, which is rendered with `inert={true}` and `aria-hidden={true}` but is still in the DOM so storage sync and TanStack Query stay live. The combination of "in the DOM" and "invisible to assistive tech" without focus containment is the exact shape that confuses screen readers and lets keyboard users interact with controls they cannot see.
+The single `FocusLock` wrapper in [onboarding-overlay.tsx](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/onboarding/onboarding-overlay.tsx) matters for one specific failure mode: a keyboard user pressing Tab while the overlay is up. Without focus containment, Tab would move focus into the lists tree behind the overlay, which is rendered with `inert={true}` and `aria-hidden={true}` but is still in the DOM so storage sync and TanStack Query stay live. The combination of "in the DOM" and "invisible to assistive tech" without focus containment is the exact shape that confuses screen readers and lets keyboard users interact with controls they cannot see.
 
 `react-focus-lock` solves both problems: focus is trapped inside the overlay, and `returnFocus` sends it back to whatever owned it when the overlay is dismissed. The same treatment is not applied to the settings overlay because settings is navigable (users intentionally want to reach both settings controls and the header), and trapping focus there would break the usual escape paths.
 
@@ -227,7 +230,7 @@ Every `onChanged` event on one of the four keys bumps `storageGeneration`. If th
 
 ### GitHub is reachable but the cookie expired
 
-The worker's fetch returns a 200 page with a logged out HTML shell. [isGitHubLoggedOutHtmlShell](../extension/common/github-html-session.ts) detects this, and the fetch throws a session auth error. That error propagates to `EventService.handleAlarm`, which calls `invalidateGitHubWebSessionAfterAuthFailure` on `StorageService`. That wipes `github_viewer_identity`, clears the PR lists, and sets `onboarding_reauth_gate_pending`. The popup's `onChanged` listener sees all three changes, `isLoggedIn` flips to `false`, and the next render is the `loggedOut` phase. When the user signs in and refreshes, the reveal phase will show one more time thanks to the reauth gate flag.
+The worker's fetch returns a 200 page with a logged out HTML shell. [isGitHubLoggedOutHtmlShell](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/github-html-session.ts) detects this, and the fetch throws a session auth error. That error propagates to `EventService.handleAlarm`, which calls `invalidateGitHubWebSessionAfterAuthFailure` on `StorageService`. That wipes `github_viewer_identity`, clears the PR lists, and sets `onboarding_reauth_gate_pending`. The popup's `onChanged` listener sees all three changes, `isLoggedIn` flips to `false`, and the next render is the `loggedOut` phase. When the user signs in and refreshes, the reveal phase will show one more time thanks to the reauth gate flag.
 
 ### Install check times out before any response arrives
 
@@ -249,6 +252,6 @@ The settings overlay deliberately does not use `FocusLock`. Settings is meant to
 
 ## See also
 
-- [Data Hydration and Storage](Data-Hydration-and-Storage): the hydration contract this hook reuses, and the `runWithTransientStorageRetry` wrapper that guards every storage read in the gate.
-- [Popup and Background Communication](Popup-and-Background-Communication): the `prs.fetchFreshAssigned` / `fetchFreshMerged` / `fetchFreshAuthored` RPCs the Refresh button triggers, and how `EVENT_SETTINGS_UPDATED` broadcasts let the gate react to settings changes while it is up.
-- [The Parser Waterfall](The-Parser-Waterfall): where the logged out HTML shell is detected and turned into the session auth error that ultimately sets the reauth gate flag.
+- [Data Hydration and Storage](./data-hydration-and-storage/): the hydration contract this hook reuses, and the `runWithTransientStorageRetry` wrapper that guards every storage read in the gate.
+- [Popup and Background Communication](./popup-and-background-communication/): the `prs.fetchFreshAssigned` / `fetchFreshMerged` / `fetchFreshAuthored` RPCs the Refresh button triggers, and how `EVENT_SETTINGS_UPDATED` broadcasts let the gate react to settings changes while it is up.
+- [The Parser Waterfall](./parser-waterfall/): where the logged out HTML shell is detected and turned into the session auth error that ultimately sets the reauth gate flag.

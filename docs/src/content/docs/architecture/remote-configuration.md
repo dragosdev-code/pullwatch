@@ -1,4 +1,8 @@
-# Remote Configuration
+---
+title: Remote Configuration
+description: Bundled vs remote patterns.json and validation.
+---
+
 
 > **Summary.** Every regex and selector that the parser waterfall relies on lives in a pattern registry. A bundled default set ships inside the extension, and a remote `patterns.json` file hosted in a public GitHub repo can override it at runtime. The remote fetch runs at most every 6 hours, is validated with Valibot, each regex is compiled inside a guard, and any failure falls back cleanly to the previously known good set. This is how a DOM change on GitHub can be patched live, without releasing a new extension build.
 
@@ -18,14 +22,14 @@ The parser reads from exactly one set of compiled patterns at runtime, but that 
 
 | Source               | Where it lives                                                                                               | Who owns it                                                                         |
 | -------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| **Bundled defaults** | [extension/common/default-patterns.ts](../extension/common/default-patterns.ts)                              | Ships inside every release. Always available, even offline.                         |
+| **Bundled defaults** | [extension/common/default-patterns.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/default-patterns.ts)                              | Ships inside every release. Always available, even offline.                         |
 | **Remote patterns**  | [github.com/dragosdev-code/pr-live-config](https://github.com/dragosdev-code/pr-live-config) (`main` branch) | Separate public repo. Hot patches here reach live users on the next 6 hour refresh. |
 
 The bundled defaults are the floor. No matter what happens with the remote file, the extension can always compile and use the defaults; new installs start on them, and any failure in the remote path leaves them in place.
 
 ### Bundled floor version
 
-Each extension build stamps a floor version in [`BUNDLED_PATTERNS_REGISTRY_VERSION`](../extension/common/constants.ts) (currently `6`). On first install, or after cached patterns are rejected, the service worker persists bundled `default-patterns.ts` under that number, not `0`. Remote config is applied only when `config.version` is strictly greater than the loaded version. That prevents an older `patterns.json` on `main` (for example v4) from replacing a newer bundle after someone clears `chrome.storage.local`.
+Each extension build stamps a floor version in [`BUNDLED_PATTERNS_REGISTRY_VERSION`](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/constants.ts) (currently `6`). On first install, or after cached patterns are rejected, the service worker persists bundled `default-patterns.ts` under that number, not `0`. Remote config is applied only when `config.version` is strictly greater than the loaded version. That prevents an older `patterns.json` on `main` (for example v4) from replacing a newer bundle after someone clears `chrome.storage.local`.
 
 ### When to bump which version
 
@@ -34,7 +38,7 @@ Two numbers matter. They are related but you do not bump both on every change.
 | What changed | Bump in pullwatch | Bump in `pr-live-config` |
 | ------------ | ----------------- | ------------------------ |
 | Regex fix shipped only via remote (OTA, no store release) | Nothing | `patterns.json` `version` (+1) |
-| Regex fix in [`default-patterns.ts`](../extension/common/default-patterns.ts) (new extension build) | `BUNDLED_PATTERNS_REGISTRY_VERSION` (+1) | Same `version` on `main` (keep in sync) |
+| Regex fix in [`default-patterns.ts`](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/default-patterns.ts) (new extension build) | `BUNDLED_PATTERNS_REGISTRY_VERSION` (+1) | Same `version` on `main` (keep in sync) |
 
 **Remote-only hotfix.** Edit `patterns.json` on `staging`, smoke test, merge to `main`. Example: users are on floor `6`, you publish remote `7`. The extension picks up `7` on the next fetch because `7 > 6`. You do not need to touch `BUNDLED_PATTERNS_REGISTRY_VERSION` unless you also changed bundled defaults in the extension repo.
 
@@ -106,7 +110,7 @@ Each rail is independent. A failure at any rail stops the update without affecti
 
 ### Rail 1: Valibot structural validation
 
-A malformed remote JSON is rejected before any regex is compiled, let alone stored. [pattern-registry-schema.ts](../extension/common/pattern-registry-schema.ts) defines a Valibot schema that mirrors every expected field, including a minimum of one entry for arrays that must never be empty (`prRowSelectors`, `prLink`, `author`, `viewerLogin`, `timestamp`, `prType`):
+A malformed remote JSON is rejected before any regex is compiled, let alone stored. [pattern-registry-schema.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/pattern-registry-schema.ts) defines a Valibot schema that mirrors every expected field, including a minimum of one entry for arrays that must never be empty (`prRowSelectors`, `prLink`, `author`, `viewerLogin`, `timestamp`, `prType`):
 
 ```ts
 export const RemotePatternConfigSchema = v.object({
@@ -163,7 +167,7 @@ There is a second gate, optional but useful: `minExtensionVersion`. If the remot
 
 Remote fetches are not tight. Two mechanisms keep them polite:
 
-- **TTL via `PATTERN_REFRESH_TTL_MS = 6 hours`.** `refreshIfStale` returns immediately if the last fetch was within that window. [GitHubService.fetchPRs](../extension/background/services/GitHubService.ts) calls `refreshIfStale` as fire and forget at the start of every list fetch; most of those calls no op.
+- **TTL via `PATTERN_REFRESH_TTL_MS = 6 hours`.** `refreshIfStale` returns immediately if the last fetch was within that window. [GitHubService.fetchPRs](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/GitHubService.ts) calls `refreshIfStale` as fire and forget at the start of every list fetch; most of those calls no op.
 - **In flight dedup via `fetchInProgress`.** If a fetch is currently running, additional callers share the same promise. Two manual refreshes cannot trigger two simultaneous remote downloads.
 
 Plus the fetch itself uses `AbortSignal.timeout(REMOTE_FETCH_TIMEOUT_MS)` so a slow GitHub CDN cannot hang the service worker. The fetch is issued `no-cache` because a newly published config must not sit behind a stale HTTP cache.
@@ -243,6 +247,6 @@ No network means no remote fetch means no update. The service uses whatever is i
 
 ## See also
 
-- [The Parser Waterfall](The-Parser-Waterfall): the consumer of this registry. Every selector and regex the parsers use comes from here.
-- [The Canary Monitor](The-Canary-Monitor): the operational system that detects when a pattern update is needed, and how fixes flow from staging to `main` to live users.
-- [Data Hydration and Storage](Data-Hydration-and-Storage): how the persisted `STORAGE_KEY_PATTERN_REGISTRY` envelope fits into the rest of the extension's storage story.
+- [The Parser Waterfall](./parser-waterfall/): the consumer of this registry. Every selector and regex the parsers use comes from here.
+- [The Canary Monitor](./canary-monitor/): the operational system that detects when a pattern update is needed, and how fixes flow from staging to `main` to live users.
+- [Data Hydration and Storage](./data-hydration-and-storage/): how the persisted `STORAGE_KEY_PATTERN_REGISTRY` envelope fits into the rest of the extension's storage story.

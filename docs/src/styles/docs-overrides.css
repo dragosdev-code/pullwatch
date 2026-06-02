@@ -1,0 +1,33 @@
+/* Match extension popup chrome: subtle page backdrop */
+body {
+  background-color: color-mix(
+    in oklch,
+    var(--color-base-300) 35%,
+    var(--color-base-100) 65%
+  );
+}
+
+/* Starlight header actions align with DaisyUI controls */
+header .select {
+  min-height: 2rem;
+}
+
+/* Hide raw Mermaid blocks until astro-mermaid has rendered SVG (avoids source flash). */
+.sl-markdown-content pre.mermaid:not([data-processed="true"]) {
+  visibility: hidden;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+}
+
+/* Hide fitted shell until first layout pass completes (avoids size jump flicker). */
+.sl-markdown-content .pw-diagram--pending {
+  visibility: hidden;
+}
+
+/* Taller diagram cards when wrapped in markdown (e.g. parser-waterfall). */
+.sl-markdown-content .diagram-wide .pw-diagram > .diagram-viewport {
+  max-height: min(85vh, 720px);
+}

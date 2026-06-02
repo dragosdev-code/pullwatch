@@ -1,0 +1,72 @@
+/**
+ * Map DaisyUI 5 semantic colors (data-theme on html) onto Starlight --sl-* tokens.
+ * Overrides @astrojs/starlight-tailwind defaults so every Daisy theme reads correctly.
+ */
+@layer utilities {
+  html[data-theme] {
+    --sl-font: ui-sans-serif, system-ui, sans-serif;
+    --sl-color-black: var(--color-base-100);
+    --sl-color-white: var(--color-base-content);
+    --sl-color-gray-1: color-mix(
+      in oklch,
+      var(--color-base-content) 88%,
+      var(--color-base-100) 12%
+    );
+    --sl-color-gray-2: color-mix(
+      in oklch,
+      var(--color-base-content) 78%,
+      var(--color-base-100) 22%
+    );
+    --sl-color-gray-3: color-mix(
+      in oklch,
+      var(--color-base-content) 62%,
+      var(--color-base-100) 38%
+    );
+    --sl-color-gray-4: color-mix(
+      in oklch,
+      var(--color-base-content) 48%,
+      var(--color-base-100) 52%
+    );
+    --sl-color-gray-5: var(--color-base-300);
+    --sl-color-gray-6: var(--color-base-200);
+    --sl-color-gray-7: color-mix(
+      in oklch,
+      var(--color-base-200) 85%,
+      var(--color-base-100) 15%
+    );
+    --sl-color-accent-low: color-mix(
+      in oklch,
+      var(--color-primary) 28%,
+      var(--color-base-100) 72%
+    );
+    --sl-color-accent: var(--color-primary);
+    --sl-color-accent-high: color-mix(
+      in oklch,
+      var(--color-primary) 55%,
+      var(--color-base-content) 45%
+    );
+    --sl-color-bg: var(--color-base-100);
+    --sl-color-text: var(--color-base-content);
+    --sl-color-text-accent: var(--color-primary);
+    --sl-color-hairline: var(--color-base-300);
+    --sl-color-hairline-shade: color-mix(
+      in oklch,
+      var(--color-base-300) 70%,
+      var(--color-base-100) 30%
+    );
+  }
+
+  /* Mermaid autoTheme: treat non-light Daisy themes as dark when color-scheme is dark */
+  html[data-theme]:not([data-theme="light"]) {
+    color-scheme: var(--color-scheme, light);
+  }
+}
+
+/* Prose and cards pick up DaisyUI base colors */
+.sl-markdown-content {
+  --sl-color-backdrop-overlay: color-mix(
+    in oklch,
+    var(--color-neutral) 40%,
+    transparent
+  );
+}

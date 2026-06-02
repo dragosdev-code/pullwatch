@@ -1,4 +1,7 @@
-# Popup and Background Communication
+---
+title: Popup and Background Communication
+description: Runtime messages, TanStack Query, and storage listeners.
+---
 
 > **Summary.** The popup talks to the service worker in two very different ways depending on what it wants. To **read** PR data it reads `chrome.storage.local` directly and subscribes to `chrome.storage.onChanged`; no runtime message is ever needed to see the lists. To **ask the worker to do something** (fetch fresh data, save settings, play a sound, fire a dev test notification), the popup sends a single runtime message that a `Map` based dispatch table inside `EventService` routes to exactly one handler. Data flows through storage, commands flow through messages, and the two channels never swap jobs.
 
@@ -44,7 +47,7 @@ The left half is how the popup **sees** state. The right half is how the popup *
 
 ## The single popup side entry point
 
-Every runtime message from the popup goes through one file: [extension/common/chrome-extension-service.ts](../extension/common/chrome-extension-service.ts) (import as `@common/chrome-extension-service`). Having one entry point means every message is typed, every call site can be found with one search, and the "popup talking to worker" surface cannot quietly grow sideways.
+Every runtime message from the popup goes through one file: [extension/common/chrome-extension-service.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/chrome-extension-service.ts) (import as `@common/chrome-extension-service`). Having one entry point means every message is typed, every call site can be found with one search, and the "popup talking to worker" surface cannot quietly grow sideways.
 
 The core is a tiny wrapper:
 
@@ -78,7 +81,7 @@ The pattern is the same every time. **Reading something the popup could always r
 
 ## The EventService dispatch table
 
-On the worker side, every message lands in one method: [EventService.handleMessage](../extension/background/services/EventService.ts). It does nothing but look up a handler in a `Map` and delegate:
+On the worker side, every message lands in one method: [EventService.handleMessage](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts). It does nothing but look up a handler in a `Map` and delegate:
 
 ```ts
 handleMessage(message, _sender, sendResponse): void {
@@ -189,7 +192,7 @@ sequenceDiagram
     SW-->>Popup: success acks (one per message)
 ```
 
-Notice where the data flows. The popup never consumes `sendResponse` for the PR list itself; the acks are just "done/failed." The actual re render is driven by the `onChanged` event on the storage key, handled by `use-pr-lists-storage-sync` on the popup side. See [Data Hydration and Storage](Data-Hydration-and-Storage) for the hydration half of this pipeline.
+Notice where the data flows. The popup never consumes `sendResponse` for the PR list itself; the acks are just "done/failed." The actual re render is driven by the `onChanged` event on the storage key, handled by `use-pr-lists-storage-sync` on the popup side. See [Data Hydration and Storage](./data-hydration-and-storage/) for the hydration half of this pipeline.
 
 ---
 
@@ -197,7 +200,7 @@ Notice where the data flows. The popup never consumes `sendResponse` for the PR 
 
 Settings are the odd one out in the communication model because they live in `chrome.storage.sync`, not `local`, but the same asymmetry applies: read direct, write through the worker.
 
-Saves run through the worker so the settings broadcast is centralised. [EventService.handleSettingsActions](../extension/background/services/EventService.ts) takes a partial settings diff, persists it via `storageService.setExtensionSettings`, then fires an `EVENT_SETTINGS_UPDATED` runtime message to **every open extension context**:
+Saves run through the worker so the settings broadcast is centralised. [EventService.handleSettingsActions](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts) takes a partial settings diff, persists it via `storageService.setExtensionSettings`, then fires an `EVENT_SETTINGS_UPDATED` runtime message to **every open extension context**:
 
 ```ts
 await storageService.setExtensionSettings(message.payload);
@@ -208,7 +211,7 @@ sendResponse({ success: true, data: settings });
 
 Why broadcast, rather than letting each popup pick up the `chrome.storage.onChanged` event and re read? Because `onChanged` only carries the key and the new value; a settings save that changed five fields still results in one event, and every receiver would need the same merge logic. Broadcasting the **computed** settings object makes the contract "receive the whole settings shape, no merging required."
 
-On the popup, [useExtensionSettings](../src/hooks/use-extension-settings.ts) listens for this broadcast and keeps local React state in sync, with one wrinkle:
+On the popup, [useExtensionSettings](https://github.com/dragosdev-code/pullwatch/blob/main/src/hooks/use-extension-settings.ts) listens for this broadcast and keeps local React state in sync, with one wrinkle:
 
 ```ts
 const unsubscribe = chromeExtensionService.settings.onChange((newSettings) => {
@@ -260,6 +263,6 @@ The top level `.catch` inside `handleMessage` catches any rejection the handler 
 
 ## See also
 
-- [Data Hydration and Storage](Data-Hydration-and-Storage): the other half of this page. How `chrome.storage.onChanged` events become TanStack Query updates, and why the popup paints with real data on frame one.
-- [The Service Worker Lifecycle](The-Service-Worker-Lifecycle): why messages have to survive worker teardown, and why `async` message handlers keep the worker alive.
-- [Notifications and Sound](Notifications-and-Sound): how `EVENT_PLAY_SOUND` and `PREVIEW_SOUND_ACTION.*` messages cross from the worker to the offscreen document.
+- [Data Hydration and Storage](./data-hydration-and-storage/): the other half of this page. How `chrome.storage.onChanged` events become TanStack Query updates, and why the popup paints with real data on frame one.
+- [The Service Worker Lifecycle](./service-worker-lifecycle/): why messages have to survive worker teardown, and why `async` message handlers keep the worker alive.
+- [Notifications and Sound](./notifications-and-sound/): how `EVENT_PLAY_SOUND` and `PREVIEW_SOUND_ACTION.*` messages cross from the worker to the offscreen document.

@@ -1,4 +1,7 @@
-# The Service Worker Lifecycle
+---
+title: The Service Worker Lifecycle
+description: Wake, init, alarm, and teardown of the MV3 worker.
+---
 
 > **Summary.** Manifest V3 service workers are not long running processes. Chrome tears them down after about 30 seconds of idle time and brings them back on demand. Pullwatch survives this by registering listeners synchronously, gating every handler behind a shared init promise, and keeping every piece of state that must outlive a wake inside `chrome.storage`. This page explains the constraint, the code pattern that handles it, and the three services (`AlarmService`, `PRService`, `RateLimitService`) whose design is dictated by it.
 
@@ -52,7 +55,7 @@ Two details are easy to miss. First, `main.ts` literally runs top to bottom on e
 
 ## The initialization gate
 
-The pattern that holds this all together lives in [extension/background/main.ts](../extension/background/main.ts). The file comments already explain the intent; here is the shape, annotated.
+The pattern that holds this all together lives in [extension/background/main.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/main.ts). The file comments already explain the intent; here is the shape, annotated.
 
 ```ts
 const serviceContainer = new ServiceContainer();
@@ -94,7 +97,7 @@ Three invariants come out of this:
 
 ## Why `performInitialSetup` does not fetch PRs
 
-This is the subtlest rule in the codebase. [BackgroundManager.performInitialSetup](../extension/background/services/BackgroundManager.ts) runs on **every** wake because it sits inside `initialize()`, and `initialize()` is the body of `initPromise`. That means the method is called before every alarm handler, every message handler, every notification click, every browser startup.
+This is the subtlest rule in the codebase. [BackgroundManager.performInitialSetup](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/BackgroundManager.ts) runs on **every** wake because it sits inside `initialize()`, and `initialize()` is the body of `initPromise`. That means the method is called before every alarm handler, every message handler, every notification click, every browser startup.
 
 The method does three infrastructure jobs and nothing else:
 
@@ -113,7 +116,7 @@ Notice what is missing: no `fetchPRs(forceRefresh: true)`. If `performInitialSet
 3. The alarm handler runs moments later, fetches again, diffs "fresh GitHub data" against "the data just seeded in step 2," and finds **zero new PRs**.
 4. No notification is shown, even though a new PR arrived.
 
-The fix is to restrict `performInitialSetup` to idempotent infrastructure (permissions, alarm registration, badge sync from existing storage), and leave the first real seed of PR data to [EventService](../extension/background/services/EventService.ts)'s `handleInstallation` and `handleStartup`. Those fire only on true lifecycle transitions (install, update, browser start), never on routine alarm wakes, so they cannot shadow the diff.
+The fix is to restrict `performInitialSetup` to idempotent infrastructure (permissions, alarm registration, badge sync from existing storage), and leave the first real seed of PR data to [EventService](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts)'s `handleInstallation` and `handleStartup`. Those fire only on true lifecycle transitions (install, update, browser start), never on routine alarm wakes, so they cannot shadow the diff.
 
 If you ever find yourself tempted to add "one small fetch" to init, this is the comment to re read.
 
@@ -123,7 +126,7 @@ If you ever find yourself tempted to add "one small fetch" to init, this is the 
 
 ### AlarmService: the heartbeat
 
-[AlarmService.ts](../extension/background/services/AlarmService.ts) owns the periodic fetch alarm. The cadence is `FETCH_INTERVAL_MINUTES = 3`, defined in [extension/common/constants.ts](../extension/common/constants.ts).
+[AlarmService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/AlarmService.ts) owns the periodic fetch alarm. The cadence is `FETCH_INTERVAL_MINUTES = 3`, defined in [extension/common/constants.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/constants.ts).
 
 The interesting piece is not the alarm itself, it is the **cadence check on every wake**:
 
@@ -145,13 +148,13 @@ async setupFetchAlarm(): Promise<void> {
 
 Why recompute on every wake instead of trusting the alarm that Chrome already holds? Because dev overrides are persisted in `chrome.storage.local` (`STORAGE_KEY_ALARM_OVERRIDE`), and they can change while the worker is asleep. A developer could set a faster override, the worker sleeps, and on the next wake the live alarm is still on the old cadence. Early return on "an alarm exists" would leave the system stuck on a stale period until something else recreated the alarm. The cadence comparison solves that.
 
-The cadence shortcut has one more consequence worth pinning down. Chrome persists each alarm's absolute `scheduledTime` across service worker restarts, so when `setupFetchAlarm` takes the cadence-match return the existing alarm keeps whatever fire time it held before the wake. After a developer reload (`chrome://extensions` Reload, which Chrome surfaces as `onInstalled` with `reason: 'update'`), [EventService.handleInstallation](../extension/background/services/EventService.ts) runs the install hydration wave (assigned, merged, authored) immediately, and the leftover alarm fires seconds or minutes later with another full wave. Both calls pass `bypassCache: true`, so neither the TTL cache nor the inflight dedup in `PRService` (described below) collapses the duplicate.
+The cadence shortcut has one more consequence worth pinning down. Chrome persists each alarm's absolute `scheduledTime` across service worker restarts, so when `setupFetchAlarm` takes the cadence-match return the existing alarm keeps whatever fire time it held before the wake. After a developer reload (`chrome://extensions` Reload, which Chrome surfaces as `onInstalled` with `reason: 'update'`), [EventService.handleInstallation](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts) runs the install hydration wave (assigned, merged, authored) immediately, and the leftover alarm fires seconds or minutes later with another full wave. Both calls pass `bypassCache: true`, so neither the TTL cache nor the inflight dedup in `PRService` (described below) collapses the duplicate.
 
 The non-install branch of `handleInstallation` and `handleStartup` close that race by calling `alarmService.rescheduleFetchAlarmFromNow()` before their fetch wave. The helper clears the existing alarm and recreates it with both `delayInMinutes` and `periodInMinutes`, anchoring the next fire to `now + interval`. It is the same primitive `ManualPrRefreshCoordinator.coalescedPushBackFetchAlarm` uses after a manual refresh, for the same reason: a fetch the popup just kicked off should not be followed by an automatic one a few seconds later. The `reason: 'install'` branch is excluded because a cold install has no preserved alarm to push back; the freshly created one already fires at `now + interval`.
 
 ### PRService: dedup and TTL cache
 
-[PRService.ts](../extension/background/services/PRService.ts) is the coordinator for list fetches. It has two caches that look similar but solve different problems.
+[PRService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PRService.ts) is the coordinator for list fetches. It has two caches that look similar but solve different problems.
 
 - **TTL cache** (`CACHE_TTL_MS = 60 * 1000`): if a list was fetched in the last 60 seconds and the caller has not asked for a forced refresh (the alarm always asks for one), return the stored envelope instead of hitting GitHub. This keeps manual refresh spam cheap.
 - **Inflight dedup** (`inflightFetches: Map<slot, { promise, opts }>`): if a fetch is already in flight for the same slot, every additional caller awaits the same promise. This keeps concurrent "popup open + alarm fires" from double fetching.
@@ -160,7 +163,7 @@ Both structures live in memory, so they are scoped to a single worker lifetime. 
 
 ### RateLimitService: backoff that survives a wake
 
-GitHub does throttle you if you ask too often. When a `429` comes back, [RateLimitService.ts](../extension/background/services/RateLimitService.ts) records the hit and computes a backoff:
+GitHub does throttle you if you ask too often. When a `429` comes back, [RateLimitService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/RateLimitService.ts) records the hit and computes a backoff:
 
 ```ts
 const exponentialBackoffMs = Math.min(
@@ -176,11 +179,11 @@ Two things to notice. The backoff is capped at 30 minutes, so a persistent throt
 
 ### HealthStatusService: in-memory mirror, persisted flags
 
-[HealthStatusService.ts](../extension/background/services/HealthStatusService.ts) holds the parser-breakage and GitHub-outage flags in memory (`parserBroken`, `githubOutage`) and uses them to dedupe repeated signals. Without rehydration on every wake, a real fault after a wake would skip the storage write because the mirror still said "already signalled". `initialize()` reads both flags back from `chrome.storage.local` so the dedupe contract holds across cold starts. The full flag lifecycle, including how `lastSeenAt` is refreshed on repeat hits and why `clearGitHubOutage` also drops `STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT`, lives on [GitHub Health and Outages](GitHub-Health-and-Outages).
+[HealthStatusService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/HealthStatusService.ts) holds the parser-breakage and GitHub-outage flags in memory (`parserBroken`, `githubOutage`) and uses them to dedupe repeated signals. Without rehydration on every wake, a real fault after a wake would skip the storage write because the mirror still said "already signalled". `initialize()` reads both flags back from `chrome.storage.local` so the dedupe contract holds across cold starts. The full flag lifecycle, including how `lastSeenAt` is refreshed on repeat hits and why `clearGitHubOutage` also drops `STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT`, lives on [GitHub Health and Outages](./github-health/).
 
 ### AlarmSeqClock: alarm-anchored counter
 
-[AlarmSeqClock.ts](../extension/background/domain/pr-list-trust/AlarmSeqClock.ts) is a monotonic counter persisted under `STORAGE_KEY_ALARM_SEQ`, advanced exactly once per completed alarm wave by [EventService.handleAlarm](../extension/background/services/EventService.ts) (after every list has finished writing). Manual refreshes deliberately do not advance the clock, otherwise a user mashing the refresh button would expire `PrTombstoneStore` entries early and miss flapping that the four-alarm window was set up to catch. The counter is read by `applyTombstoneFilter` to decide what is "still inside the window" on the next wave; see [List Trust and Suspect Lists](List-Trust-and-Suspect-Lists) for how the window math works in practice.
+[AlarmSeqClock.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/AlarmSeqClock.ts) is a monotonic counter persisted under `STORAGE_KEY_ALARM_SEQ`, advanced exactly once per completed alarm wave by [EventService.handleAlarm](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts) (after every list has finished writing). Manual refreshes deliberately do not advance the clock, otherwise a user mashing the refresh button would expire `PrTombstoneStore` entries early and miss flapping that the four-alarm window was set up to catch. The counter is read by `applyTombstoneFilter` to decide what is "still inside the window" on the next wave; see [List Trust and Suspect Lists](./github-health/list-trust/) for how the window math works in practice.
 
 ---
 
@@ -188,7 +191,7 @@ Two things to notice. The backoff is capped at 30 minutes, so a persistent throt
 
 ### The popup opens while the worker is cold
 
-When you click the Pullwatch icon, Chrome sends a lifecycle signal to the worker (via the implicit runtime message channel from the popup). If the worker was torn down, Chrome wakes it, `main.ts` runs, and the message listener awaits `initPromise` before responding. Meanwhile the popup is already rendering from `chrome.storage.local`, which has never stopped existing. The popup does not wait for the worker; it only waits for the worker when the user clicks **Refresh**. See [Data Hydration and Storage](Data-Hydration-and-Storage) for the full cold open path.
+When you click the Pullwatch icon, Chrome sends a lifecycle signal to the worker (via the implicit runtime message channel from the popup). If the worker was torn down, Chrome wakes it, `main.ts` runs, and the message listener awaits `initPromise` before responding. Meanwhile the popup is already rendering from `chrome.storage.local`, which has never stopped existing. The popup does not wait for the worker; it only waits for the worker when the user clicks **Refresh**. See [Data Hydration and Storage](./data-hydration-and-storage/) for the full cold open path.
 
 ### In memory caches must be re seeded from storage on every wake
 
@@ -206,7 +209,7 @@ All the `chrome.*` listeners in `main.ts` are `async` and they `await` the event
 
 ## See also
 
-- [Architecture Overview](Architecture-Overview): where this page fits into the broader system.
-- [Popup and Background Communication](Popup-and-Background-Communication): how the popup talks to the worker, including why data flows through storage instead of message replies.
-- [GitHub Health and Outages](GitHub-Health-and-Outages): the hub for `HealthStatusService`'s flags and the integrity layer that anchors `AlarmSeqClock`.
-- [Data Hydration and Storage](Data-Hydration-and-Storage): what survives a wake, and how the popup reads it back in.
+- [Architecture Overview](./overview/): where this page fits into the broader system.
+- [Popup and Background Communication](./popup-and-background-communication/): how the popup talks to the worker, including why data flows through storage instead of message replies.
+- [GitHub Health and Outages](./github-health/): the hub for `HealthStatusService`'s flags and the integrity layer that anchors `AlarmSeqClock`.
+- [Data Hydration and Storage](./data-hydration-and-storage/): what survives a wake, and how the popup reads it back in.

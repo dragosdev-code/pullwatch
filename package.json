@@ -18,7 +18,10 @@
     "test:remote-patterns": "vitest run --config vitest.remote-patterns.config.ts",
     "test:remote-patterns:production": "vitest run --config vitest.remote-patterns.config.ts --mode production",
     "test:remote-patterns:production:parity": "vitest run --config vitest.remote-patterns.config.ts --mode production-parity",
-    "test:remote-patterns:staging": "vitest run --config vitest.remote-patterns.config.ts --mode staging"
+    "test:remote-patterns:staging": "vitest run --config vitest.remote-patterns.config.ts --mode staging",
+    "docs:dev": "npm --prefix docs run dev",
+    "docs:build": "npm --prefix docs run build",
+    "docs:check": "npm --prefix docs run check"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

@@ -1,0 +1,37 @@
+{
+  "name": "docs",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "check": "astro check",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.9",
+    "@astrojs/mdx": "^6.0.1",
+    "@astrojs/react": "^5.0.7",
+    "@astrojs/starlight": "^0.39.3",
+    "@astrojs/starlight-tailwind": "^5.0.0",
+    "@mermaid-js/layout-elk": "^0.2.1",
+    "@panzoom/panzoom": "^4.6.2",
+    "@tailwindcss/vite": "^4.2.2",
+    "astro": "^6.3.1",
+    "astro-mermaid": "^2.0.2",
+    "daisyui": "5.0.43",
+    "mermaid": "^11.15.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3"
+  }
+}

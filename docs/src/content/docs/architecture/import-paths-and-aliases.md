@@ -1,4 +1,8 @@
-# Import paths and aliases
+---
+title: Import paths and aliases
+description: TypeScript path aliases across the extension and popup.
+---
+
 
 > **Summary.** Pullwatch resolves the same logical roots in three places at once: TypeScript (`tsconfig.json` `paths`), Vite (`vite.aliases.ts`), and Vitest (shared `viteResolveAliases`). This page is the contract for _when_ to use an alias versus a normal relative import, and _why_ the split exists. If you only remember one sentence: **aliases mark a boundary crossing; relatives keep a feature or subsystem readable on the page.**
 
@@ -33,7 +37,7 @@ The usual top level folders under `src/` are `components`, `hooks`, `stores`, `l
 
 Relative imports are still the default **inside** a coherent slice of the tree. That keeps diffs small when you rename a feature folder and preserves the mental model “everything in this directory belongs together.”
 
-- **`extension/common/`** — import siblings with `./types`, `./constants`, and the like. The shared layer should read like a small library, not like every file starts with `@common/`. For the chrome adapter/client subtree specifically, [extension/common/chrome/index.ts](../extension/common/chrome/index.ts) is an optional barrel (`./chrome` from other `extension/common/` modules) so imports do not sprawl across `adapters/` and `clients/` when you only need the public surface of that layer.
+- **`extension/common/`** — import siblings with `./types`, `./constants`, and the like. The shared layer should read like a small library, not like every file starts with `@common/`. For the chrome adapter/client subtree specifically, [extension/common/chrome/index.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/chrome/index.ts) is an optional barrel (`./chrome` from other `extension/common/` modules) so imports do not sprawl across `adapters/` and `clients/` when you only need the public surface of that layer.
 - **`extension/background/`** — `services` importing `../interfaces/...` is correct. You are still inside the worker package; an `@background/interfaces/...` path from the same package adds noise without buying a boundary.
 - **`extension/offscreen/`** and **`extension/debug/`** — same story: stay relative inside each tree unless something **outside** that tree needs the symbol.
 - **`src/components/...`** — short hops within the components tree, including a feature folder importing its own `./components/...` children, stay relative. That is the same “feature locality” idea as the background worker.
@@ -66,5 +70,5 @@ You could prefer a single absolute style everywhere under `src/`—that is a fai
 
 ## What to read next
 
-- **How the three Chrome contexts fit together:** [Architecture Overview](Architecture-Overview).
-- **Why the popup must not import the worker directly:** [Popup and Background Communication](Popup-and-Background-Communication).
+- **How the three Chrome contexts fit together:** [Architecture Overview](./overview/).
+- **Why the popup must not import the worker directly:** [Popup and Background Communication](./popup-and-background-communication/).
