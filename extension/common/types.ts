@@ -146,7 +146,7 @@ export interface ExtensionSettings {
   assigned: AssignedSettings;
   /** Merged PR notification settings */
   merged: MergedSettings;
-  /** Authored PR notification settings (reserved for future use) */
+  /** Authored tab list/display settings only — desktop notifications are not implemented for authored PRs. */
   authored: AuthoredSettings;
 }
 

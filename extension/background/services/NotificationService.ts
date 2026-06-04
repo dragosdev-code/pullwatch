@@ -76,6 +76,15 @@ export class NotificationService implements INotificationService {
   }
 
   /**
+   * WHY [delegate to SoundService]: PRService only depends on INotificationService; offscreen
+   * lifecycle stays centralized. Overlap create with the visual round-trip via PRService's await
+   * pattern (start warm, create visual, persist, await warm, play sound).
+   */
+  async warmNotificationAudio(): Promise<void> {
+    await this.soundService.ensureOffscreenDocument();
+  }
+
+  /**
    * Shows visual + sound for new assigned pull requests.
    *
    * WHY [thin wrapper]: External callers (including legacy tests) keep this single-call shape.

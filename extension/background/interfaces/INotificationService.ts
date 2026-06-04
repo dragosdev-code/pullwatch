@@ -65,6 +65,13 @@ export interface INotificationService extends IService {
   playMergedSound(): Promise<void>;
 
   /**
+   * Starts offscreen document creation so it can overlap `chrome.notifications.create` on a cold
+   * worker wake. Call before {@link createAssignedPRVisuals} / {@link createMergedPRVisuals}; await
+   * before {@link playAssignedSound} / {@link playMergedSound} so playback does not trail the toast.
+   */
+  warmNotificationAudio(): Promise<void>;
+
+  /**
    * Fires a sample notification + sound from settings (To Review vs Merged).
    * Uses non-`pr-alert` IDs so clicks dismiss without opening a tab.
    * Each successful fire uses a fresh notification id (timestamp suffix) so macOS shows a new banner instead of

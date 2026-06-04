@@ -755,8 +755,12 @@ export class PRService implements IPRService {
     forceRefresh: boolean
   ): Promise<void> {
     let visualFired = false;
+    let warmAudio: Promise<void> | undefined;
     if (newPRs.length > 0 && !forceRefresh) {
       this.debugService.log(`[PRService] Showing notifications for ${newPRs.length} new PR(s)`);
+      // WHY [parallel warm]: offscreen create overlaps the visual round-trip so the first sound
+      // after a cold worker wake does not trail the toast.
+      warmAudio = this.notificationService.warmNotificationAudio();
       const visual = await this.notificationService.createAssignedPRVisuals(newPRs);
       visualFired = visual.fired;
     }
@@ -769,6 +773,9 @@ export class PRService implements IPRService {
     // WHY [sound last]: see ordering rationale above. Sound must follow `setStoredPRs` so a
     // worker suspension during playback cannot resurrect the PR as "new" on the next alarm.
     if (visualFired) {
+      if (warmAudio) {
+        await warmAudio;
+      }
       await this.notificationService.playAssignedSound();
     }
   }
@@ -1149,9 +1156,9 @@ export class PRService implements IPRService {
         : freshAuthoredPRsRaw;
 
       if (!treatAsBaseline) {
-        // WHY [authored has no notifications today]: applyTombstoneFilter still runs so drops are
-        // recorded and the pr_list_churn signal fires on resurrection — keeps the integrity
-        // semantics aligned with assigned/merged and future-proofs a notifications addition.
+        // WHY [authored does not notify]: applyTombstoneFilter still runs so drops are recorded and
+        // the pr_list_churn signal fires on resurrection — integrity semantics match assigned/merged.
+        // The Authored tab is list-only (noise budget); see notifications-and-sound docs.
         const filtered = await this.applyTombstoneFilter({
           listKind: 'authored',
           oldPRs,
@@ -1383,10 +1390,12 @@ export class PRService implements IPRService {
       // miss). Sound fires after persist so a crash during the long playback window does not
       // resurrect the PR as "new" and replay the sound on the next alarm.
       let visualFired = false;
+      let warmAudio: Promise<void> | undefined;
       if (newPRs.length > 0 && !forceRefresh) {
         this.debugService.log(
           `[PRService] Triggering merged PR notifications for ${newPRs.length} PR(s)`
         );
+        warmAudio = this.notificationService.warmNotificationAudio();
         const visual = await this.notificationService.createMergedPRVisuals(newPRs);
         visualFired = visual.fired;
       } else if (newPRs.length === 0) {
@@ -1399,6 +1408,9 @@ export class PRService implements IPRService {
       this.markListRefreshedForCurrentViewer('merged');
 
       if (visualFired) {
+        if (warmAudio) {
+          await warmAudio;
+        }
         await this.notificationService.playMergedSound();
       }
 

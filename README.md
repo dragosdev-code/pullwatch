@@ -29,7 +29,7 @@ Pullwatch keeps the pull requests you care about visible without you having to l
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Session based access** | Reads the GitHub HTML you can already see while signed in. No personal access tokens, no OAuth, nothing to authorize.                                                   |
 | **Three tab inbox**      | **To review** (pending vs already reviewed), **Authored** (sorted by review state: changes requested, approved, pending, draft), and **Merged** (recently shipped).     |
-| **Notifications**        | Optional desktop alerts and sounds for assigned, merged, and authored work. Draft alerts for assigned PRs are off by default and can be turned on per category.         |
+| **Notifications**        | Optional desktop alerts and sounds for **assigned (to review)** and **merged** PRs. The **Authored** tab is for visibility only (no toasts). Draft alerts for assigned PRs are off by default and can be turned on.         |
 | **Themes**               | 35 built-in [DaisyUI](https://daisyui.com/) themes on Tailwind CSS 4.                                                                                                   |
 | **Background sync**      | Default refresh cadence is 3 minutes (see `FETCH_INTERVAL_MINUTES` in [extension/common/constants.ts](extension/common/constants.ts)). It pauses when you go offline.   |
 | **Resilient parsing**    | A three stage parser handles both the new and legacy GitHub list pages. Regex updates can be shipped from a public config repo without releasing a new extension build. |

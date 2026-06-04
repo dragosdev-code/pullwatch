@@ -70,6 +70,7 @@ describe('PRService notification ordering (visual → persist → sound)', () =>
   let getLastResolvedViewerLogin: Mock;
   let createAssignedPRVisuals: Mock;
   let createMergedPRVisuals: Mock;
+  let warmNotificationAudio: Mock;
   let playAssignedSound: Mock;
   let playMergedSound: Mock;
   let setPRCountBadge: Mock;
@@ -103,6 +104,7 @@ describe('PRService notification ordering (visual → persist → sound)', () =>
       notificationService: {
         createAssignedPRVisuals,
         createMergedPRVisuals,
+        warmNotificationAudio,
         playAssignedSound,
         playMergedSound,
         showAssignedPRNotifications: vi.fn(),
@@ -167,6 +169,7 @@ describe('PRService notification ordering (visual → persist → sound)', () =>
     getLastResolvedViewerLogin = vi.fn().mockReturnValue('viewer');
     createAssignedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
     createMergedPRVisuals = vi.fn().mockResolvedValue({ fired: true });
+    warmNotificationAudio = vi.fn().mockResolvedValue(undefined);
     playAssignedSound = vi.fn().mockResolvedValue(undefined);
     playMergedSound = vi.fn().mockResolvedValue(undefined);
     setPRCountBadge = vi.fn().mockResolvedValue(undefined);
@@ -182,7 +185,7 @@ describe('PRService notification ordering (visual → persist → sound)', () =>
   });
 
   describe('assigned', () => {
-    it('order: createAssignedPRVisuals → setStoredPRs → playAssignedSound', async () => {
+    it('order: warm + createAssignedPRVisuals → setStoredPRs → playAssignedSound', async () => {
       storedByKey[STORAGE_KEY_ASSIGNED_PRS] = { prs: [] };
       const fresh = makePR({ id: 'a1', url: 'https://github.com/o/r/pull/1' });
       fetchAssignedPRs.mockResolvedValue([fresh]);
@@ -190,10 +193,12 @@ describe('PRService notification ordering (visual → persist → sound)', () =>
       const pr = makeService();
       await pr.fetchAndUpdateAssignedPRs(false, true);
 
+      expect(warmNotificationAudio).toHaveBeenCalledTimes(1);
       expect(createAssignedPRVisuals).toHaveBeenCalledTimes(1);
       expect(setStoredPRs).toHaveBeenCalled();
       expect(playAssignedSound).toHaveBeenCalledTimes(1);
 
+      const warmOrder = warmNotificationAudio.mock.invocationCallOrder[0];
       const visualOrder = createAssignedPRVisuals.mock.invocationCallOrder[0];
       const persistOrder = setStoredPRs.mock.invocationCallOrder.find((_o, i) => {
         const callArgs = setStoredPRs.mock.calls[i];
@@ -201,6 +206,7 @@ describe('PRService notification ordering (visual → persist → sound)', () =>
       })!;
       const soundOrder = playAssignedSound.mock.invocationCallOrder[0];
 
+      expect(warmOrder).toBeLessThan(visualOrder);
       expect(visualOrder).toBeLessThan(persistOrder);
       expect(persistOrder).toBeLessThan(soundOrder);
     });
@@ -296,6 +302,7 @@ describe('PRService notification ordering (visual → persist → sound)', () =>
       const pr = makeService();
       await pr.fetchAndUpdateAssignedPRs(true, true);
 
+      expect(warmNotificationAudio).not.toHaveBeenCalled();
       expect(createAssignedPRVisuals).not.toHaveBeenCalled();
       expect(playAssignedSound).not.toHaveBeenCalled();
       expect(setStoredPRs).toHaveBeenCalled();
@@ -303,7 +310,7 @@ describe('PRService notification ordering (visual → persist → sound)', () =>
   });
 
   describe('merged', () => {
-    it('order: createMergedPRVisuals → setStoredPRs → playMergedSound', async () => {
+    it('order: warm + createMergedPRVisuals → setStoredPRs → playMergedSound', async () => {
       storedByKey[STORAGE_KEY_MERGED_PRS] = { prs: [] };
       const fresh = mergedPR({ id: 'm1', url: 'https://github.com/o/r/pull/10' });
       fetchMergedPRs.mockResolvedValue([fresh]);
@@ -311,6 +318,7 @@ describe('PRService notification ordering (visual → persist → sound)', () =>
       const pr = makeService();
       await pr.updateMergedPRs(false, true);
 
+      expect(warmNotificationAudio).toHaveBeenCalledTimes(1);
       expect(createMergedPRVisuals).toHaveBeenCalledTimes(1);
       const mergedPersistIdx = setStoredPRs.mock.calls.findIndex(
         (args) => args[0] === STORAGE_KEY_MERGED_PRS
@@ -318,10 +326,12 @@ describe('PRService notification ordering (visual → persist → sound)', () =>
       expect(mergedPersistIdx).toBeGreaterThanOrEqual(0);
       expect(playMergedSound).toHaveBeenCalledTimes(1);
 
+      const warmOrder = warmNotificationAudio.mock.invocationCallOrder[0];
       const visualOrder = createMergedPRVisuals.mock.invocationCallOrder[0];
       const persistOrder = setStoredPRs.mock.invocationCallOrder[mergedPersistIdx];
       const soundOrder = playMergedSound.mock.invocationCallOrder[0];
 
+      expect(warmOrder).toBeLessThan(visualOrder);
       expect(visualOrder).toBeLessThan(persistOrder);
       expect(persistOrder).toBeLessThan(soundOrder);
     });
