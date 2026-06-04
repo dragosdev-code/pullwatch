@@ -40,6 +40,8 @@ export default defineConfig({
         src: './src/assets/logo.png',
       },
 
+      favicon: '/favicon.png',
+
       editLink: {
         baseUrl: 'https://github.com/dragosdev-code/pullwatch/edit/main/docs/',
       },
