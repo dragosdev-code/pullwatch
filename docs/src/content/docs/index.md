@@ -44,7 +44,11 @@ For the mechanics behind "resilient parsing" head to [The Parser Waterfall](./ar
 Pullwatch is built so that you do not have to take its word for it. The whole codebase is open and the rules below are easy to verify.
 
 - **No tokens. No OAuth app.** Pullwatch never asks for a token and never creates an OAuth integration on your account. It reads the same pages your browser would render if you typed `github.com/pulls` in the address bar yourself.
-- **Only two outbound destinations, ever.** The extension talks to `github.com` (your own signed in pages, including avatar URLs) and to `raw.githubusercontent.com/dragosdev-code/pr-live-config/*` (a public regex config file). There is no analytics, no telemetry, no beacon, no third party SDK, and no server owned by the project.
+- **Outbound network (four host origins, all declared in the manifest).** Pullwatch does not run its own servers and does not use analytics or third-party SDKs. The only destinations it contacts are:
+  - **`https://github.com/*`** — the background worker fetches your signed-in pulls list HTML; the popup may open PR links and load pages on this origin using your existing session.
+  - **`https://avatars.githubusercontent.com/*`** — avatar images shown next to PR rows in the popup.
+  - **`https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*`** — a public `patterns.json` file used to update parser regexes without a new extension release.
+  - **`https://www.githubstatus.com/*`** — GitHub’s public Statuspage API (`summary.json`) so outage banners can be corroborated against real Pull Requests incidents. No credentials are sent; responses are cached locally in `chrome.storage.local`.
 - **Your data stays on your machine.** PR lists, route hints, rate limit state, and other operational data live in `chrome.storage.local` on this device only. Your appearance and notification preferences live in `chrome.storage.sync` so Chrome can carry them across your own signed in Chrome instances if you have Chrome sync turned on. Nothing is uploaded anywhere by Pullwatch itself.
 - **Non goals.** Pullwatch does not act on PRs for you, does not write anything back to GitHub, and does not sync your PR data across devices. It is read only by design.
 

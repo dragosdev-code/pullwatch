@@ -76,6 +76,10 @@ describe('NotificationService.showAssignedPRNotifications (draft filtering)', ()
       soundService: {
         playNotificationSound: playSound,
       } as never,
+      alarmSeqClock: {
+        current: vi.fn().mockResolvedValue(0),
+        advance: vi.fn(),
+      } as never,
     });
   }
 

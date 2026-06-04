@@ -292,6 +292,15 @@ async function handlePlayNotificationSound(
 
 // Listen for messages from other parts of the extension (e.g., background script)
 chromeExtensionService.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
+  // WHY [sender id check]: Same guard as background `main.ts`. `onMessage` is registered extension-wide;
+  // only this extension’s contexts should drive AudioContext play/stop. Cross-extension messages use
+  // `onMessageExternal`, which we do not register — this rejects misrouted or future-external senders early.
+  const ownExtensionId = chromeExtensionService.runtime.getExtensionId();
+  if (sender.id !== ownExtensionId) {
+    debugWarn(`[Offscreen] Ignored message from foreign sender: ${sender.id ?? '(none)'}`);
+    return false;
+  }
+
   const message = rawMessage as RuntimeMessage;
   debugLog('Offscreen document received message:', message, 'from sender:', sender);
 

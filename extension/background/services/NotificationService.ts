@@ -22,6 +22,7 @@ import {
   chromeExtensionService,
   type NotificationCreateOptions,
 } from '@common/chrome-extension-service';
+import type { AlarmSeqClock } from '../domain/pr-list-trust';
 
 /**
  * NotificationService handles Chrome extension notifications with sound integration.
@@ -39,6 +40,7 @@ export class NotificationService implements INotificationService {
   private debugService: IDebugService;
   private storageService: IStorageService;
   private soundService: ISoundService;
+  private alarmSeqClock: AlarmSeqClock;
   private initialized = false;
 
   /**
@@ -59,10 +61,12 @@ export class NotificationService implements INotificationService {
     debugService: IDebugService;
     storageService: IStorageService;
     soundService: ISoundService;
+    alarmSeqClock: AlarmSeqClock;
   }) {
     this.debugService = deps.debugService;
     this.storageService = deps.storageService;
     this.soundService = deps.soundService;
+    this.alarmSeqClock = deps.alarmSeqClock;
   }
 
   async initialize(): Promise<void> {
@@ -381,7 +385,11 @@ export class NotificationService implements INotificationService {
     const hiddenCount = prs.length - visibleTitles.length;
     const suffix = hiddenCount > 0 ? `\n+${hiddenCount} more` : '';
     const d = NotificationService.NOTIFICATION_DELIMITER;
-    const notificationId = `${NotificationService.NOTIFICATION_BATCH_PREFIX}${d}${category}${d}${Date.now()}`;
+    // WHY [alarm seq, not wall clock]: Batch ids share the tombstone wave counter. Within one alarm wave
+    // `current()` is stable until EventService advances after persist — Chrome replaces a duplicate
+    // summary for the same category instead of stacking rows when the wave retries or re-notifies.
+    const waveKey = await this.alarmSeqClock.current();
+    const notificationId = `${NotificationService.NOTIFICATION_BATCH_PREFIX}${d}${category}${d}${waveKey}`;
 
     // WHY [attention budget]: A polling recovery can surface many valid events at once. Keep the
     // event detail in one native row so the user gets signal without a wall of OS interruptions.

@@ -78,7 +78,10 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     Reflect.deleteProperty(globalThis, 'chrome');
   });
 
-  function makeService(settings: ExtensionSettings) {
+  function makeService(
+    settings: ExtensionSettings,
+    alarmSeqCurrent: number = 7
+  ) {
     getSettings.mockResolvedValue(settings);
     return new NotificationService({
       debugService: {
@@ -91,6 +94,10 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
       } as never,
       soundService: {
         playNotificationSound: playSound,
+      } as never,
+      alarmSeqClock: {
+        current: vi.fn().mockResolvedValue(alarmSeqCurrent),
+        advance: vi.fn(),
       } as never,
     });
   }
@@ -198,11 +205,37 @@ describe('NotificationService.fireSettingsTestNotification (macOS preview ids)',
     expect(notificationsCreate).toHaveBeenCalledTimes(1);
     const id = notificationsCreate.mock.calls[0][0] as string;
     const options = notificationsCreate.mock.calls[0][1] as NotificationCreateOptions;
-    expect(id).toMatch(/^pr-alert-batch\|assigned\|\d+$/);
+    expect(id).toBe('pr-alert-batch|assigned|7');
     expect(options.title).toBe('2 new PR review requests');
     expect(options.message).toContain('First PR');
     expect(options.message).toContain('Second PR');
     expect(playSound).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the same batch notification id within one alarm wave', async () => {
+    const svc = makeService(
+      settingsWithPreviewEnabled({
+        assigned: {
+          ...DEFAULT_EXTENSION_SETTINGS.assigned,
+          notificationsEnabled: true,
+          notifyOnDrafts: false,
+          showDraftsInList: true,
+        },
+      }),
+      3
+    );
+
+    const batch = [
+      openPr({ id: 'o1', title: 'First PR', url: 'https://github.com/o/r/pull/1' }),
+      openPr({ id: 'o2', title: 'Second PR', url: 'https://github.com/o/r/pull/2' }),
+    ];
+
+    await svc.showAssignedPRNotifications(batch);
+    await svc.showAssignedPRNotifications(batch);
+
+    expect(notificationsCreate).toHaveBeenCalledTimes(2);
+    expect(notificationsCreate.mock.calls[0][0]).toBe('pr-alert-batch|assigned|3');
+    expect(notificationsCreate.mock.calls[1][0]).toBe('pr-alert-batch|assigned|3');
   });
 
   it('opens the extension dashboard when a batch notification is clicked', async () => {

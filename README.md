@@ -40,7 +40,11 @@ Pullwatch keeps the pull requests you care about visible without you having to l
 Pullwatch is built so that you do not have to take its word for it. The whole codebase is open and the rules below are easy to verify.
 
 - **No tokens. No OAuth app.** Pullwatch never asks for a token and never creates an OAuth integration on your account. It reads the same pages your browser would render if you typed `github.com/pulls` in the address bar yourself.
-- **Only two outbound destinations, ever.** The extension talks to `github.com` (your own signed in pages, including avatar URLs) and to `raw.githubusercontent.com/dragosdev-code/pr-live-config/*` (a public regex config file). There is no analytics, no telemetry, no beacon, no third party SDK, and no server owned by the project.
+- **Outbound network (four host origins, all declared in the manifest).** Pullwatch does not run its own servers and does not use analytics or third-party SDKs. The only destinations it contacts are:
+  - **`https://github.com/*`** — the background worker fetches your signed-in pulls list HTML; the popup may open PR links and load pages on this origin using your existing session.
+  - **`https://avatars.githubusercontent.com/*`** — avatar images shown next to PR rows in the popup.
+  - **`https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*`** — a public `patterns.json` file used to update parser regexes without a new extension release.
+  - **`https://www.githubstatus.com/*`** — GitHub’s public Statuspage API (`summary.json`) so outage banners can be corroborated against real Pull Requests incidents. No credentials are sent; responses are cached locally in `chrome.storage.local`.
 - **Your data stays on your machine.** PR lists, route hints, rate limit state, and other operational data live in `chrome.storage.local` on this device only. Your appearance and notification preferences live in `chrome.storage.sync` so Chrome can carry them across your own signed in Chrome instances if you have Chrome sync turned on. Nothing is uploaded anywhere by Pullwatch itself.
 - **Non-goals.** Pullwatch does not act on PRs for you, does not write anything back to GitHub, and does not sync your PR data across devices. It is read only by design.
 
@@ -116,6 +120,22 @@ All permissions are declared in [public/manifest.json](public/manifest.json). Ea
 | `https://github.com/*`                                              | Reads the signed in pulls pages your browser would already render. This is where every PR row comes from.                                   |
 | `https://avatars.githubusercontent.com/*`                           | Loads avatar images shown next to each PR.                                                                                                  |
 | `https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*` | Downloads the public regex config file used by the parser. See the [pr-live-config repo](https://github.com/dragosdev-code/pr-live-config). |
+| `https://www.githubstatus.com/*`                                    | Fetches GitHub’s public status API so outage banners match real Pull Requests incidents (see **How it works** above). No account data is sent. |
+
+### Chrome Web Store listing (copy-paste justifications)
+
+Use the same wording in the store’s permission and host-access fields so the listing matches this README.
+
+- **`storage`** — Saves PR lists, settings, route hints, and rate-limit state on this device only.
+- **`notifications`** — Optional desktop alerts when your inbox changes (per-category; can be disabled).
+- **`alarms`** — Background refresh on a schedule without keeping a GitHub tab open.
+- **`offscreen`** — Plays notification sounds; MV3 service workers cannot use `AudioContext` directly.
+- **`https://github.com/*`** — Reads signed-in pulls pages the user could already open in the browser; no tokens or OAuth.
+- **`https://avatars.githubusercontent.com/*`** — PR author avatars in the popup UI.
+- **`https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*`** — Public parser regex updates (data only, validated before use).
+- **`https://www.githubstatus.com/*`** — Public outage status for accurate “GitHub may be down” banners; no user credentials.
+
+**Single purpose:** Read-only GitHub PR inbox in the toolbar — track reviews, authored PRs, and merges using the browser’s existing GitHub session.
 
 ## Development
 

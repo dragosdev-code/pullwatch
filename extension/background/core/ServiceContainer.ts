@@ -88,6 +88,7 @@ export class ServiceContainer {
         debugService: this.getService('debugService'),
         storageService: this.getService('storageService'),
         soundService: this.getService('soundService'),
+        alarmSeqClock: this.getService('alarmSeqClock'),
       })
     );
 
