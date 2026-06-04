@@ -3,9 +3,9 @@ title: Architecture Overview
 description: Map of every moving part in Pullwatch.
 ---
 
-> **What this page is.** A one page map of every moving part in Pullwatch. Think of it as the index to the rest of the wiki: every service you see here links straight to the deep dive that explains how it works. If you only read one technical page, read this one.
+This is the map. Pullwatch is a handful of small pieces spread across three separate runtime contexts, and this page names every one of them and shows how they fit together. Each service in the tables below links straight to the deep dive that explains it, so if you read only one technical page, make it this one.
 
-Imports use shared path aliases (`@common/*`, `@src/*`, `@background/*`, and others) so TypeScript, Vite, and Vitest agree; prefer them over long `../` paths into `extension/` or across top-level `src/` folders (see `tsconfig.json` and `vite.aliases.ts`). **Full conventions:** [Import paths and aliases](./import-paths-and-aliases/).
+Imports use shared path aliases (`@common/*`, `@src/*`, `@background/*`, and others) so TypeScript, Vite, and Vitest agree; prefer them over long `../` paths into `extension/` or across top-level `src/` folders (see `tsconfig.json` and `vite.aliases.ts`). **Full conventions:** [Import paths and aliases](/architecture/import-paths-and-aliases/).
 
 ---
 
@@ -24,6 +24,8 @@ The rest of this page zooms into each context.
 ---
 
 ## The whole system in one diagram
+
+The diagram below is the single picture worth holding in your head. Read it in two passes. First, top to bottom: the three boxes are the runtime contexts from the table above (Popup, Service worker, Offscreen document), and the cylinders along the side are the storage areas and external hosts they reach. Then follow the arrows: solid edges are the steady-state path that starts at the alarm and ends at a stored PR list, and the popup's edges (bottom) only ever touch storage and the dispatch table, never GitHub directly. Notice that no arrow crosses from the popup straight to `github.com`.
 
 ```mermaid
 flowchart TB
@@ -74,7 +76,7 @@ flowchart TB
 A few things worth noticing before you move on:
 
 - The popup never talks to `github.com` directly. Every arrow into GitHub comes out of the service worker.
-- The popup reads PR data from `Local`, not from a runtime message reply. That is on purpose; [Popup and Background Communication](./popup-and-background-communication/) explains why.
+- The popup reads PR data from `Local`, not from a runtime message reply. That is on purpose; [Popup and Background Communication](/architecture/popup-and-background-communication/) explains why.
 - The alarm is the main clock. Everything that happens in steady state starts with `AL -->|onAlarm| EV`.
 
 ---
@@ -87,16 +89,16 @@ Each row below is a service in the background. Each has a single job and a small
 
 | Service                    | Source                                                                                                     | Role                                                                                                                                                            | Deep dive                                                                |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `BackgroundManager`        | [BackgroundManager.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/BackgroundManager.ts)                              | Orchestrates init on every wake. Calls permissions check, alarm setup, and badge sync from storage. Never fetches PRs.                                          | [Service Worker Lifecycle](./service-worker-lifecycle/)                 |
-| `EventService`             | [EventService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts)                                        | Routes runtime messages through a `Map` based dispatch table. Owns the depth counter that tracks overlapping fetch waves.                                       | [Popup and Background Communication](./popup-and-background-communication/) |
-| `PRService`                | [PRService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PRService.ts)                                              | Coordinates per list fetches. Dedupes concurrent calls, applies a 60 second TTL cache, runs account swap detection against `github_viewer_identity`.            | [Service Worker Lifecycle](./service-worker-lifecycle/)                 |
-| `GitHubService`            | [GitHubService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/GitHubService.ts)                                      | The only place the extension calls `fetch()` against `github.com`. Picks the route using a 24 hour route hint, then runs the parser gauntlet.                   | [The Parser Waterfall](./parser-waterfall/)                             |
-| `AlarmService`             | [AlarmService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/AlarmService.ts)                                        | Owns the periodic fetch alarm. Default cadence is `FETCH_INTERVAL_MINUTES = 3`. Persists any dev override across worker restarts.                               | [Service Worker Lifecycle](./service-worker-lifecycle/)                 |
-| `RateLimitService`         | [RateLimitService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/RateLimitService.ts)                                | Tracks GitHub 429 responses, applies exponential backoff (capped at 30 minutes), and persists the state so it survives a worker restart.                        | [Service Worker Lifecycle](./service-worker-lifecycle/)                 |
-| `PatternRegistryService`   | [PatternRegistryService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PatternRegistryService.ts)                    | Pulls remote regex patterns every 6 hours. Validates with Valibot, compiles, and falls back to bundled defaults if anything is wrong.                           | [Remote Configuration](./remote-configuration/)                             |
-| `NotificationService`      | [NotificationService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/NotificationService.ts)                          | Builds and shows Chrome notifications for assigned and merged PRs only. Encodes the PR URL into the notification ID so click handling survives a wake. | [Notifications and Sound](./notifications-and-sound/)                       |
-| `SoundService` + offscreen | [SoundService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/SoundService.ts), [offscreen/](https://github.com/dragosdev-code/pullwatch/blob/main/extension/offscreen/) | Plays notification sounds. Manifest V3 workers cannot play audio, so a one off offscreen document holds the `AudioContext`.                                     | [Notifications and Sound](./notifications-and-sound/)                       |
-| `StorageService`           | [StorageService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/StorageService.ts)                                    | Type safe wrapper around `chrome.storage.local` and `chrome.storage.sync` with retry on transient post wake failures.                                           | [Data Hydration and Storage](./data-hydration-and-storage/)                 |
+| `BackgroundManager`        | [BackgroundManager.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/BackgroundManager.ts)                              | Orchestrates init on every wake. Calls permissions check, alarm setup, and badge sync from storage. Never fetches PRs.                                          | [Service Worker Lifecycle](/architecture/service-worker-lifecycle/)                 |
+| `EventService`             | [EventService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts)                                        | Routes runtime messages through a `Map` based dispatch table. Owns the depth counter that tracks overlapping fetch waves.                                       | [Popup and Background Communication](/architecture/popup-and-background-communication/) |
+| `PRService`                | [PRService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PRService.ts)                                              | Coordinates per list fetches. Dedupes concurrent calls, applies a 60 second TTL cache, runs account swap detection against `github_viewer_identity`.            | [Service Worker Lifecycle](/architecture/service-worker-lifecycle/)                 |
+| `GitHubService`            | [GitHubService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/GitHubService.ts)                                      | The only place the extension calls `fetch()` against `github.com`. Picks the route using a 24 hour route hint, then runs the parser gauntlet.                   | [The Parser Waterfall](/architecture/parser-waterfall/)                             |
+| `AlarmService`             | [AlarmService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/AlarmService.ts)                                        | Owns the periodic fetch alarm. Default cadence is `FETCH_INTERVAL_MINUTES = 3`. Persists any dev override across worker restarts.                               | [Service Worker Lifecycle](/architecture/service-worker-lifecycle/)                 |
+| `RateLimitService`         | [RateLimitService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/RateLimitService.ts)                                | Tracks GitHub 429 responses, applies exponential backoff (capped at 30 minutes), and persists the state so it survives a worker restart.                        | [Service Worker Lifecycle](/architecture/service-worker-lifecycle/)                 |
+| `PatternRegistryService`   | [PatternRegistryService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PatternRegistryService.ts)                    | Pulls remote regex patterns every 6 hours. Validates with Valibot, compiles, and falls back to bundled defaults if anything is wrong.                           | [Remote Configuration](/architecture/remote-configuration/)                             |
+| `NotificationService`      | [NotificationService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/NotificationService.ts)                          | Builds and shows Chrome notifications for assigned and merged PRs only. Encodes the PR URL into the notification ID so click handling survives a wake. | [Notifications and Sound](/architecture/notifications-and-sound/)                       |
+| `SoundService` + offscreen | [SoundService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/SoundService.ts), [offscreen/](https://github.com/dragosdev-code/pullwatch/blob/main/extension/offscreen/) | Plays notification sounds. Manifest V3 workers cannot play audio, so a one off offscreen document holds the `AudioContext`.                                     | [Notifications and Sound](/architecture/notifications-and-sound/)                       |
+| `StorageService`           | [StorageService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/StorageService.ts)                                    | Type safe wrapper around `chrome.storage.local` and `chrome.storage.sync` with retry on transient post wake failures.                                           | [Data Hydration and Storage](/architecture/data-hydration-and-storage/)                 |
 
 ### Supporting cast
 
@@ -105,20 +107,20 @@ These do narrower jobs and exist so the core services can stay small. You will r
 | Service               | Source                                                                            | What it does                                                                                               |
 | --------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `AvatarService`       | [AvatarService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/AvatarService.ts)             | Normalises and resolves avatar URLs, so parsers do not each rebuild the same logic.                        |
-| `BadgeService`        | [BadgeService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/BadgeService.ts)               | Keeps the toolbar icon badge in sync with the unread / needs review count derived from storage.            |
+| `BadgeService`        | [BadgeService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/BadgeService.ts)               | Owns the toolbar icon badge: the pending To Review count (draft-filtered), or `!` when a parser breakage or outage flag is set. Derived from storage on every wake. See [Inside the Popup](/architecture/inside-the-popup/#the-toolbar-badge). |
 | `DebugService`        | [DebugService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/DebugService.ts)               | Exposes structured diagnostics consumed by the in popup debug panel.                                       |
 | `DevTestService`      | [DevTestService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/DevTestService.ts)           | Dev only helpers for triggering notifications or clearing storage from the debug panel.                    |
-| `HealthStatusService` | [HealthStatusService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/HealthStatusService.ts) | Owns two persisted health flags (parser breakage, GitHub outage with reason tag), refreshes `lastSeenAt` on repeated outage signals, drops `STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT` on outage clear, and broadcasts every transition. See [GitHub Health and Outages](./github-health/). |
-| `GitHubStatusClient`  | [github-status-client.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/github-status-client.ts)            | Polls `summary.json` once per wave (`bypassCache: true` on the alarm path). Two-minute cache, fail-OPEN to `'unknown'`. Used by the popup banner to gate the Statuspage link. See [Outage Banner and Statuspage](./github-health/outage-banner/). |
+| `HealthStatusService` | [HealthStatusService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/HealthStatusService.ts) | Owns two persisted health flags (parser breakage, GitHub outage with reason tag), refreshes `lastSeenAt` on repeated outage signals, drops `STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT` on outage clear, and broadcasts every transition. See [GitHub Health and Outages](/architecture/github-health/). |
+| `GitHubStatusClient`  | [github-status-client.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/github-status-client.ts)            | Polls `summary.json` once per wave (`bypassCache: true` on the alarm path). Two-minute cache, fail-OPEN to `'unknown'`. Used by the popup banner to gate the Statuspage link. See [Outage Banner and Statuspage](/architecture/github-health/outage-banner/). |
 | `AlarmSeqClock`       | [AlarmSeqClock.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/AlarmSeqClock.ts) | Monotonic per-wave counter advanced once per completed alarm by `EventService`. Anchors `PrTombstoneStore` to alarm waves rather than wall-clock milliseconds.                                                                                  |
-| List-trust domain     | [extension/background/domain/pr-list-trust/](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/) | Decides whether a fresh fetch is allowed to replace the stored baseline. Houses `PrListTrustAssessor`, `EmptyConfirmationTracker`, `MergedLimboPromoter`, `PrTombstoneStore`, and `MergedNotificationEligibility`. See [List Trust and Suspect Lists](./github-health/list-trust/). |
+| List-trust domain     | [extension/background/domain/pr-list-trust/](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/) | Decides whether a fresh fetch is allowed to replace the stored baseline. Houses `PrListTrustAssessor`, `EmptyConfirmationTracker`, `MergedLimboPromoter`, `PrTombstoneStore`, and `MergedNotificationEligibility`. See [List Trust and Suspect Lists](/architecture/github-health/list-trust/). |
 | `PermissionService`   | [PermissionService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PermissionService.ts)     | Runs the "do we actually have the permissions we declared" check on every wake.                            |
 
 ---
 
 ## The popup side in one paragraph
 
-The React popup boots once per open. Before the first render, `main.tsx` awaits a hydration step that reads the three PR list keys from `chrome.storage.local` and seeds them into TanStack Query. That is why the popup paints with real data on frame one, no spinner, no round trip. While it is open, a storage listener forwards any `onChanged` event into the same TanStack Query keys, so if the alarm fires mid session the lists update live. Zustand stores (`global-error`, `debug`, `tab-control`) hold UI only state that does not belong on the server. Full mechanics are on [Data Hydration and Storage](./data-hydration-and-storage/).
+The React popup boots once per open. Before the first render, `main.tsx` awaits a hydration step that reads the three PR list keys from `chrome.storage.local` and seeds them into TanStack Query. That is why the popup paints with real data on frame one, no spinner, no round trip. While it is open, a storage listener forwards any `onChanged` event into the same TanStack Query keys, so if the alarm fires mid session the lists update live. Zustand stores (`global-error`, `debug`, `tab-control`) hold UI only state that does not belong on the server. Full mechanics are on [Data Hydration and Storage](/architecture/data-hydration-and-storage/).
 
 ---
 
@@ -132,7 +134,7 @@ Three Chrome storage areas, each with a very specific job.
 | `chrome.storage.sync`    | User settings: theme, notification preferences, sound choices.                                                                                                                                                              | Yes, if Chrome sync is on. |
 | `chrome.storage.session` | Manual refresh throttle timestamp (`last_manual_refresh_at`). Cleared when the browser quits.                                                                                                                               | No. In memory only.        |
 
-[Data Hydration and Storage](./data-hydration-and-storage/) explains the full key list and the hydration contract.
+[Data Hydration and Storage](/architecture/data-hydration-and-storage/) explains the full key list and the hydration contract.
 
 ---
 
@@ -145,8 +147,9 @@ Pullwatch is scoped so tightly at the manifest level that you can audit every HT
 | `https://github.com/*`                                              | Fetches the pulls list HTML using the cookie your browser already has. Read only.                         |
 | `https://avatars.githubusercontent.com/*`                           | Serves avatar images for PR rows. Images only, same as on GitHub itself.                                  |
 | `https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*` | Downloads `patterns.json` for the parser. The path prefix is scoped to a single repo owned by the author. |
+| `https://www.githubstatus.com/*`                                    | Reads the public Statuspage `summary.json` so the outage banner can be corroborated against a real incident. Anonymous, cached locally, read by `GitHubStatusClient`. |
 
-There is no fourth. No analytics endpoint, no crash reporter, no CDN owned by the project. If you ever see Pullwatch contact anything else in DevTools, that is a bug worth an issue.
+Those four origins are the whole list. No analytics endpoint, no crash reporter, no CDN owned by the project. If you ever see Pullwatch contact anything else in DevTools, that is a bug worth an issue.
 
 ---
 
@@ -154,12 +157,13 @@ There is no fourth. No analytics endpoint, no crash reporter, no CDN owned by th
 
 You can read the deep dives in any order, but this sequence tends to flow well if you want a narrative tour:
 
-1. [The Service Worker Lifecycle](./service-worker-lifecycle/): why the worker is ephemeral and how Pullwatch deals with it.
-2. [The Parser Waterfall](./parser-waterfall/): how the three stage parser stays resilient across GitHub's two experiences.
-3. [Remote Configuration](./remote-configuration/): how parser regexes can be hot fixed without shipping a new build.
-4. [Data Hydration and Storage](./data-hydration-and-storage/): where every piece of state lives, and why.
-5. [Popup and Background Communication](./popup-and-background-communication/): the runtime messaging surface, and why data flows through storage instead.
-6. [Onboarding and Session Gates](./onboarding-and-session-gates/): the first run, signed out, and re auth flows.
-7. [Notifications and Sound](./notifications-and-sound/): the notification pipeline and the offscreen document.
-8. [The Canary Monitor](./canary-monitor/): how Pullwatch finds out GitHub's DOM changed before users do.
-9. [GitHub Health and Outages](./github-health/): the hub that maps "what could go wrong with a fetch" to "what the popup says". Children: [List Trust and Suspect Lists](./github-health/list-trust/) and [Outage Banner and Statuspage](./github-health/outage-banner/).
+1. [The Service Worker Lifecycle](/architecture/service-worker-lifecycle/): why the worker is ephemeral and how Pullwatch deals with it.
+2. [The Parser Waterfall](/architecture/parser-waterfall/): how the three stage parser stays resilient across GitHub's two experiences.
+3. [Remote Configuration](/architecture/remote-configuration/): how parser regexes can be hot fixed without shipping a new build.
+4. [Data Hydration and Storage](/architecture/data-hydration-and-storage/): where every piece of state lives, and why.
+5. [Popup and Background Communication](/architecture/popup-and-background-communication/): the runtime messaging surface, and why data flows through storage instead.
+6. [Inside the Popup](/architecture/inside-the-popup/): what the popup actually shows: tabs, sorting, badges, empty states, and settings.
+7. [Onboarding and Session Gates](/architecture/onboarding-and-session-gates/): the first run, signed out, and re auth flows.
+8. [Notifications and Sound](/architecture/notifications-and-sound/): the notification pipeline and the offscreen document.
+9. [The Canary Monitor](/architecture/canary-monitor/): how Pullwatch finds out GitHub's DOM changed before users do.
+10. [GitHub Health and Outages](/architecture/github-health/): the hub that maps "what could go wrong with a fetch" to "what the popup says". Children: [List Trust and Suspect Lists](/architecture/github-health/list-trust/) and [Outage Banner and Statuspage](/architecture/github-health/outage-banner/).

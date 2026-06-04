@@ -3,11 +3,11 @@ title: Data Hydration and Storage
 description: chrome.storage.local keys and popup hydration.
 ---
 
-> **Summary.** Pullwatch uses `chrome.storage` as the contract between the popup and the service worker. The background is the sole writer; the popup reads. TanStack Query is seeded from storage **before the first React paint**, and a storage listener keeps it in sync while the popup is open. Zustand holds only UI state that would be awkward to round trip through storage. This page explains why storage is the spine, what lives where, and the exact contract that keeps the popup feeling instant.
+The reason the popup paints with real data the instant you open it is that `chrome.storage` is the contract between it and the service worker, not a network call. The background is the sole writer; the popup reads. TanStack Query is seeded from storage **before the first React paint**, a storage listener keeps it in sync while the popup is open, and Zustand holds only the UI state that would be awkward to round trip through storage. This page lays out why storage is the spine, what lives in each area, and the exact contract that keeps the panel feeling instant.
 
 ---
 
-## Why this page exists
+## Why storage, not messages
 
 A lot of Chrome extensions use `chrome.runtime.sendMessage` to ferry data between the popup and the background. That works, but it has two sharp edges in Manifest V3. Runtime messages require the worker to be awake at the moment you ask, and a message reply is a single point in time that has no built in "and also notify me when this changes later" semantics.
 
@@ -44,17 +44,17 @@ The full inventory. All keys are defined in [extension/common/constants.ts](http
 | `github_authored_prs`            | PRs authored by the viewer.                                             | `PRService` (write)      | Same.                                                                       |
 | `last_fetch_time`                | Timestamp of the last successful fetch.                                 | `PRService`              | Displayed as "updated X ago" in the popup.                                  |
 | `pr_fetch_in_progress`           | Flag that a fetch wave is running.                                      | `EventService`           | Drives the popup's subtle "refreshing" indicator.                           |
-| `parser_pattern_registry`        | Compiled pattern envelope (`patterns`, `version`, `timestamp`).         | `PatternRegistryService` | See [Remote Configuration](./remote-configuration/).                           |
+| `parser_pattern_registry`        | Compiled pattern envelope (`patterns`, `version`, `timestamp`).         | `PatternRegistryService` | See [Remote Configuration](/architecture/remote-configuration/).                           |
 | `parser_breakage`                | Last observed parser failure, for the popup banner.                     | `PRService`              | Cleared on the next successful fetch.                                       |
-| `github_outage`                  | Active outage payload (`detected`, `timestamp`, `lastSeenAt`, `context`, `reason`). Refreshed on repeat outage signals so the popup can age out stale flags after 2 hours. | `HealthStatusService`    | Keeps cached lists visible with an "outage" banner rather than wiping them. The reason discriminator (`transport` / `pr_component_degraded` / `pr_list_churn`) drives the banner copy. See [GitHub Health and Outages](./github-health/). |
-| `github_status_cache`            | Cached Statuspage `summary.json` snapshot (`prComponentStatus`, `globalIndicator`, `fetchedAt`). Two-minute TTL. | `GitHubStatusClient`     | Mirrored by `useGitHubStatusSnapshot` to gate the banner's Statuspage link. See [Outage Banner and Statuspage](./github-health/outage-banner/). |
+| `github_outage`                  | Active outage payload (`detected`, `timestamp`, `lastSeenAt`, `context`, `reason`). Refreshed on repeat outage signals so the popup can age out stale flags after 2 hours. | `HealthStatusService`    | Keeps cached lists visible with an "outage" banner rather than wiping them. The reason discriminator (`transport` / `pr_component_degraded` / `pr_list_churn`) drives the banner copy. See [GitHub Health and Outages](/architecture/github-health/). |
+| `github_status_cache`            | Cached Statuspage `summary.json` snapshot (`prComponentStatus`, `globalIndicator`, `fetchedAt`). Two-minute TTL. | `GitHubStatusClient`     | Mirrored by `useGitHubStatusSnapshot` to gate the banner's Statuspage link. See [Outage Banner and Statuspage](/architecture/github-health/outage-banner/). |
 | `last_untrusted_fetch_at`        | Timestamp of the most recent fetch the trust gate refused to apply.    | `PRService`              | Only `pr_component_degraded` writes this; drives the banner's "Last check (kept your cached list)" subline. Cleared together with `github_outage`. |
-| `pr_list_trust_state`            | Per-list limbo entries, last-trusted/last-suspicious metadata, empty-confirmation streak, recovery baseline marker. | List-trust domain (`PrListTrustStore`) | See [List Trust and Suspect Lists](./github-health/list-trust/). |
+| `pr_list_trust_state`            | Per-list limbo entries, last-trusted/last-suspicious metadata, empty-confirmation streak, recovery baseline marker. | List-trust domain (`PrListTrustStore`) | See [List Trust and Suspect Lists](/architecture/github-health/list-trust/). |
 | `pr_tombstones_v1`               | Bounded per-list log of dropped PR keys with `droppedAtAlarmSeq`.       | `PrTombstoneStore`       | LRU-capped at 200 entries per list. Used to detect resurrection inside the four-alarm window and to signal `pr_list_churn`. |
 | `alarm_seq`                      | Monotonic per-wave counter advanced once per alarm by `EventService`.   | `AlarmSeqClock`          | Anchors the tombstone window to alarm waves rather than wall-clock milliseconds. |
-| `pulls_list_route_hint`          | Which URL shape (`search` or `legacy`) last worked, with a 24 hour TTL. | `GitHubService`          | See [The Parser Waterfall](./parser-waterfall/).                           |
+| `pulls_list_route_hint`          | Which URL shape (`search` or `legacy`) last worked, with a 24 hour TTL. | `GitHubService`          | See [The Parser Waterfall](/architecture/parser-waterfall/).                           |
 | `github_viewer_identity`         | Last known signed in GitHub login.                                      | `PRService`              | Used for account swap detection; a mismatch clears cached lists.            |
-| `has_seen_onboarding`            | First run gate.                                                         | Onboarding hook          | See [Onboarding and Session Gates](./onboarding-and-session-gates/).           |
+| `has_seen_onboarding`            | First run gate.                                                         | Onboarding hook          | See [Onboarding and Session Gates](/architecture/onboarding-and-session-gates/).           |
 | `onboarding_reauth_gate_pending` | "We thought the session was gone, waiting for user to re auth."         | Onboarding hook          | Same.                                                                       |
 | `install_session_check_complete` | Whether the 12 second install time session probe has finished.          | Onboarding hook          | Same.                                                                       |
 | `rate_limit_state`               | `RateLimitService` state (consecutive hits, retry timestamp).           | `RateLimitService`       | Persisted so backoff survives a worker wake.                                |
@@ -170,6 +170,16 @@ Notice how the "first paint with data" step happens before any communication wit
 
 ---
 
+## Identity and account switching
+
+`github_viewer_identity` stores the GitHub login Pullwatch last resolved from the signed-in session. It exists so a change of account is handled cleanly instead of producing nonsense.
+
+On each fetch wave, `PRService` compares the login it just resolved against that stored baseline. When they differ, it treats the wave as an account swap: it clears the route hint (the new account may be on a different `/pulls` route), and it rebaselines the lists for the new viewer rather than diffing the fresh PRs against the previous account's cached list. Diffing across accounts would mark every PR belonging to the new account as "new" and fire a wall of notifications, so the swap path deliberately skips that comparison.
+
+Two ordering rules keep the swap honest. The identity is only written once every list in the wave has finished (`persistResolvedViewerIdentity` runs at `depth === 0`, see [Popup and Background Communication](/architecture/popup-and-background-communication/#the-fetch-in-progress-indicator)), so a half-finished wave cannot record the new login while old lists are still in storage. And if the viewer advanced after only some lists wrote, any list that did not write for the final resolved login is cleared, so storage never pairs `github_viewer_identity` with another account's PR arrays. The popup-facing summary of this behaviour is on [Inside the Popup](/architecture/inside-the-popup/#switching-github-accounts).
+
+---
+
 ## The popup's in memory stores
 
 The popup has two layers of client state and they do different jobs.
@@ -230,6 +240,6 @@ Every popup open creates a fresh React root. That is why the `onChanged` listene
 
 ## See also
 
-- [The Service Worker Lifecycle](./service-worker-lifecycle/): the writer side of this contract, including why `performInitialSetup` never writes PR data and why the rate limit state has to be persisted to survive a wake.
-- [Popup and Background Communication](./popup-and-background-communication/): the small surface of runtime messages Pullwatch does use, and when a message is the right tool (commands) rather than storage (data).
-- [Remote Configuration](./remote-configuration/): the pattern registry storage envelope, why it is validated as a wrapper rather than just by content, and how version `0` in storage is the "defaults were persisted" sentinel.
+- [The Service Worker Lifecycle](/architecture/service-worker-lifecycle/): the writer side of this contract, including why `performInitialSetup` never writes PR data and why the rate limit state has to be persisted to survive a wake.
+- [Popup and Background Communication](/architecture/popup-and-background-communication/): the small surface of runtime messages Pullwatch does use, and when a message is the right tool (commands) rather than storage (data).
+- [Remote Configuration](/architecture/remote-configuration/): the pattern registry storage envelope, why it is validated as a wrapper rather than just by content, and how version `0` in storage is the "defaults were persisted" sentinel.

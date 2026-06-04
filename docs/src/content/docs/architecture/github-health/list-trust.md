@@ -3,13 +3,13 @@ title: List Trust and Suspect Lists
 description: PrListTrustAssessor, empty confirmation, and tombstones.
 ---
 
-> **What this page is.** GitHub can return HTTP 200 with parseable HTML and an incomplete pull request list. List trust is the layer that decides whether a fresh fetch is allowed to replace the stored baseline, and what to do when it is not. This page covers the assessor, the empty-confirmation streak, the merged limbo promoter, the tombstone log, the merged freshness floor, and how those pieces compose into the six-branch dispatcher inside `PRService`.
+GitHub can return HTTP 200 with parseable HTML and still hand back an incomplete pull request list. List trust is the layer that decides whether a fresh fetch is allowed to replace the stored baseline, and what to do when it is not. This page covers the assessor, the empty-confirmation streak, the merged limbo promoter, the tombstone log, the merged freshness floor, and how those pieces compose into the six-branch dispatcher inside `PRService`.
 
 The whole layer lives under [extension/background/domain/pr-list-trust/](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/). It exists between "the parser produced a `PullRequest[]`" and "this is the list the popup will read", and it is the reason a one-tick flake from GitHub does not turn into a notification storm five minutes later.
 
 ---
 
-## Why this page exists
+## The failure mode this prevents
 
 Imagine the popup has eight assigned PRs in storage, all real. GitHub returns 200 OK with HTML the parser is happy with, but only six of those PRs are present in the response. Without a trust gate, `PRService` would persist six PRs as the new baseline. The next tick GitHub returns the original eight; `comparePRs` would see two PRs that are not in `oldPRs`, classify them as `isNew`, and fire two assigned notifications for PRs that have been sitting in the queue for days.
 
@@ -168,7 +168,7 @@ Both `detectAccountSwap` (the primary pre-empt) and the `reset_swap` branch in `
 
 ### `lastSeenAt` refresh on repeat outage signals
 
-A wave that re-asserts the same outage reason does not produce a new banner; `HealthStatusService.signalGitHubOutage` calls `refreshGitHubOutageLastSeen` instead. The popup's stale-flag expiry (see [Outage Banner and Statuspage](./outage-banner/)) keys on `lastSeenAt`, so this refresh is what keeps a genuinely ongoing outage from ageing out.
+A wave that re-asserts the same outage reason does not produce a new banner; `HealthStatusService.signalGitHubOutage` calls `refreshGitHubOutageLastSeen` instead. The popup's stale-flag expiry (see [Outage Banner and Statuspage](/architecture/github-health/outage-banner/)) keys on `lastSeenAt`, so this refresh is what keeps a genuinely ongoing outage from ageing out.
 
 ### Wave suppression survives one full wave at most
 
@@ -182,7 +182,7 @@ The `trusted_operational_shrink` branch is the freshness-wins side of the merged
 
 ## See also
 
-- [GitHub Health and Outages](./): the hub. The `GitHubOutageReason` taxonomy and the wave-suppression rule for `pr_list_churn`.
-- [Outage Banner and Statuspage](./outage-banner/): the popup-side contract. How `pr_component_degraded` and `pr_list_churn` produce different banner copy and different Statuspage-link visibility.
-- [The Parser Waterfall](../parser-waterfall/): the layer below this one. The parser produces the `PullRequest[]` that the assessor scores.
-- [Notifications and Sound](../notifications-and-sound/): the gates this layer feeds. Most of the suppression rules in that page point at this one.
+- [GitHub Health and Outages](/architecture/github-health/): the hub. The `GitHubOutageReason` taxonomy and the wave-suppression rule for `pr_list_churn`.
+- [Outage Banner and Statuspage](/architecture/github-health/outage-banner/): the popup-side contract. How `pr_component_degraded` and `pr_list_churn` produce different banner copy and different Statuspage-link visibility.
+- [The Parser Waterfall](/architecture/parser-waterfall/): the layer below this one. The parser produces the `PullRequest[]` that the assessor scores.
+- [Notifications and Sound](/architecture/notifications-and-sound/): the gates this layer feeds. Most of the suppression rules in that page point at this one.

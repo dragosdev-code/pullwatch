@@ -3,11 +3,11 @@ title: The Parser Waterfall
 description: Three-stage parser gauntlet and route fallback.
 ---
 
-> **Summary.** GitHub ships two different "all my pull requests" experiences (a new SSR dashboard and the classic HTML page), and it rolls them out unevenly per user, per repository, per feature flag. Hardcoding selectors against one of them would break the other. Pullwatch solves this with a three stage gauntlet: try the embedded SSR JSON first, fall back to the new experience HTML, then fall back to the classic legacy HTML. A separate **route hint** remembers which URL shape (`/pulls/search` vs `/pulls?q=...`) last worked, so steady state polling only issues one request per list.
+> **What you'll learn.** Why Pullwatch can keep reading your pull requests even when GitHub quietly changes its page markup. GitHub ships two different "all my pull requests" experiences (a new SSR dashboard and the classic HTML page) and rolls them out unevenly per user, per repository, per feature flag, so hardcoding selectors against one would break the other. The answer is a three stage gauntlet (embedded SSR JSON first, then new experience HTML, then classic legacy HTML) plus a **route hint** that remembers which URL shape last worked so steady state polling only issues one request per list.
 
 ---
 
-## Why this page exists
+## Scraping a moving target
 
 Scraping GitHub is a moving target. Most weeks nothing changes; some weeks a class name flips, a data attribute moves, or a whole new `/pulls/search` route appears. If Pullwatch had one parser wired to one URL, a single GitHub change would mean a user facing breakage and a scramble for a new Chrome Web Store release.
 
@@ -16,6 +16,8 @@ The waterfall makes that story boring. When the page shape changes, one of the t
 ---
 
 ## The gauntlet in one diagram
+
+The flowchart below shows both fallback mechanisms at once, so it helps to read it as two nested loops. The vertical spine is the parser gauntlet: each stage either returns PR rows or hands down to the next. The branch at the bottom is the route fallback: only when all three parsers fail (a thrown `ParserBreakageError`) does the service retry the other URL shape and update the route hint. Follow the "match found" exits first to see the happy path, then trace the failure edges down the spine.
 
 ```mermaid
 flowchart TD
@@ -90,9 +92,9 @@ export function parsePullsListHTML(
 }
 ```
 
-The `observer` parameter is how the [canary suite](./canary-monitor/) watches the waterfall in CI. Production calls the function with no observer, so the gauntlet has zero runtime cost when nothing is listening. The canary uses the hooks to emit markers like `CANARY_EMBEDDED_JSON_DRIFT` and `CANARY_NEW_HTML_FALLBACK_DEGRADED` whenever an earlier stage declines and a later one takes over.
+The `observer` parameter is how the [canary suite](/architecture/canary-monitor/) watches the waterfall in CI. Production calls the function with no observer, so the gauntlet has zero runtime cost when nothing is listening. The canary uses the hooks to emit markers like `CANARY_EMBEDDED_JSON_DRIFT` and `CANARY_NEW_HTML_FALLBACK_DEGRADED` whenever an earlier stage declines and a later one takes over.
 
-Every selector and every regex referenced by stages 2 and 3 comes from the pattern registry, which means every one of them can be patched in production via [Remote Configuration](./remote-configuration/) without releasing a new extension build.
+Every selector and every regex referenced by stages 2 and 3 comes from the pattern registry, which means every one of them can be patched in production via [Remote Configuration](/architecture/remote-configuration/) without releasing a new extension build.
 
 ---
 
@@ -163,15 +165,15 @@ Stage 1 returns `null`, stage 2 returns `null`, stage 3 throws `ParserBreakageEr
 
 ### GitHub is down, not changed
 
-HTTP 5xx and Cloudflare edge codes (520 through 530) are classified as [GitHubOutageError](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/errors.ts), not `ParserBreakageError`. Outage errors skip the route fallback because the other URL would hit the same infrastructure problem, and they intentionally preserve the cached PR lists in the popup with an "outage" banner instead of the misleading "parser broken" banner. Transient cases are also retried once after a 3 second delay, so the very common "blip" does not surface an error at all. Full classification, including the network-level failures that map to `GitHubOutageError`, lives on [GitHub Health and Outages](./github-health/).
+HTTP 5xx and Cloudflare edge codes (520 through 530) are classified as [GitHubOutageError](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/errors.ts), not `ParserBreakageError`. Outage errors skip the route fallback because the other URL would hit the same infrastructure problem, and they intentionally preserve the cached PR lists in the popup with an "outage" banner instead of the misleading "parser broken" banner. Transient cases are also retried once after a 3 second delay, so the very common "blip" does not surface an error at all. Full classification, including the network-level failures that map to `GitHubOutageError`, lives on [GitHub Health and Outages](/architecture/github-health/).
 
 ### 200 OK, parseable HTML, incomplete list
 
-The waterfall's job is "produce a `PullRequest[]` from the document". When GitHub returns 200 OK with HTML the parser is happy with, but the list is incomplete (a partial drop, or empty when storage held PRs), the parser cannot tell. The decision belongs to the layer above. [List Trust and Suspect Lists](./github-health/list-trust/) describes the assessor and the empty-confirmation streak that catch this case before it can shrink storage and produce a notification storm on recovery.
+The waterfall's job is "produce a `PullRequest[]` from the document". When GitHub returns 200 OK with HTML the parser is happy with, but the list is incomplete (a partial drop, or empty when storage held PRs), the parser cannot tell. The decision belongs to the layer above. [List Trust and Suspect Lists](/architecture/github-health/list-trust/) describes the assessor and the empty-confirmation streak that catch this case before it can shrink storage and produce a notification storm on recovery.
 
 ### The session is expired, but the HTTP status is 200
 
-GitHub sometimes returns a 200 page with a logged out shell instead of a 401. `fetchGitHubData` handles this with [isGitHubLoggedOutHtmlShell](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/github-html-session.ts), which inspects the HTML metadata (`user-login`, `is_logged_out_page`) before the gauntlet runs. If it looks logged out, the fetch throws a session error and [Onboarding and Session Gates](./onboarding-and-session-gates/) takes over.
+GitHub sometimes returns a 200 page with a logged out shell instead of a 401. `fetchGitHubData` handles this with [isGitHubLoggedOutHtmlShell](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/github-html-session.ts), which inspects the HTML metadata (`user-login`, `is_logged_out_page`) before the gauntlet runs. If it looks logged out, the fetch throws a session error and [Onboarding and Session Gates](/architecture/onboarding-and-session-gates/) takes over.
 
 ### A regex has the global flag and an old `lastIndex`
 
@@ -183,13 +185,13 @@ If you sign out of GitHub and sign in as someone else, the cached PR lists would
 
 ### Legacy titles with inline HTML (`<code>`, etc.)
 
-GitHub sometimes renders PR titles as markup inside the `markdown-title` link, for example `ABC-123: <code>WidgetLoader</code> as shared module`. The new-experience parser already captures inner HTML and strips tags via [`stripHtmlTags`](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/utils/github-parser-utils.ts). Legacy `prLink` patterns must use a non-greedy `([\s\S]*?)` capture before `</a>` and the same strip step. An older `([^<]+)</a>` pattern matches only plain text and drops the entire row when a tag appears in the title. JSON harvest uses plain `title` strings and is unaffected. See [Remote Configuration](./remote-configuration/) for how bundled and remote pattern versions interact when you test a fix locally.
+GitHub sometimes renders PR titles as markup inside the `markdown-title` link, for example `ABC-123: <code>WidgetLoader</code> as shared module`. The new-experience parser already captures inner HTML and strips tags via [`stripHtmlTags`](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/utils/github-parser-utils.ts). Legacy `prLink` patterns must use a non-greedy `([\s\S]*?)` capture before `</a>` and the same strip step. An older `([^<]+)</a>` pattern matches only plain text and drops the entire row when a tag appears in the title. JSON harvest uses plain `title` strings and is unaffected. See [Remote Configuration](/architecture/remote-configuration/) for how bundled and remote pattern versions interact when you test a fix locally.
 
 ---
 
 ## See also
 
-- [Remote Configuration](./remote-configuration/): how the patterns that drive stages 2 and 3 can be patched in live production.
-- [The Canary Monitor](./canary-monitor/): the hourly DOM change watcher that uses the waterfall's `observer` hook to catch breakages before users do.
-- [GitHub Health and Outages](./github-health/): the other side of the "is this an outage or a DOM change?" fork, including the full transport classification table and the recovery path.
-- [The Service Worker Lifecycle](./service-worker-lifecycle/): where `PRService` lives, how the TTL cache and inflight dedup wrap these fetches, and why the route hint has to be persisted to survive a wake.
+- [Remote Configuration](/architecture/remote-configuration/): how the patterns that drive stages 2 and 3 can be patched in live production.
+- [The Canary Monitor](/architecture/canary-monitor/): the hourly DOM change watcher that uses the waterfall's `observer` hook to catch breakages before users do.
+- [GitHub Health and Outages](/architecture/github-health/): the other side of the "is this an outage or a DOM change?" fork, including the full transport classification table and the recovery path.
+- [The Service Worker Lifecycle](/architecture/service-worker-lifecycle/): where `PRService` lives, how the TTL cache and inflight dedup wrap these fetches, and why the route hint has to be persisted to survive a wake.

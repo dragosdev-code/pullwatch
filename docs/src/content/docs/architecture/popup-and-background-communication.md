@@ -3,11 +3,11 @@ title: Popup and Background Communication
 description: Runtime messages, TanStack Query, and storage listeners.
 ---
 
-> **Summary.** The popup talks to the service worker in two very different ways depending on what it wants. To **read** PR data it reads `chrome.storage.local` directly and subscribes to `chrome.storage.onChanged`; no runtime message is ever needed to see the lists. To **ask the worker to do something** (fetch fresh data, save settings, play a sound, fire a dev test notification), the popup sends a single runtime message that a `Map` based dispatch table inside `EventService` routes to exactly one handler. Data flows through storage, commands flow through messages, and the two channels never swap jobs.
+The popup talks to the service worker in two very different ways depending on what it wants, and the whole page rests on keeping them apart. To **read** PR data it reads `chrome.storage.local` directly and subscribes to `chrome.storage.onChanged`; no runtime message is ever needed to see the lists. To **ask the worker to do something** (fetch fresh data, save settings, play a sound, fire a dev test notification), the popup sends a single runtime message that a `Map` based dispatch table inside `EventService` routes to exactly one handler. Data flows through storage, commands flow through messages, and the two channels never swap jobs.
 
 ---
 
-## Why this page exists
+## The rule worth memorising
 
 The rule worth memorising before reading any communication code in Pullwatch is this: **storage is the query channel, messages are the command channel.** A new reader who expects "popup asks the worker for the PR list, worker responds with data" will try to wire that up, hit two problems at once (worker teardown, `sendResponse` reliability), and end up fighting the platform.
 
@@ -16,6 +16,8 @@ The design avoids that fight entirely. The popup never waits for a reply to get 
 ---
 
 ## Commands vs queries at a glance
+
+The diagram splits the popup's two channels so you can see they never cross. Read the left half as the **read** path (the popup gets state by reading `chrome.storage.local` and re-rendering on `onChanged`) and the right half as the **command** path (the popup sends a message, the worker does the side effect and writes the result back to storage). The thing to notice is that the command reply never carries PR data; it only carries an acknowledgement, and the fresh data arrives back through the left half.
 
 ```mermaid
 flowchart LR
@@ -162,6 +164,8 @@ The same wrapper is used on the alarm, install, and startup paths, so install ti
 
 ## Manual refresh end to end
 
+Clicking Refresh is the clearest example of the two channels working together, so it is worth a sequence of its own. Read it top to bottom: the popup fires three independent commands (one per list), the worker fans them out to GitHub in parallel under a single in-progress flag, and each result lands in storage. The detail to watch is the bottom third, where the popup re-renders from the `onChanged` events rather than from the command acks, which arrive separately and carry no list data.
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -192,7 +196,23 @@ sequenceDiagram
     SW-->>Popup: success acks (one per message)
 ```
 
-Notice where the data flows. The popup never consumes `sendResponse` for the PR list itself; the acks are just "done/failed." The actual re render is driven by the `onChanged` event on the storage key, handled by `use-pr-lists-storage-sync` on the popup side. See [Data Hydration and Storage](./data-hydration-and-storage/) for the hydration half of this pipeline.
+Notice where the data flows. The popup never consumes `sendResponse` for the PR list itself; the acks are just "done/failed." The actual re render is driven by the `onChanged` event on the storage key, handled by `use-pr-lists-storage-sync` on the popup side. See [Data Hydration and Storage](/architecture/data-hydration-and-storage/) for the hydration half of this pipeline.
+
+---
+
+## What the refresh button shows
+
+The refresh button is the user-facing end of everything above, and it never drives a fetch on its own; it only reflects two storage signals (`STORAGE_KEY_LAST_FETCH` and `STORAGE_KEY_PR_FETCH_IN_PROGRESS`) plus the session throttle. A manual refresh is allowed at most once every `MIN_REFRESH_INTERVAL_MS` (30 seconds), enforced by `STORAGE_KEY_LAST_MANUAL_REFRESH_AT` in `chrome.storage.session`, so a click inside that window is a no-op. [deriveRefreshDisplay](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/refresh-button/utils/derive-refresh-display.ts) turns those signals into one of five states, each with its own ring colour and tooltip:
+
+| State | What triggered it | Ring | Tooltip (two lines) |
+| --- | --- | --- | --- |
+| **Ready** | Idle, refresh allowed | None | `Refresh "to review", "authored" & "merged" PRs` / last fetch duration, or `Max once per 30s` |
+| **Fetching** | Your manual refresh is in flight | Blue, fills with progress | `Refreshing all PR lists…` / `{N}s elapsed` |
+| **Cooldown** | A refresh just finished, the 30s window is still open | Warning (amber), counts down | `Manual refresh on cooldown` / `{N}s until available` |
+| **Throttled** | You clicked during the cooldown window | Warning, brief | `Did not refetch (rate limit)` / `Try again in {N}s` |
+| **Background** | An alarm-driven sync is running (not your click) | None (disabled) | `Auto-refresh in progress` / `Manual refresh paused while background sync runs` |
+
+The "Background" state is the subtle one. The worker mirrors `pr_fetch_in_progress = true` for both alarm and manual fetches, so the button distinguishes "a fetch I started" from "a fetch the alarm started" by also checking whether a manual mutation is in flight. Only the alarm-only case drops the ring and shows the paused tooltip, so a manual refresh never gets masked by a background sync that happens to overlap it.
 
 ---
 
@@ -263,6 +283,6 @@ The top level `.catch` inside `handleMessage` catches any rejection the handler 
 
 ## See also
 
-- [Data Hydration and Storage](./data-hydration-and-storage/): the other half of this page. How `chrome.storage.onChanged` events become TanStack Query updates, and why the popup paints with real data on frame one.
-- [The Service Worker Lifecycle](./service-worker-lifecycle/): why messages have to survive worker teardown, and why `async` message handlers keep the worker alive.
-- [Notifications and Sound](./notifications-and-sound/): how `EVENT_PLAY_SOUND` and `PREVIEW_SOUND_ACTION.*` messages cross from the worker to the offscreen document.
+- [Data Hydration and Storage](/architecture/data-hydration-and-storage/): the other half of this page. How `chrome.storage.onChanged` events become TanStack Query updates, and why the popup paints with real data on frame one.
+- [The Service Worker Lifecycle](/architecture/service-worker-lifecycle/): why messages have to survive worker teardown, and why `async` message handlers keep the worker alive.
+- [Notifications and Sound](/architecture/notifications-and-sound/): how `EVENT_PLAY_SOUND` and `PREVIEW_SOUND_ACTION.*` messages cross from the worker to the offscreen document.

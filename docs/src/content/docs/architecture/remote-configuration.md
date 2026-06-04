@@ -4,11 +4,11 @@ description: Bundled vs remote patterns.json and validation.
 ---
 
 
-> **Summary.** Every regex and selector that the parser waterfall relies on lives in a pattern registry. A bundled default set ships inside the extension, and a remote `patterns.json` file hosted in a public GitHub repo can override it at runtime. The remote fetch runs at most every 6 hours, is validated with Valibot, each regex is compiled inside a guard, and any failure falls back cleanly to the previously known good set. This is how a DOM change on GitHub can be patched live, without releasing a new extension build.
+Every regex and selector the parser waterfall relies on lives in a pattern registry, and that registry can be updated without shipping a new extension build. A bundled default set travels inside the extension; a remote `patterns.json` file hosted in a public GitHub repo can override it at runtime. The remote fetch runs at most every 6 hours, is validated with Valibot, has each regex compiled inside a guard, and falls back cleanly to the last known good set on any failure. This page is how a DOM change on GitHub gets patched live, with none of the gates ever leaving users worse off than before the fetch.
 
 ---
 
-## Why this page exists
+## Faster than a Web Store review cycle
 
 GitHub's DOM can change faster than a Chrome Web Store review cycle. If the only way to fix a broken selector was to publish a new extension version, every small DOM tweak would leave users with empty lists for hours or days.
 
@@ -54,6 +54,8 @@ The `pr-live-config` repo has two branches worth knowing about:
 ---
 
 ## The full update flow
+
+The sequence below is one refresh of the pattern registry, from the worker deciding the cache is stale to either swapping in new patterns or keeping the old ones. Read it top to bottom as a single guarded pipeline: fetch, then validate, then version-gate, then compile, and only a clean pass at every step swaps the live registry. The point to watch is that each gate fails closed; any rejection leaves the previously compiled patterns in place rather than blanking them.
 
 ```mermaid
 sequenceDiagram
@@ -247,6 +249,6 @@ No network means no remote fetch means no update. The service uses whatever is i
 
 ## See also
 
-- [The Parser Waterfall](./parser-waterfall/): the consumer of this registry. Every selector and regex the parsers use comes from here.
-- [The Canary Monitor](./canary-monitor/): the operational system that detects when a pattern update is needed, and how fixes flow from staging to `main` to live users.
-- [Data Hydration and Storage](./data-hydration-and-storage/): how the persisted `STORAGE_KEY_PATTERN_REGISTRY` envelope fits into the rest of the extension's storage story.
+- [The Parser Waterfall](/architecture/parser-waterfall/): the consumer of this registry. Every selector and regex the parsers use comes from here.
+- [The Canary Monitor](/architecture/canary-monitor/): the operational system that detects when a pattern update is needed, and how fixes flow from staging to `main` to live users.
+- [Data Hydration and Storage](/architecture/data-hydration-and-storage/): how the persisted `STORAGE_KEY_PATTERN_REGISTRY` envelope fits into the rest of the extension's storage story.

@@ -3,11 +3,11 @@ title: The Canary Monitor
 description: Tier 1/2 parser checks and Discord alerts.
 ---
 
-> **Summary.** Pullwatch collects zero telemetry. Without an error pipeline, a DOM change on GitHub would reach users before it reached the maintainer. The canary closes that loop by running the real parser against the real GitHub site every hour in CI. Two tiers (public and authenticated), two chapters inside the authenticated tier (legacy `/pulls?q=...` and new `/pulls/search?q=...`), and a Discord webhook that classifies every failure into one of four buckets: critical JSON drift, degraded HTML fallback, generic DOM change, or GitHub outage. When a canary alert fires, the runbook's path is short: get a fresh HTML sample, fix the regex, push it to the `pr-live-config` staging branch, promote to `main`, and live users recover on the next 6 hour refresh.
+> **Why this exists.** Pullwatch collects zero telemetry, so without a separate watchdog a DOM change on GitHub would reach users before it reached the maintainer. The canary closes that loop by running the real parser against the real GitHub site every hour in CI. It has two tiers (public and authenticated), two chapters inside the authenticated tier (legacy `/pulls?q=...` and new `/pulls/search?q=...`), and a Discord webhook that sorts every failure into one of four buckets: critical JSON drift, degraded HTML fallback, generic DOM change, or GitHub outage. When an alert fires, the runbook path is short: grab a fresh HTML sample, fix the regex, push it to the `pr-live-config` staging branch, promote to `main`, and live users recover on the next 6 hour refresh.
 
 ---
 
-## Why this page exists
+## The assumption everything else depends on
 
 The parser waterfall and the remote config flow both assume the maintainer finds out when GitHub ships a DOM change. Without that assumption, a single selector rename would silently produce empty lists for every user, the maintainer would not learn until a bug report arrived, and by then the window for a hot fix would be over.
 
@@ -16,6 +16,8 @@ The canary exists so that "GitHub changed something" becomes a timed, routed, ac
 ---
 
 ## The detect to patch loop
+
+The flowchart below is the whole canary, from the hourly cron to live users recovering. Read it left to right as a pipeline: the cron fans out into the two test tiers, an orchestrator classifies whatever they find, and a failure routes through Discord into the human fix path. The part to notice is that the loop only closes when a patch promoted to `main` reaches users on the next refresh; everything before that is detection and routing.
 
 ```mermaid
 flowchart TD
@@ -93,7 +95,7 @@ Hourly is the right cadence because the hot fix path (staging → smoke → main
 
 ## Classifying the failure
 
-A canary failure is not always a DOM change. [.github/workflows/canary-parser-test.yml](../.github/workflows/canary-parser-test.yml) runs a classification ladder after the test job completes:
+A canary failure is not always a DOM change. [.github/workflows/canary-parser-test.yml](https://github.com/dragosdev-code/pullwatch/blob/main/.github/workflows/canary-parser-test.yml) runs a classification ladder after the test job completes:
 
 1. **`CANARY_EMBEDDED_JSON_DRIFT` in the log → CRITICAL.** The JSON harvester returned `null` on a page that looks like the new dashboard. This is the "primary data path for the new experience is broken" alert. Discord gets a red embed with `@here`, and the action item is to edit `GitHubEmbeddedJsonPullHarvest.ts` (JSON traversal), not necessarily a pattern.
 2. **GitHub status API says not `none` → OUTAGE.** The status endpoint reports `minor`, `major`, or `critical`. The alert is yellow, not red; the action is "wait for recovery, the canary retries itself on the next hourly tick."
@@ -126,7 +128,7 @@ Once the Discord alert lands, the rest is the [DOM_CHANGE_RUNBOOK.md](https://gi
 5. **Merge staging to `main`.** The raw `main` URL is served immediately; no deploy step.
 6. **Also edit `extension/common/default-patterns.ts`** and run the canary locally (`npm run canary:test`) to confirm the fix works against live GitHub. The extension ships both: the remote config is the hot fix for current users, and the bundled defaults are the floor for fresh installs.
 
-The loop closes on its own. Within 6 hours, every live install refreshes its pattern registry from the new `patterns.json` (see [Remote Configuration](./remote-configuration/)), the next fetch parses successfully, `HealthStatusService` clears the breakage flag, and the "parser breakage" banner disappears from the popup.
+The loop closes on its own. Within 6 hours, every live install refreshes its pattern registry from the new `patterns.json` (see [Remote Configuration](/architecture/remote-configuration/)), the next fetch parses successfully, `HealthStatusService` clears the breakage flag, and the "parser breakage" banner disappears from the popup.
 
 ---
 
@@ -150,11 +152,11 @@ GitHub sometimes demands an OTP code sent to the bot's email. The canary's Gmail
 
 ### A cached Playwright session hits "Page not found" on global `/pulls`
 
-[getPageHTML in canary/utils/github-session.ts](https://github.com/dragosdev-code/pullwatch/blob/main/canary/utils/github-session.ts) is **self-healing** for the usual multi-account routing flake: it classifies the HTML shell, and if GitHub served a global-pulls 404 while the context is still logged in, it runs **`activateAccountForRouting`** (select the real `/switch_account` row, then probe `/pulls`) with short backoff, then **rewrites `storageState`** when recovery succeeds so the **next** CI run inherits good cookies—no manual deletion of `playwright-state-*.json` required for that case. Fresh logins already activate before the first save. Bounded attempts avoid spinning forever; a genuinely bad session surfaces as login or `Account activation failed` (see [DOM_CHANGE_RUNBOOK.md § 404 after fresh login](https://github.com/dragosdev-code/pullwatch/blob/main/canary/DOM_CHANGE_RUNBOOK.md#404-after-fresh-login-multi-account-routing)).
+[getPageHTML in canary/utils/github-session.ts](https://github.com/dragosdev-code/pullwatch/blob/main/canary/utils/github-session.ts) is **self-healing** for the usual multi-account routing flake: it classifies the HTML shell, and if GitHub served a global-pulls 404 while the context is still logged in, it runs **`activateAccountForRouting`** (select the real `/switch_account` row, then probe `/pulls`) with short backoff, then **rewrites `storageState`** when recovery succeeds so the **next** CI run inherits good cookies, with no manual deletion of `playwright-state-*.json` required for that case. Fresh logins already activate before the first save. Bounded attempts avoid spinning forever; a genuinely bad session surfaces as login or `Account activation failed` (see [DOM_CHANGE_RUNBOOK.md § 404 after fresh login](https://github.com/dragosdev-code/pullwatch/blob/main/canary/DOM_CHANGE_RUNBOOK.md#404-after-fresh-login-multi-account-routing)).
 
 ### Same upstream, opposite default
 
-Both the canary and the extension consult `https://www.githubstatus.com/api/v2/`, but they fail in opposite directions. [canary/utils/github-status.ts](https://github.com/dragosdev-code/pullwatch/blob/main/canary/utils/github-status.ts) is a boolean `isGitHubDegraded()` that fails CLOSED to `false`, so a flaky status endpoint cannot mask a real DOM-change alert. The extension's [GitHubStatusClient](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/github-status-client.ts) returns a full snapshot and fails OPEN to `'unknown'`, so a flaky status endpoint cannot silently *suppress* legitimate notifications by masking a healthy PR fetch as degraded. Same upstream, opposite default for the opposite reason. The full popup-side contract is on [Outage Banner and Statuspage](./github-health/outage-banner/); the role of `summary.json` in the integrity layer is on [List Trust and Suspect Lists](./github-health/list-trust/).
+Both the canary and the extension consult `https://www.githubstatus.com/api/v2/`, but they fail in opposite directions. [canary/utils/github-status.ts](https://github.com/dragosdev-code/pullwatch/blob/main/canary/utils/github-status.ts) is a boolean `isGitHubDegraded()` that fails CLOSED to `false`, so a flaky status endpoint cannot mask a real DOM-change alert. The extension's [GitHubStatusClient](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/github-status-client.ts) returns a full snapshot and fails OPEN to `'unknown'`, so a flaky status endpoint cannot silently *suppress* legitimate notifications by masking a healthy PR fetch as degraded. Same upstream, opposite default for the opposite reason. The full popup-side contract is on [Outage Banner and Statuspage](/architecture/github-health/outage-banner/); the role of `summary.json` in the integrity layer is on [List Trust and Suspect Lists](/architecture/github-health/list-trust/).
 
 ### The hosted `patterns.json` is unreachable during the fix
 
@@ -164,7 +166,7 @@ The production smoke test (`test:remote-patterns`) would fail even though the lo
 
 ## See also
 
-- [The Parser Waterfall](./parser-waterfall/): the production code the canary exercises end to end. Every canary assertion maps to a stage of the waterfall.
-- [Remote Configuration](./remote-configuration/): the delivery system the fix path flows through. A canary alert becomes a commit to `pr-live-config` and reaches users on the next 6 hour refresh.
-- [GitHub Health and Outages](./github-health/): the extension-side counterpart to the canary's status check, plus the full reason taxonomy that the popup banner branches on.
+- [The Parser Waterfall](/architecture/parser-waterfall/): the production code the canary exercises end to end. Every canary assertion maps to a stage of the waterfall.
+- [Remote Configuration](/architecture/remote-configuration/): the delivery system the fix path flows through. A canary alert becomes a commit to `pr-live-config` and reaches users on the next 6 hour refresh.
+- [GitHub Health and Outages](/architecture/github-health/): the extension-side counterpart to the canary's status check, plus the full reason taxonomy that the popup banner branches on.
 - [DOM_CHANGE_RUNBOOK.md](https://github.com/dragosdev-code/pullwatch/blob/main/canary/DOM_CHANGE_RUNBOOK.md): the full runbook the on call reads when an alert fires; this wiki page is its narrative companion.

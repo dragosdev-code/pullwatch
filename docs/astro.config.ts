@@ -1,8 +1,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import { starlightBasePath } from 'starlight-base-path';
 import mermaid from 'astro-mermaid';
-import react from '@astrojs/react';
-import mdx from '@astrojs/mdx';
 import tailwindcss from '@tailwindcss/vite';
 
 import { pullwatchMermaidConfig } from './mermaid.config';
@@ -30,6 +29,8 @@ export default defineConfig({
     }),
 
     starlight({
+      plugins: [starlightBasePath()],
+
       title: 'Pullwatch',
 
       description:
@@ -112,6 +113,8 @@ export default defineConfig({
 
             'architecture/popup-and-background-communication',
 
+            'architecture/inside-the-popup',
+
             'architecture/onboarding-and-session-gates',
 
             'architecture/notifications-and-sound',
@@ -139,9 +142,5 @@ export default defineConfig({
         },
       ],
     }),
-
-    react(),
-
-    mdx(),
   ],
 });

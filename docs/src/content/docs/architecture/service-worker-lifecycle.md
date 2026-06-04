@@ -3,11 +3,11 @@ title: The Service Worker Lifecycle
 description: Wake, init, alarm, and teardown of the MV3 worker.
 ---
 
-> **Summary.** Manifest V3 service workers are not long running processes. Chrome tears them down after about 30 seconds of idle time and brings them back on demand. Pullwatch survives this by registering listeners synchronously, gating every handler behind a shared init promise, and keeping every piece of state that must outlive a wake inside `chrome.storage`. This page explains the constraint, the code pattern that handles it, and the three services (`AlarmService`, `PRService`, `RateLimitService`) whose design is dictated by it.
+> **The constraint.** Manifest V3 service workers are not long running processes. Chrome tears them down after about 30 seconds of idle time and brings them back on demand, with no memory of the last wake. Pullwatch survives this by registering listeners synchronously, gating every handler behind a shared init promise, and keeping every piece of state that must outlive a wake inside `chrome.storage`. This page explains the constraint, the code pattern that handles it, and the three services (`AlarmService`, `PRService`, `RateLimitService`) whose design is dictated by it.
 
 ---
 
-## Why this page exists
+## The surprise: background code that isn't always running
 
 If you have not shipped an MV3 extension before, the most surprising thing about the platform is that your background code is not always running. It used to be. The older "persistent background page" in MV2 kept a full document alive for the lifetime of the browser. MV3 replaced that with a service worker, and service workers are **ephemeral** by design.
 
@@ -16,6 +16,8 @@ That single change reshapes how you write code. Global variables do not persist.
 ---
 
 ## The MV3 constraint in one picture
+
+The sequence below is one full life of the worker: torn down, woken by an alarm, initialised from scratch, and torn down again. Read it top to bottom as a single wake cycle. The two moments that define the whole pattern are the `par` block, where listeners are registered synchronously before any `await`, and the `await initPromise` line, where the handler that woke the worker waits for setup to finish before it touches GitHub. Everything else on the page is detail hung off those two beats.
 
 ```mermaid
 sequenceDiagram
@@ -179,11 +181,11 @@ Two things to notice. The backoff is capped at 30 minutes, so a persistent throt
 
 ### HealthStatusService: in-memory mirror, persisted flags
 
-[HealthStatusService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/HealthStatusService.ts) holds the parser-breakage and GitHub-outage flags in memory (`parserBroken`, `githubOutage`) and uses them to dedupe repeated signals. Without rehydration on every wake, a real fault after a wake would skip the storage write because the mirror still said "already signalled". `initialize()` reads both flags back from `chrome.storage.local` so the dedupe contract holds across cold starts. The full flag lifecycle, including how `lastSeenAt` is refreshed on repeat hits and why `clearGitHubOutage` also drops `STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT`, lives on [GitHub Health and Outages](./github-health/).
+[HealthStatusService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/HealthStatusService.ts) holds the parser-breakage and GitHub-outage flags in memory (`parserBroken`, `githubOutage`) and uses them to dedupe repeated signals. Without rehydration on every wake, a real fault after a wake would skip the storage write because the mirror still said "already signalled". `initialize()` reads both flags back from `chrome.storage.local` so the dedupe contract holds across cold starts. The full flag lifecycle, including how `lastSeenAt` is refreshed on repeat hits and why `clearGitHubOutage` also drops `STORAGE_KEY_LAST_UNTRUSTED_FETCH_AT`, lives on [GitHub Health and Outages](/architecture/github-health/).
 
 ### AlarmSeqClock: alarm-anchored counter
 
-[AlarmSeqClock.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/AlarmSeqClock.ts) is a monotonic counter persisted under `STORAGE_KEY_ALARM_SEQ`, advanced exactly once per completed alarm wave by [EventService.handleAlarm](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts) (after every list has finished writing). Manual refreshes deliberately do not advance the clock, otherwise a user mashing the refresh button would expire `PrTombstoneStore` entries early and miss flapping that the four-alarm window was set up to catch. The counter is read by `applyTombstoneFilter` to decide what is "still inside the window" on the next wave; see [List Trust and Suspect Lists](./github-health/list-trust/) for how the window math works in practice.
+[AlarmSeqClock.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/pr-list-trust/AlarmSeqClock.ts) is a monotonic counter persisted under `STORAGE_KEY_ALARM_SEQ`, advanced exactly once per completed alarm wave by [EventService.handleAlarm](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts) (after every list has finished writing). Manual refreshes deliberately do not advance the clock, otherwise a user mashing the refresh button would expire `PrTombstoneStore` entries early and miss flapping that the four-alarm window was set up to catch. The counter is read by `applyTombstoneFilter` to decide what is "still inside the window" on the next wave; see [List Trust and Suspect Lists](/architecture/github-health/list-trust/) for how the window math works in practice.
 
 ---
 
@@ -191,7 +193,7 @@ Two things to notice. The backoff is capped at 30 minutes, so a persistent throt
 
 ### The popup opens while the worker is cold
 
-When you click the Pullwatch icon, Chrome sends a lifecycle signal to the worker (via the implicit runtime message channel from the popup). If the worker was torn down, Chrome wakes it, `main.ts` runs, and the message listener awaits `initPromise` before responding. Meanwhile the popup is already rendering from `chrome.storage.local`, which has never stopped existing. The popup does not wait for the worker; it only waits for the worker when the user clicks **Refresh**. See [Data Hydration and Storage](./data-hydration-and-storage/) for the full cold open path.
+When you click the Pullwatch icon, Chrome sends a lifecycle signal to the worker (via the implicit runtime message channel from the popup). If the worker was torn down, Chrome wakes it, `main.ts` runs, and the message listener awaits `initPromise` before responding. Meanwhile the popup is already rendering from `chrome.storage.local`, which has never stopped existing. The popup does not wait for the worker; it only waits for the worker when the user clicks **Refresh**. See [Data Hydration and Storage](/architecture/data-hydration-and-storage/) for the full cold open path.
 
 ### In memory caches must be re seeded from storage on every wake
 
@@ -209,7 +211,7 @@ All the `chrome.*` listeners in `main.ts` are `async` and they `await` the event
 
 ## See also
 
-- [Architecture Overview](./overview/): where this page fits into the broader system.
-- [Popup and Background Communication](./popup-and-background-communication/): how the popup talks to the worker, including why data flows through storage instead of message replies.
-- [GitHub Health and Outages](./github-health/): the hub for `HealthStatusService`'s flags and the integrity layer that anchors `AlarmSeqClock`.
-- [Data Hydration and Storage](./data-hydration-and-storage/): what survives a wake, and how the popup reads it back in.
+- [Architecture Overview](/architecture/overview/): where this page fits into the broader system.
+- [Popup and Background Communication](/architecture/popup-and-background-communication/): how the popup talks to the worker, including why data flows through storage instead of message replies.
+- [GitHub Health and Outages](/architecture/github-health/): the hub for `HealthStatusService`'s flags and the integrity layer that anchors `AlarmSeqClock`.
+- [Data Hydration and Storage](/architecture/data-hydration-and-storage/): what survives a wake, and how the popup reads it back in.

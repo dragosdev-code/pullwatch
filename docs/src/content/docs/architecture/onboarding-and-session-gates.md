@@ -3,11 +3,11 @@ title: Onboarding and Session Gates
 description: Install flow, identity, and reveal overlay phases.
 ---
 
-> **Summary.** Pullwatch has no login of its own. It relies on whatever GitHub session the browser already holds, which means the popup has to be graceful about three states it can find itself in: "we don't know yet" (install is still running the first fetch), "there's no session" (signed out or cookie expired), and "fresh session, hasn't seen the welcome yet" (re auth after a session wipe). One overlay shell, one hook (`useOnboarding`), and four storage keys coordinate all three. A single `react-focus-lock` wraps the shell so keyboard users cannot tab past the gate into lists that are not yet safe to show.
+Pullwatch has no login of its own; it borrows whatever GitHub session the browser already holds. That single fact is what this page is about, because it forces the popup to be graceful about three states it can find itself in: "we don't know yet" (install is still running the first fetch), "there's no session" (signed out or cookie expired), and "fresh session, hasn't seen the welcome yet" (re auth after a session wipe). One overlay shell, one hook (`useOnboarding`), and four storage keys coordinate all three, and a single `react-focus-lock` wraps the shell so keyboard users cannot tab past the gate into lists that are not yet safe to show.
 
 ---
 
-## Why this page exists
+## The assumption the popup makes
 
 The popup is a tiny UI with a big assumption: that it is running on behalf of a logged in GitHub user. If that assumption is wrong in either direction (no session at all, or "session restored but the user has not yet seen the welcome"), showing the three tab inbox would be at best confusing and at worst actively misleading.
 
@@ -45,7 +45,7 @@ Every decision `useOnboarding` makes comes from reading and watching four keys i
 | `onboarding_reauth_gate_pending` | `StorageService.clearGitHubWebSessionCaches`    | Set when the worker wipes the session after an auth failure. Forces the welcome overlay on next sign in. |
 | `install_session_check_complete` | `EventService.handleInstallation` (try/finally) | True once the install time probe settles. Used to distinguish "still checking" from "checked and empty." |
 
-The popup treats `chrome.storage.local` as the source of truth. It hydrates once on mount and then subscribes to `chrome.storage.onChanged` for live updates, the same pattern as PR list hydration ([Data Hydration and Storage](./data-hydration-and-storage/)).
+The popup treats `chrome.storage.local` as the source of truth. It hydrates once on mount and then subscribes to `chrome.storage.onChanged` for live updates, the same pattern as PR list hydration ([Data Hydration and Storage](/architecture/data-hydration-and-storage/)).
 
 ---
 
@@ -252,6 +252,6 @@ The settings overlay deliberately does not use `FocusLock`. Settings is meant to
 
 ## See also
 
-- [Data Hydration and Storage](./data-hydration-and-storage/): the hydration contract this hook reuses, and the `runWithTransientStorageRetry` wrapper that guards every storage read in the gate.
-- [Popup and Background Communication](./popup-and-background-communication/): the `prs.fetchFreshAssigned` / `fetchFreshMerged` / `fetchFreshAuthored` RPCs the Refresh button triggers, and how `EVENT_SETTINGS_UPDATED` broadcasts let the gate react to settings changes while it is up.
-- [The Parser Waterfall](./parser-waterfall/): where the logged out HTML shell is detected and turned into the session auth error that ultimately sets the reauth gate flag.
+- [Data Hydration and Storage](/architecture/data-hydration-and-storage/): the hydration contract this hook reuses, and the `runWithTransientStorageRetry` wrapper that guards every storage read in the gate.
+- [Popup and Background Communication](/architecture/popup-and-background-communication/): the `prs.fetchFreshAssigned` / `fetchFreshMerged` / `fetchFreshAuthored` RPCs the Refresh button triggers, and how `EVENT_SETTINGS_UPDATED` broadcasts let the gate react to settings changes while it is up.
+- [The Parser Waterfall](/architecture/parser-waterfall/): where the logged out HTML shell is detected and turned into the session auth error that ultimately sets the reauth gate flag.

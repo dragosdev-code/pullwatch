@@ -3,7 +3,7 @@ title: Outage Banner and Statuspage
 description: Popup banner copy, Statuspage client, and link gating.
 ---
 
-> **What this page is.** The popup's outage banner has to mean something different in three different situations. This page covers what the banner says, when, why the Statuspage link is sometimes hidden, and how the popup gets its read on `summary.json` without ever fetching it itself.
+> **In one screen.** A single banner component has to carry four different meanings, from "GitHub didn't answer" to "Chrome revoked our access to GitHub." This page covers what the banner says in each case, when the Statuspage link is shown or hidden, and how the popup gets its read on `summary.json` without ever fetching it itself.
 
 The background is the only context that touches `githubstatus.com`. The popup mirrors a cached snapshot from `chrome.storage.local` and decides whether to render a link based on what is in that cache. Same pattern as PR data, same reason: the popup paints from storage, it does not perform network IO of its own.
 
@@ -26,7 +26,7 @@ Failing open is the load-bearing design choice. Real transport outages on `githu
 
 The PR component name the parser looks for is exactly `'pull requests'` (`GITHUB_PR_COMPONENT_NAME`), case-folded on read. If GitHub renames the component, the snapshot logs a warning and falls back to the global `status.indicator`. That gives a one-cycle escape hatch before the constant has to be updated.
 
-The `bypassCache` flag exists for one specific caller. [EventService.handleAlarm](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts) prefetches one snapshot at the top of every alarm wave with `bypassCache: true`, and the snapshot is threaded through all three list assessments. The bypass write overwrites the cache entry, so any incidental same-wave non-bypass read picks up the refreshed snapshot rather than triple-hitting `summary.json`. See [List Trust and Suspect Lists](./list-trust/) for how `assess()` consumes that wave-scoped snapshot.
+The `bypassCache` flag exists for one specific caller. [EventService.handleAlarm](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/EventService.ts) prefetches one snapshot at the top of every alarm wave with `bypassCache: true`, and the snapshot is threaded through all three list assessments. The bypass write overwrites the cache entry, so any incidental same-wave non-bypass read picks up the refreshed snapshot rather than triple-hitting `summary.json`. See [List Trust and Suspect Lists](/architecture/github-health/list-trust/) for how `assess()` consumes that wave-scoped snapshot.
 
 ---
 
@@ -51,15 +51,16 @@ Both hooks treat `chrome.storage.local.remove` (which surfaces as `newValue: und
 
 ## Banner copy by reason
 
-[github-outage-banner.tsx](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/github-outage-banner.tsx) renders one of three copy variants, keyed on the outage reason. The `data-variant-id` attribute is stable so support reports and integration tests can match it directly.
+[github-outage-banner.tsx](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/github-outage-banner.tsx) renders one of four copy variants, keyed on the outage reason. The `data-variant-id` attribute is stable so support reports and integration tests can match it directly.
 
 | `reason`                | `data-variant-id`            | Title                                                            | Body                                                                                                                                                  |
 | ----------------------- | ---------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `transport` (default)   | `outage.transport`           | "GitHub didn't respond. Showing your last known list."           | "Pullwatch will retry on its own. If this sticks around, a quick refresh or a check on your connection usually clears it."                            |
 | `pr_component_degraded` | `outage.component-degraded`  | "Pullwatch noticed an unusual change in your list."              | "Keeping your last known list while things settle. New review requests during this window may not show until the next clean sync."                    |
 | `pr_list_churn`         | `outage.list-churn`          | "A pull request briefly disappeared and came back."              | "Pullwatch held back the bouncing one to avoid duplicate alerts. Other list updates still flow through normally."                                     |
+| `site_access_blocked`   | `outage.site-access-blocked` | "Chrome is blocking Pullwatch from reaching GitHub."             | "Site access for github.com is turned off in chrome://extensions. Pullwatch is showing your last known list, re-enable access to refresh it."        |
 
-The copy is intentionally calm and never names "GitHub" as broken when Pullwatch is not sure GitHub is broken. `pr_component_degraded` says "an unusual change in your list", not "GitHub is degraded", because the local anomaly is what we are confident about. `pr_list_churn` is the one banner that explicitly explains the suppression: a notification did not fire, that is by design, and the rest of the popup is still alive.
+The copy is intentionally calm and never names "GitHub" as broken when Pullwatch is not sure GitHub is broken. `pr_component_degraded` says "an unusual change in your list", not "GitHub is degraded", because the local anomaly is what we are confident about. `pr_list_churn` is the one banner that explicitly explains the suppression: a notification did not fire, that is by design, and the rest of the popup is still alive. `site_access_blocked` is the only reason where the fix is on the user's side, so its banner replaces the Statuspage link with a button that opens `chrome://extensions/?id=<id>` directly (via `chrome.tabs.create`, because Chrome blocks navigating to a `chrome://` URL from a plain anchor click).
 
 ---
 
@@ -72,6 +73,7 @@ The link to `https://www.githubstatus.com` is not always shown. It is gated by r
 | `transport`             | Shown iff `hasCorroboratingStatusCache(snapshot)` is `true`. |
 | `pr_component_degraded` | Shown iff `hasCorroboratingStatusCache(snapshot)` is `true`. |
 | `pr_list_churn`         | **Always hidden.**                                            |
+| `site_access_blocked`   | **No Statuspage link.** Shows a "open chrome://extensions" action button instead, because the fix is a local Chrome setting, not a GitHub incident. |
 
 `hasCorroboratingStatusCache` (in [use-github-status-snapshot.ts](https://github.com/dragosdev-code/pullwatch/blob/main/src/hooks/use-github-status-snapshot.ts)) returns `true` when:
 
@@ -107,6 +109,8 @@ A popup can mount hours after a brief outage. Three layers prevent a phantom ban
 ---
 
 ## End-to-end sequence
+
+The sequence below walks one alarm wave that ends in a `pr_component_degraded` banner, so you can see every actor from the timer to the rendered link in order. Read it top to bottom: the alarm wakes the worker, the worker prefetches the Statuspage snapshot once, then the PR assessment decides the list is suspect and signals the outage. The last four lines are the popup reacting to two independent `chrome.storage.onChanged` events (the outage payload and the snapshot) and combining them into copy plus a gated link. Notice the worker never pushes the banner; it only writes storage, and the popup derives everything from there.
 
 ```mermaid
 sequenceDiagram
@@ -145,7 +149,7 @@ When the next wave lands a trusted persist, `Health.clearGitHubOutage` removes `
 
 ## See also
 
-- [GitHub Health and Outages](./): the hub. The full `GitHubOutageReason` taxonomy and the wave-suppression rule that decides when `clearGitHubOutage` may fire.
-- [List Trust and Suspect Lists](./list-trust/): the integrity layer that produces `pr_component_degraded` and `pr_list_churn` signals.
-- [Notifications and Sound](../notifications-and-sound/): the sibling suppression layer. Most of its rules are described in terms of the same trust dispatch this banner reflects.
-- [Data Hydration and Storage](../data-hydration-and-storage/): every storage key referenced on this page, in one inventory.
+- [GitHub Health and Outages](/architecture/github-health/): the hub. The full `GitHubOutageReason` taxonomy and the wave-suppression rule that decides when `clearGitHubOutage` may fire.
+- [List Trust and Suspect Lists](/architecture/github-health/list-trust/): the integrity layer that produces `pr_component_degraded` and `pr_list_churn` signals.
+- [Notifications and Sound](/architecture/notifications-and-sound/): the sibling suppression layer. Most of its rules are described in terms of the same trust dispatch this banner reflects.
+- [Data Hydration and Storage](/architecture/data-hydration-and-storage/): every storage key referenced on this page, in one inventory.

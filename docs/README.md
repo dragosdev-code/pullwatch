@@ -12,13 +12,6 @@ npm run preview  # serve dist/
 npm run check    # astro check (types + content)
 ```
 
-If you see `UnknownContentCollectionError` for a page after renaming or removing `.mdx` files, clear the Astro cache and restart:
-
-```bash
-rm -rf .astro node_modules/.vite
-npm run dev
-```
-
 ## Content
 
 Markdown lives in `src/content/docs/`. To re-run the one-time wiki import from `../wiki/`:
@@ -41,6 +34,4 @@ Flowcharts use the **[ELK](https://eclipse.dev/elk/)** layout engine (`@mermaid-
 
 To use Dagre on a single diagram, add YAML frontmatter at the top of the `mermaid` code block (`layout: dagre`). See [Mermaid layouts](https://mermaid.js.org/config/layouts.html).
 
-## Interactive components (optional)
-
-`@astrojs/react` and MDX are installed for future scenario walkthroughs. Pages are plain Markdown + Mermaid for now.
+Pages are plain Markdown + Mermaid. To add React or MDX later, install `@astrojs/react`, `@astrojs/mdx`, `react`, and `react-dom`, then register those integrations in `astro.config.ts`.

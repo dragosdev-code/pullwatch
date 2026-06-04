@@ -33,8 +33,9 @@ export const pullwatchMermaidConfig: MermaidConfig = {
     useMaxWidth: true,
   },
   state: {
-    nodeSpacing: 55,
-    rankSpacing: 70,
+    nodeSpacing: 85,
+    rankSpacing: 110,
+    padding: 16,
     useMaxWidth: true,
   },
 };

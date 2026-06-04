@@ -4,11 +4,11 @@ description: TypeScript path aliases across the extension and popup.
 ---
 
 
-> **Summary.** Pullwatch resolves the same logical roots in three places at once: TypeScript (`tsconfig.json` `paths`), Vite (`vite.aliases.ts`), and Vitest (shared `viteResolveAliases`). This page is the contract for _when_ to use an alias versus a normal relative import, and _why_ the split exists. If you only remember one sentence: **aliases mark a boundary crossing; relatives keep a feature or subsystem readable on the page.**
+Pullwatch resolves the same logical roots in three places at once: TypeScript (`tsconfig.json` `paths`), Vite (`vite.aliases.ts`), and Vitest (shared `viteResolveAliases`). This page is the contract for _when_ to reach for an alias versus a normal relative import, and _why_ the split exists at all. If you remember one sentence, make it this: **aliases mark a boundary crossing; relatives keep a feature or subsystem readable on the page.**
 
 ---
 
-## Why this page exists
+## The two failure modes without a rule
 
 Without an agreed rule, two things happen on every mid sized repo. Imports either sprawl into endless `../../..` chains that break every time a file moves, or everything flips to path aliases on every line and you stop seeing, at a glance, whether a file is talking to its neighbours or reaching across the whole tree.
 
@@ -18,7 +18,7 @@ Pullwatch sits deliberately in the middle. Shared extension code, the popup, and
 
 ## The aliases, and what each one is for
 
-The table below is the authoritative “which prefix when.” The implementation lives in [tsconfig.json](../tsconfig.json) (for the type checker and the IDE) and [vite.aliases.ts](../vite.aliases.ts) (for Vite and the Vitest configs that import the shared object).
+The table below is the authoritative “which prefix when.” The implementation lives in [tsconfig.json](https://github.com/dragosdev-code/pullwatch/blob/main/tsconfig.json) (for the type checker and the IDE) and [vite.aliases.ts](https://github.com/dragosdev-code/pullwatch/blob/main/vite.aliases.ts) (for Vite and the Vitest configs that import the shared object).
 
 | Alias            | What it is for                                                                                                                                                                                                                         |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -37,11 +37,11 @@ The usual top level folders under `src/` are `components`, `hooks`, `stores`, `l
 
 Relative imports are still the default **inside** a coherent slice of the tree. That keeps diffs small when you rename a feature folder and preserves the mental model “everything in this directory belongs together.”
 
-- **`extension/common/`** — import siblings with `./types`, `./constants`, and the like. The shared layer should read like a small library, not like every file starts with `@common/`. For the chrome adapter/client subtree specifically, [extension/common/chrome/index.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/chrome/index.ts) is an optional barrel (`./chrome` from other `extension/common/` modules) so imports do not sprawl across `adapters/` and `clients/` when you only need the public surface of that layer.
-- **`extension/background/`** — `services` importing `../interfaces/...` is correct. You are still inside the worker package; an `@background/interfaces/...` path from the same package adds noise without buying a boundary.
-- **`extension/offscreen/`** and **`extension/debug/`** — same story: stay relative inside each tree unless something **outside** that tree needs the symbol.
-- **`src/components/...`** — short hops within the components tree, including a feature folder importing its own `./components/...` children, stay relative. That is the same “feature locality” idea as the background worker.
-- **Barrel `index.ts` files under `src/`** — keep re-exports relative where that avoids circular imports or pointless churn. The barrels are already a public surface; they do not need to be turned into a wall of `@src` paths.
+- **`extension/common/`**: import siblings with `./types`, `./constants`, and the like. The shared layer should read like a small library, not like every file starts with `@common/`. For the chrome adapter/client subtree specifically, [extension/common/chrome/index.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/chrome/index.ts) is an optional barrel (`./chrome` from other `extension/common/` modules) so imports do not sprawl across `adapters/` and `clients/` when you only need the public surface of that layer.
+- **`extension/background/`**: `services` importing `../interfaces/...` is correct. You are still inside the worker package; an `@background/interfaces/...` path from the same package adds noise without buying a boundary.
+- **`extension/offscreen/`** and **`extension/debug/`**, same story: stay relative inside each tree unless something **outside** that tree needs the symbol.
+- **`src/components/...`**: short hops within the components tree, including a feature folder importing its own `./components/...` children, stay relative. That is the same “feature locality” idea as the background worker.
+- **Barrel `index.ts` files under `src/`**: keep re-exports relative where that avoids circular imports or pointless churn. The barrels are already a public surface; they do not need to be turned into a wall of `@src` paths.
 
 ---
 
@@ -58,17 +58,17 @@ Some boundaries are not just style; they keep the MV3 split honest.
 
 If you add a new alias root, it needs to land in **`tsconfig.json` `paths`** and **`viteResolveAliases`** at the same time, or you will get the classic “green in the bundle, red in the editor” split. The default Vitest suite reuses the main Vite config; the canary and remote patterns configs import the shared alias object explicitly, so they stay in lock step without hand copying path strings in three places.
 
-[.oxlintrc.json](../.oxlintrc.json) adds a belt and braces guard: import paths that crawl up with `../` and then reach into `extension/{common,background,offscreen,debug}/` are rejected in favour of the matching alias, and `src/**` may not import `@background/*` at all. That is the machine readable version of the layering rule above.
+[.oxlintrc.json](https://github.com/dragosdev-code/pullwatch/blob/main/.oxlintrc.json) adds a belt and braces guard: import paths that crawl up with `../` and then reach into `extension/{common,background,offscreen,debug}/` are rejected in favour of the matching alias, and `src/**` may not import `@background/*` at all. That is the machine readable version of the layering rule above.
 
 ---
 
 ## “Every line an alias” versus “alias at the boundary”
 
-You could prefer a single absolute style everywhere under `src/`—that is a fair choice when uniformity matters more than locality. Pullwatch uses the boundary led style instead: less noise inside a feature, clearer signal when you leave your neighbourhood. Neither option is universally “correct”; this page writes the decision down so future you does not have to reverse engineer it from git history.
+You could prefer a single absolute style everywhere under `src/`, which is a fair choice when uniformity matters more than locality. Pullwatch uses the boundary led style instead: less noise inside a feature, clearer signal when you leave your neighbourhood. Neither option is universally “correct”; this page writes the decision down so future you does not have to reverse engineer it from git history.
 
 ---
 
 ## What to read next
 
-- **How the three Chrome contexts fit together:** [Architecture Overview](./overview/).
-- **Why the popup must not import the worker directly:** [Popup and Background Communication](./popup-and-background-communication/).
+- **How the three Chrome contexts fit together:** [Architecture Overview](/architecture/overview/).
+- **Why the popup must not import the worker directly:** [Popup and Background Communication](/architecture/popup-and-background-communication/).

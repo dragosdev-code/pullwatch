@@ -4,11 +4,11 @@ description: Desktop alerts, offscreen audio, and suppression rules.
 ---
 
 
-> **Summary.** When a new pull request arrives, two things happen: Chrome fires a visual notification, and a sound plays. The visual half is simple; the audio half is not, because Manifest V3 service workers are not allowed to use `AudioContext`. Pullwatch solves that by spinning up a hidden **offscreen document** on demand, passing sound instructions across a runtime message, and keeping the worker alive until playback finishes. A deterministic notification ID encodes the PR URL so clicks open the right tab even after a worker restart, and a FIFO promise gate in `SoundService` keeps concurrent sound requests from overlapping.
+When a new pull request arrives, two things happen: Chrome fires a visual notification, and a sound plays. The visual half is simple; the audio half is not, because Manifest V3 service workers are not allowed to use `AudioContext`. Pullwatch solves that by spinning up a hidden **offscreen document** on demand, passing sound instructions across a runtime message, and keeping the worker alive until playback finishes. This page follows that pipeline end to end and explains the two non-obvious tricks that hold it together: a deterministic notification ID that encodes the PR URL so clicks open the right tab even after a worker restart, and a FIFO promise gate in `SoundService` that keeps concurrent sound requests from overlapping.
 
 ---
 
-## Why this page exists
+## The complexity hides across the boundary
 
 If you are reading the code top down, `NotificationService` looks innocent: build some notifications, call `chrome.notifications.create`, done. The complicated part is across the boundary: `SoundService`, the offscreen document, and the generation counter that keeps two rapid fire play requests from producing overlapping audio. None of that is obvious from one file.
 
@@ -17,6 +17,8 @@ This page stitches the pipeline together so the full path ("new PR detected" to 
 ---
 
 ## The pipeline in one diagram
+
+This sequence traces a single new assigned PR from detection to the user hearing a sound and clicking the toast. Read it top to bottom as time: the service worker drives the left edge, and each participant to the right is a boundary it has to cross (`NotificationService`, then `SoundService`, then the offscreen document and its `AudioContext`). The two crossings that carry the most weight are the storage write that sits between the visual and the sound, and the click path at the bottom that decodes the PR URL straight out of the notification ID. Watch for those as you read.
 
 ```mermaid
 sequenceDiagram
@@ -61,19 +63,21 @@ Three things are worth noticing before zooming in. First, the click handler does
 
 [NotificationService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/NotificationService.ts) owns "turn a `PullRequest[]` into Chrome notifications." The public surface is small:
 
-- `createAssignedPRVisuals` / `playAssignedSound` — the visual half and the sound half of the assigned PR notification, exposed separately so `PRService` can persist storage between them (see the "Crash duplicate trade-off" section below). Both respect `assigned.notificationsEnabled`; the visual half also filters drafts unless `notifyOnDrafts` is on.
-- `createMergedPRVisuals` / `playMergedSound` — same shape for merged PRs.
-- `showAssignedPRNotifications` / `showMergedPRNotifications` — thin wrappers that call the visual half then the sound half in one go. Kept for callers that do not need to interleave other work.
-- `fireSettingsTestNotification(category)` — a throttled preview fired from the settings panel.
-- `handleNotificationClick(id)` — opens the PR in a new tab and clears the toast.
+- `createAssignedPRVisuals` / `playAssignedSound`: the visual half and the sound half of the assigned PR notification, exposed separately so `PRService` can persist storage between them (see the "Crash duplicate trade-off" section below). Both respect `assigned.notificationsEnabled`; the visual half also filters drafts unless `notifyOnDrafts` is on.
+- `createMergedPRVisuals` / `playMergedSound`: same shape for merged PRs.
+- `showAssignedPRNotifications` / `showMergedPRNotifications`: thin wrappers that call the visual half then the sound half in one go. Kept for callers that do not need to interleave other work.
+- `fireSettingsTestNotification(category)`: a throttled preview fired from the settings panel.
+- `handleNotificationClick(id)`: opens the PR in a new tab and clears the toast.
 
 Notifications are per PR (one row per pull request, not one row per batch) so the native OS notification center shows a list the user can skim. Every row uses the same icon, and every row is created with `silent: true` because audio is owned by `SoundService`, not by the OS.
 
 | Category   | Default        | Produces a sound?             | Filters drafts?                                                                                                                       |
 | ---------- | -------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `assigned` | On             | Yes, `assigned.sound` setting | Yes unless `notifyOnDrafts` is on (see [effective-assigned-draft-notify.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/effective-assigned-draft-notify.ts)). |
-| `merged`   | On             | Yes, `merged.sound` setting   | No concept of drafts in merged PRs.                                                                                                   |
+| `merged`   | Off (opt-in)   | Yes, `merged.sound` setting   | No concept of drafts in merged PRs.                                                                                                   |
 | `authored` | Off (no toast) | n/a                           | `authored` is a visible list but does not notify; noise budget.                                                                       |
+
+The defaults are deliberate. Assigned PRs are the one category that interrupts you out of the box, because a review request is the thing most worth surfacing. Merged notifications ship **off** (`merged.notificationsEnabled` defaults to `false`) and are opted into from settings; a merge is good news, but it is not time sensitive, so the default keeps the interrupt budget on the work waiting for you.
 
 Why no toast for authored? Because the user owns those PRs. Notifying on "your own PR exists" produces a toast on every draft commit push, every title edit, every CI round trip. The list is still there to look at, but the interrupt budget is better spent on assigned and merged.
 
@@ -83,7 +87,7 @@ Why no toast for authored? Because the user owns those PRs. Notifying on "your o
 
 There is a guardrail against an inconsistent settings combo (`notifyOnDrafts: true` with `showDraftsInList: false`). When that combo appears, `effectiveAssignedNotifyOnDrafts` treats it as off, because notifying on a PR the user cannot see in the list would be a dead end click, and silently dropping the notification is less confusing than a notification that leads to an empty list.
 
-Hiding drafts from the assigned list is a display filter, not evidence that GitHub truncated the response. Tombstone drop recording skips draft keys removed only by that filter so `pr_list_churn` and the integrity banner do not fire when the user toggles visibility alone. The full rule lives on [List Trust and Suspect Lists](./github-health/list-trust/).
+Hiding drafts from the assigned list is a display filter, not evidence that GitHub truncated the response. Tombstone drop recording skips draft keys removed only by that filter so `pr_list_churn` and the integrity banner do not fire when the user toggles visibility alone. The full rule lives on [List Trust and Suspect Lists](/architecture/github-health/list-trust/).
 
 ---
 
@@ -231,8 +235,8 @@ The offscreen `decodeAudioData` path reads the base64, turns it into an `AudioBu
 
 The editor UI (in [src/components/custom-sound-editor/](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/custom-sound-editor/)) is the one place in the popup that reaches for **vanilla Zustand** instead of the app wide hook based stores:
 
-- [audio-draft-store.ts](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/custom-sound-editor/store/audio-draft-store.ts) — the loaded buffer, its waveform peaks, start/end trim in seconds.
-- [async-feedback-store.ts](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/custom-sound-editor/store/async-feedback-store.ts) — decode and save errors, and the saving spinner.
+- [audio-draft-store.ts](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/custom-sound-editor/store/audio-draft-store.ts): the loaded buffer, its waveform peaks, start/end trim in seconds.
+- [async-feedback-store.ts](https://github.com/dragosdev-code/pullwatch/blob/main/src/components/custom-sound-editor/store/async-feedback-store.ts): decode and save errors, and the saving spinner.
 
 Two stores instead of one because the trim geometry and the save pipeline are independent concerns: clicking a draft's delete button should not stomp the editor's trim range, and a decode error should not reset the trim. Keeping them split means each reset call only touches the UI it owns.
 
@@ -248,7 +252,7 @@ Once the user saves, the final base64 blob is persisted to `chrome.storage.local
 
 ### The trust gate
 
-[List Trust and Suspect Lists](./github-health/list-trust/) is the integrity layer that decides whether a fresh fetch is allowed to replace the stored baseline. When it returns `suspect_partial` or `suspect_empty_corroborated`, [PRService](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PRService.ts) returns `oldPRs` to the caller without touching `notificationService.show*`. The popup keeps the cached list and the outage banner explains the gap; nothing alerts because nothing was persisted.
+[List Trust and Suspect Lists](/architecture/github-health/list-trust/) is the integrity layer that decides whether a fresh fetch is allowed to replace the stored baseline. When it returns `suspect_partial` or `suspect_empty_corroborated`, [PRService](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PRService.ts) returns `oldPRs` to the caller without touching `notificationService.show*`. The popup keeps the cached list and the outage banner explains the gap; nothing alerts because nothing was persisted.
 
 The same applies to `suspect_empty_pending`. The empty-only path is a confirmation period, not a veto, and a one-tick flake should not produce a notification storm when the list returns. The pending branch is silent for the streak window.
 
@@ -268,7 +272,7 @@ The same applies to `suspect_empty_pending`. The empty-only path is a confirmati
 
 `assigned.notifyOnDrafts` defaults to `false`, so draft PRs do not produce assigned notifications unless the user opts in. There is one explicit guard against an inconsistent settings combo (`notifyOnDrafts: true` with `showDraftsInList: false`); when that combo appears, [effectiveAssignedNotifyOnDrafts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/common/effective-assigned-draft-notify.ts) treats it as off, because notifying on a PR the user cannot see in the list would be a dead-end click.
 
-The same `showDraftsInList` toggle also controls whether drafts are written into stored assigned PRs. That client-side omission is wired into tombstone drop recording so it does not produce a list-integrity signal by itself; see the assigned note under **Drop record** in [List Trust and Suspect Lists](./github-health/list-trust/).
+The same `showDraftsInList` toggle also controls whether drafts are written into stored assigned PRs. That client-side omission is wired into tombstone drop recording so it does not produce a list-integrity signal by itself; see the assigned note under **Drop record** in [List Trust and Suspect Lists](/architecture/github-health/list-trust/).
 
 ---
 
@@ -310,7 +314,7 @@ The split is exposed on `NotificationService` as `createAssignedPRVisuals` and `
 
 ## See also
 
-- [List Trust and Suspect Lists](./github-health/list-trust/): the integrity layer behind every suppression rule above. Decides what is `suspect_partial`, `suspect_empty_*`, or trusted; emits `pr_component_degraded` and `pr_list_churn` signals.
-- [The Service Worker Lifecycle](./service-worker-lifecycle/): why the worker cannot play audio itself, and why the offscreen document has to outlive a message round trip.
-- [Popup and Background Communication](./popup-and-background-communication/): the `EVENT_PLAY_SOUND` and `PREVIEW_SOUND_ACTION.*` messages the popup uses to drive sound previews from the settings panel.
-- [Data Hydration and Storage](./data-hydration-and-storage/): where custom sound blobs and their metadata live in `chrome.storage.local`, and how settings in `chrome.storage.sync` name them.
+- [List Trust and Suspect Lists](/architecture/github-health/list-trust/): the integrity layer behind every suppression rule above. Decides what is `suspect_partial`, `suspect_empty_*`, or trusted; emits `pr_component_degraded` and `pr_list_churn` signals.
+- [The Service Worker Lifecycle](/architecture/service-worker-lifecycle/): why the worker cannot play audio itself, and why the offscreen document has to outlive a message round trip.
+- [Popup and Background Communication](/architecture/popup-and-background-communication/): the `EVENT_PLAY_SOUND` and `PREVIEW_SOUND_ACTION.*` messages the popup uses to drive sound previews from the settings panel.
+- [Data Hydration and Storage](/architecture/data-hydration-and-storage/): where custom sound blobs and their metadata live in `chrome.storage.local`, and how settings in `chrome.storage.sync` name them.

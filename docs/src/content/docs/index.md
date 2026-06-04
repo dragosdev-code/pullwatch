@@ -17,9 +17,9 @@ The docs have three tiers. You are free to jump around, but the tiers are meant 
 
 | Tier                | Pages                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Who it is for                          |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| **Welcome**         | [Home](./), [Getting Started](./getting-started/)                                                                                                                                                                                                                                                                                                                                                                                                         | Anyone, including curious users.       |
-| **The big picture** | [Architecture Overview](./architecture/overview/)                                                                                                                                                                                                                                                                                                                                                                                                           | Engineers starting the tour.           |
-| **Deep dives**      | [The Service Worker Lifecycle](./architecture/service-worker-lifecycle/), [The Parser Waterfall](./architecture/parser-waterfall/), [GitHub Health and Outages](./architecture/github-health/) (with [List Trust and Suspect Lists](./architecture/github-health/list-trust/) and [Outage Banner and Statuspage](./architecture/github-health/outage-banner/)), [Remote Configuration](./architecture/remote-configuration/), [Data Hydration and Storage](./architecture/data-hydration-and-storage/), [Popup and Background Communication](./architecture/popup-and-background-communication/), [Onboarding and Session Gates](./architecture/onboarding-and-session-gates/), [Notifications and Sound](./architecture/notifications-and-sound/), [The Canary Monitor](./architecture/canary-monitor/) | Engineers going one concept at a time. |
+| **Welcome**         | [Home](/), [Getting Started](/getting-started/)                                                                                                                                                                                                                                                                                                                                                                                                         | Anyone, including curious users.       |
+| **The big picture** | [Architecture Overview](/architecture/overview/)                                                                                                                                                                                                                                                                                                                                                                                                           | Engineers starting the tour.           |
+| **Deep dives**      | [The Service Worker Lifecycle](/architecture/service-worker-lifecycle/), [The Parser Waterfall](/architecture/parser-waterfall/), [GitHub Health and Outages](/architecture/github-health/) (with [List Trust and Suspect Lists](/architecture/github-health/list-trust/) and [Outage Banner and Statuspage](/architecture/github-health/outage-banner/)), [Remote Configuration](/architecture/remote-configuration/), [Data Hydration and Storage](/architecture/data-hydration-and-storage/), [Popup and Background Communication](/architecture/popup-and-background-communication/), [Inside the Popup](/architecture/inside-the-popup/), [Onboarding and Session Gates](/architecture/onboarding-and-session-gates/), [Notifications and Sound](/architecture/notifications-and-sound/), [The Canary Monitor](/architecture/canary-monitor/) | Engineers going one concept at a time. |
 
 ---
 
@@ -35,7 +35,9 @@ The docs have three tiers. You are free to jump around, but the tiers are meant 
 | **Resilient parsing**    | A three stage parser handles both the new and legacy GitHub list pages. Regex updates can be shipped from a public config repo without releasing a new extension build. |
 | **Fast popup**           | The UI hydrates instantly from `chrome.storage.local` so the panel is filled before any network call.                                                                   |
 
-For the mechanics behind "resilient parsing" head to [The Parser Waterfall](./architecture/parser-waterfall/). For the mechanics behind "fast popup" head to [Data Hydration and Storage](./architecture/data-hydration-and-storage/).
+For the mechanics behind "resilient parsing" head to [The Parser Waterfall](/architecture/parser-waterfall/). For the mechanics behind "fast popup" head to [Data Hydration and Storage](/architecture/data-hydration-and-storage/).
+
+Two extras stay out of the way until you find them: a small **squash minigame** that reveals itself after the popup has been opened enough times (the [minigame docs](https://github.com/dragosdev-code/pullwatch/tree/main/src/components/squash-minigame/docs) cover it), and a hidden **debug panel** for development that has its own quiet way in.
 
 ---
 
@@ -45,20 +47,20 @@ Pullwatch is built so that you do not have to take its word for it. The whole co
 
 - **No tokens. No OAuth app.** Pullwatch never asks for a token and never creates an OAuth integration on your account. It reads the same pages your browser would render if you typed `github.com/pulls` in the address bar yourself.
 - **Outbound network (four host origins, all declared in the manifest).** Pullwatch does not run its own servers and does not use analytics or third-party SDKs. The only destinations it contacts are:
-  - **`https://github.com/*`** — the background worker fetches your signed-in pulls list HTML; the popup may open PR links and load pages on this origin using your existing session.
-  - **`https://avatars.githubusercontent.com/*`** — avatar images shown next to PR rows in the popup.
-  - **`https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*`** — a public `patterns.json` file used to update parser regexes without a new extension release.
-  - **`https://www.githubstatus.com/*`** — GitHub’s public Statuspage API (`summary.json`) so outage banners can be corroborated against real Pull Requests incidents. No credentials are sent; responses are cached locally in `chrome.storage.local`.
+  - **`https://github.com/*`**: the background worker fetches your signed-in pulls list HTML; the popup may open PR links and load pages on this origin using your existing session.
+  - **`https://avatars.githubusercontent.com/*`**: avatar images shown next to PR rows in the popup.
+  - **`https://raw.githubusercontent.com/dragosdev-code/pr-live-config/*`**: a public `patterns.json` file used to update parser regexes without a new extension release.
+  - **`https://www.githubstatus.com/*`**: GitHub’s public Statuspage API (`summary.json`) so outage banners can be corroborated against real Pull Requests incidents. No credentials are sent; responses are cached locally in `chrome.storage.local`.
 - **Your data stays on your machine.** PR lists, route hints, rate limit state, and other operational data live in `chrome.storage.local` on this device only. Your appearance and notification preferences live in `chrome.storage.sync` so Chrome can carry them across your own signed in Chrome instances if you have Chrome sync turned on. Nothing is uploaded anywhere by Pullwatch itself.
 - **Non goals.** Pullwatch does not act on PRs for you, does not write anything back to GitHub, and does not sync your PR data across devices. It is read only by design.
 
-The [Remote Configuration](./architecture/remote-configuration/) page covers exactly what is in the config file and how it is validated before the extension will use it.
+The [Remote Configuration](/architecture/remote-configuration/) page covers exactly what is in the config file and how it is validated before the extension will use it.
 
 ---
 
 ## The ten thousand foot view
 
-Pullwatch has two halves that talk to each other through Chrome's own storage rather than through direct messages.
+Pullwatch has two halves that talk to each other through Chrome's own storage rather than through direct messages. The diagram below shows that split end to end: the popup on the left, the background service worker on the right, and `chrome.storage.local` sitting between them as the hand-off point. The arrows are the only ways the two halves interact, so it is worth a slow read before the deep dives fill in the detail.
 
 ```mermaid
 flowchart LR
@@ -83,7 +85,7 @@ flowchart LR
 
 Read from left to right: the popup renders from storage (so it paints instantly when you open it), and separately asks the worker to do things like "fetch again now." Read from right to left: the alarm fires every few minutes, the worker fetches GitHub and writes the result to storage, and the popup (if it happens to be open) picks the change up through a storage listener.
 
-If you want the full story of _why_ it is split this way, [Popup and Background Communication](./architecture/popup-and-background-communication/) is the page.
+If you want the full story of _why_ it is split this way, [Popup and Background Communication](/architecture/popup-and-background-communication/) is the page.
 
 ---
 
@@ -113,8 +115,8 @@ Each entry below explains what the package actually does inside Pullwatch, not j
 
 ## Where to go next
 
-- You are a **new user or a developer who just cloned the repo**: head to [Getting Started](./getting-started/). It walks through the install, the four commands that matter, and every permission Pullwatch asks for, explained in plain English.
-- You are an **engineer who wants the full tour**: head to [Architecture Overview](./architecture/overview/). That page names every moving part and points you at the deep dive for each one.
+- You are a **new user or a developer who just cloned the repo**: head to [Getting Started](/getting-started/). It walks through the install, the four commands that matter, and every permission Pullwatch asks for, explained in plain English.
+- You are an **engineer who wants the full tour**: head to [Architecture Overview](/architecture/overview/). That page names every moving part and points you at the deep dive for each one.
 - You are **here for one specific thing**: jump straight to the deep dive from the table at the top.
 
 ---
