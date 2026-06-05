@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+pullwatch.zip
 
 # Canary failure dumps (local / CI artifact)
 canary/snapshots

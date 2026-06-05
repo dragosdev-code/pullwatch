@@ -25,7 +25,9 @@ Pullwatch keeps the pull requests you care about visible without you having to l
 
 ## Install
 
-**Chrome Web Store:** coming soon (the link will be added when the listing goes live).
+**Chrome Web Store:** coming soon (the listing link will be added when the store item is live).
+
+**Privacy policy:** [PRIVACY.md](PRIVACY.md) (also on the [docs site](https://dragosdev-code.github.io/pullwatch/privacy/) after the next docs deploy).
 
 **From source:** see [Development](#development) below, then load the unpacked `dist/` folder in `chrome://extensions`.
 
@@ -168,6 +170,7 @@ Then in Chrome: open `chrome://extensions`, enable **Developer mode**, click **L
 - `npm run canary:test` runs the canary suite locally.
 - `npm run test:remote-patterns` validates the production `patterns.json` against the schema. There are also `:staging`, `:production`, and `:production:parity` variants.
 - `npm run lint` runs oxlint.
+- `npm run zip` runs `npm run build`, then writes `pullwatch.zip` at the repo root (production `dist/` contents only; excludes marketing `pullwatch-view.gif`, analyzer `stats.html`, and `*.map`). Use this archive for Chrome Web Store uploads.
 - `npm run icons` regenerates `public/logo-{16,32,48,128}.png` from `public/logo.png` (via `sharp`). The icons are already committed, so a normal build does not need this: it is a one-time step run only when the logo changes.
 
 Squash minigame architecture and simulation contracts: [`src/components/squash-minigame/docs/README.md`](src/components/squash-minigame/docs/README.md).

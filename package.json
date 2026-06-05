@@ -7,6 +7,7 @@
     "dev": "vite",
     "icons": "node scripts/generate-extension-icons.mjs",
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && vite build",
+    "zip": "npm run build && node scripts/zip-extension.mjs",
     "build:analyze": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && vite build --mode analyze && explorer dist/stats.html",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

@@ -83,7 +83,7 @@ export default defineConfig({
         {
           label: 'Welcome',
 
-          items: ['index', 'getting-started'],
+          items: ['index', 'getting-started', 'privacy'],
         },
 
         {
