@@ -178,6 +178,8 @@ On each fetch wave, `PRService` compares the login it just resolved against that
 
 Two ordering rules keep the swap honest. The identity is only written once every list in the wave has finished (`persistResolvedViewerIdentity` runs at `depth === 0`, see [Popup and Background Communication](/architecture/popup-and-background-communication/#the-fetch-in-progress-indicator)), so a half-finished wave cannot record the new login while old lists are still in storage. And if the viewer advanced after only some lists wrote, any list that did not write for the final resolved login is cleared, so storage never pairs `github_viewer_identity` with another account's PR arrays. The popup-facing summary of this behaviour is on [Inside the Popup](/architecture/inside-the-popup/#switching-github-accounts).
 
+The "resolved login" for a wave is held to the last non-empty value the parser produced, not whatever the final request happened to return. This matters because some lists fetch several pages (the Authored list pulls one page per review state) and the last page can carry no login at all when it is empty. Holding the last known login keeps every list in the wave attributed to the same account, so a list that genuinely refreshed for the new viewer is not mistaken for a stale write and cleared.
+
 ---
 
 ## The popup's in memory stores

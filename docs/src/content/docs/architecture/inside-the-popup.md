@@ -160,6 +160,8 @@ Beyond the built-in sounds you can upload your own. The custom-sound editor lets
 
 Pullwatch reads whichever GitHub session your browser holds, so signing into a different GitHub account changes whose PRs it should show. The next fetch notices the viewer identity changed, clears the cached route hint, and rebaselines the lists for the new account rather than diffing them against the previous account's PRs. That last part is what stops an account switch from firing a wall of "new PR" notifications for PRs that were simply never yours on this account. The storage-integrity side of this (how Pullwatch avoids ever pairing one account's identity with another's stored lists) is in [Data Hydration and Storage](/architecture/data-hydration-and-storage/#identity-and-account-switching).
 
+When the popup sees the stored identity change to a different login, it reloads its three PR lists from storage (the new account's lists, which the fetch wave has already written) instead of clearing them to empty. That keeps the switch from briefly showing blank lists while still never rendering the previous account's rows. A first sign in (no previous login) is not treated as a switch, so the lists the wave just seeded stay put.
+
 ---
 
 ## Hidden extras
