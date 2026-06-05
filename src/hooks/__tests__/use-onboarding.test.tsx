@@ -206,6 +206,71 @@ describe('useOnboarding', () => {
     expect(result.current.isLoggedIn).toBe(true);
   });
 
+  it('does not clear PR caches on first login (null -> login)', async () => {
+    // No identity at boot; the install/alarm wave persists this viewer's lists *before*
+    // the identity key, so by the time the null -> login event lands the caches already
+    // hold the correct data (applied by usePrListsStorageSync). The first login is not a
+    // swap and must not wipe them.
+    getMock.mockResolvedValueOnce({
+      [STORAGE_KEY_HAS_SEEN_ONBOARDING]: false,
+    });
+    queryClient.setQueryData(queryKeys.assignedPrs, [{ id: 'assigned-alice' }]);
+    queryClient.setQueryData(queryKeys.mergedPrs, [{ id: 'merged-alice' }]);
+    queryClient.setQueryData(queryKeys.authoredPrs, [{ id: 'authored-alice' }]);
+
+    const { result } = renderOnboardingHook();
+    await waitFor(() => expect(result.current.storageReady).toBe(true));
+
+    expect(storageListener).toBeDefined();
+    await act(async () => {
+      storageListener!(
+        {
+          [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: {
+            oldValue: undefined,
+            newValue: { login: 'alice', updatedAt: '2020-01-01T00:00:00.000Z' },
+          },
+        },
+        'local'
+      );
+    });
+
+    expect(queryClient.getQueryData(queryKeys.assignedPrs)).toEqual([{ id: 'assigned-alice' }]);
+    expect(queryClient.getQueryData(queryKeys.mergedPrs)).toEqual([{ id: 'merged-alice' }]);
+    expect(queryClient.getQueryData(queryKeys.authoredPrs)).toEqual([{ id: 'authored-alice' }]);
+    expect(result.current.isLoggedIn).toBe(true);
+  });
+
+  it('clears PR caches on logout (login -> null)', async () => {
+    getMock.mockResolvedValueOnce({
+      [STORAGE_KEY_HAS_SEEN_ONBOARDING]: true,
+      [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: { login: 'alice' },
+    });
+    queryClient.setQueryData(queryKeys.assignedPrs, [{ id: 'assigned-alice' }]);
+    queryClient.setQueryData(queryKeys.mergedPrs, [{ id: 'merged-alice' }]);
+    queryClient.setQueryData(queryKeys.authoredPrs, [{ id: 'authored-alice' }]);
+
+    const { result } = renderOnboardingHook();
+    await waitFor(() => expect(result.current.storageReady).toBe(true));
+
+    expect(storageListener).toBeDefined();
+    await act(async () => {
+      storageListener!(
+        {
+          [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: {
+            oldValue: { login: 'alice', updatedAt: '2020-01-01T00:00:00.000Z' },
+            newValue: undefined,
+          },
+        },
+        'local'
+      );
+    });
+
+    expect(queryClient.getQueryData(queryKeys.assignedPrs)).toBeUndefined();
+    expect(queryClient.getQueryData(queryKeys.mergedPrs)).toBeUndefined();
+    expect(queryClient.getQueryData(queryKeys.authoredPrs)).toBeUndefined();
+    expect(result.current.isLoggedIn).toBe(false);
+  });
+
   it('sets friendly refresh info when session refresh rejects with NotLoggedIn', async () => {
     const matchMediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation(
       () =>

@@ -226,10 +226,14 @@ export function useOnboarding() {
         });
         const next = identityChange.newValue;
         const nextLogin = readViewerLogin({ [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: next });
-        if (previousLogin !== nextLogin) {
+        if (previousLogin && previousLogin !== nextLogin) {
           // WHY [account boundary]: PR query keys are shared across GitHub users, while their
           // storage snapshots are viewer-scoped. Clear active observers immediately and drop
           // inactive cache entries so an account swap cannot render the previous viewer's lists.
+          // WHY [require previousLogin]: a first login (null → login) is NOT a swap — the same
+          // fetch wave persists this viewer's lists *before* the identity key, so the caches
+          // already hold the correct data. Clearing here would wipe lists the wave just wrote
+          // and leave onboarding handoff empty until the next alarm/manual refresh.
           for (const queryKey of VIEWER_SCOPED_PR_QUERY_KEYS) {
             queryClient.setQueryData(queryKey, []);
             queryClient.removeQueries({ queryKey, exact: true, type: 'inactive' });
