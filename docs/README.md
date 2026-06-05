@@ -33,5 +33,3 @@ Theme choice is stored under `pr-extension-theme` in `localStorage` (same key as
 Flowcharts use the **[ELK](https://eclipse.dev/elk/)** layout engine (`@mermaid-js/layout-elk`) for clearer large graphs. In the page, diagrams **scale to fill** the card (not draggable). **Click** a diagram for fullscreen pan/zoom; **Esc** closes.
 
 To use Dagre on a single diagram, add YAML frontmatter at the top of the `mermaid` code block (`layout: dagre`). See [Mermaid layouts](https://mermaid.js.org/config/layouts.html).
-
-Pages are plain Markdown + Mermaid. To add React or MDX later, install `@astrojs/react`, `@astrojs/mdx`, `react`, and `react-dom`, then register those integrations in `astro.config.ts`.

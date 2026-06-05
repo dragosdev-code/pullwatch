@@ -13,10 +13,10 @@ Pullwatch reads HTML from `github.com` once every three minutes. Most of the tim
 
 [HealthStatusService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/HealthStatusService.ts) owns two flags, persists them to `chrome.storage.local`, and broadcasts every transition. It is not a "last fetch summary"; it is the orchestrator that the popup banner and the toolbar badge ultimately read.
 
-| Flag                            | Storage key                | Set by                                                                            | Cleared by                                                                                                                       |
-| ------------------------------- | -------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Parser breakage                 | `parser_breakage`          | `signalParserBreakage(context)` from [PrFetchErrorHandler](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/PrFetchErrorHandler.ts) when a `ParserBreakageError` bubbles up | `clearParserBreakage()` on the next trusted list update.                                                                         |
-| GitHub outage (reason-tagged)   | `github_outage`            | `signalGitHubOutage(context, reason)` from `PrFetchErrorHandler` and from `PRService` integrity branches | `clearGitHubOutage()` on the next trusted list update, subject to the wave-suppression rule below.                              |
+| Flag                          | Storage key       | Set by                                                                                                                                                                                                       | Cleared by                                                                                         |
+| ----------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Parser breakage               | `parser_breakage` | `signalParserBreakage(context)` from [PrFetchErrorHandler](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/PrFetchErrorHandler.ts) when a `ParserBreakageError` bubbles up | `clearParserBreakage()` on the next trusted list update.                                           |
+| GitHub outage (reason-tagged) | `github_outage`   | `signalGitHubOutage(context, reason)` from `PrFetchErrorHandler` and from `PRService` integrity branches                                                                                                     | `clearGitHubOutage()` on the next trusted list update, subject to the wave-suppression rule below. |
 
 Both flags follow the same lifecycle:
 
@@ -40,12 +40,12 @@ export type GitHubOutageReason =
   | 'site_access_blocked';
 ```
 
-| Reason                   | Source of the signal                                                                                              | Statuspage involved? | What the banner says (in plain English)                                                                                 |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `transport`              | A thrown `GitHubOutageError` caught in [PrFetchErrorHandler](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/PrFetchErrorHandler.ts) | No                   | "GitHub didn't respond. Showing your last known list."                                                                  |
-| `pr_component_degraded`  | A local list anomaly: any `partial_drop_*` assessment branch, or an empty list corroborated by Statuspage         | Conditional          | "Pullwatch noticed an unusual change in your list."                                                                     |
-| `pr_list_churn`          | `PrTombstoneStore` resurrection inside the 4-alarm window (a key briefly disappeared and came back)                | No                   | "A pull request briefly disappeared and came back."                                                                     |
-| `site_access_blocked`    | `PrFetchErrorHandler` (or `SiteAccessWatcher` on `chrome.permissions.onRemoved`) when Chrome has revoked the extension's access to `github.com` | No                   | "Chrome is blocking Pullwatch from reaching GitHub." The banner points the user at `chrome://extensions` rather than Statuspage. |
+| Reason                  | Source of the signal                                                                                                                                                   | Statuspage involved? | What the banner says (in plain English)                                                                                          |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `transport`             | A thrown `GitHubOutageError` caught in [PrFetchErrorHandler](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/domain/PrFetchErrorHandler.ts) | No                   | "GitHub didn't respond. Showing your last known list."                                                                           |
+| `pr_component_degraded` | A local list anomaly: any `partial_drop_*` assessment branch, or an empty list corroborated by Statuspage                                                              | Conditional          | "Pullwatch noticed an unusual change in your list."                                                                              |
+| `pr_list_churn`         | `PrTombstoneStore` resurrection inside the 4-alarm window (a key briefly disappeared and came back)                                                                    | No                   | "A pull request briefly disappeared and came back."                                                                              |
+| `site_access_blocked`   | `PrFetchErrorHandler` (or `SiteAccessWatcher` on `chrome.permissions.onRemoved`) when Chrome has revoked the extension's access to `github.com`                        | No                   | "Chrome is blocking Pullwatch from reaching GitHub." The banner points the user at `chrome://extensions` rather than Statuspage. |
 
 There is one invariant worth memorising. From [IHealthStatusService.ts](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/interfaces/IHealthStatusService.ts):
 
@@ -59,11 +59,11 @@ In other words, "your assigned list went to zero" is not by itself an outage. It
 
 [GitHubService.fetchGitHubData](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/GitHubService.ts) is the only place the extension hits `github.com`, and it is also the place that classifies what came back. Three buckets matter for outages.
 
-| HTTP shape                                         | Classification                                                                                  |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `500, 502, 503, 504, 520-530`                      | Transient. One retry after `TRANSIENT_RETRY_DELAY_MS = 3s`, then `GitHubOutageError`.            |
-| `AbortError` (timeout) or `TypeError` (DNS / reset) | Network-level failure. One retry, then `GitHubOutageError`.                                      |
-| Any other non-OK status                             | Throws a generic error; not retried, not classified as outage.                                   |
+| HTTP shape                                          | Classification                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `500, 502, 503, 504, 520-530`                       | Transient. One retry after `TRANSIENT_RETRY_DELAY_MS = 3s`, then `GitHubOutageError`. |
+| `AbortError` (timeout) or `TypeError` (DNS / reset) | Network-level failure. One retry, then `GitHubOutageError`.                           |
+| Any other non-OK status                             | Throws a generic error; not retried, not classified as outage.                        |
 
 Two limits keep the retry from compounding. Each attempt has its own `GITHUB_FETCH_TIMEOUT_MS` socket timeout, and the loop as a whole is capped at `GITHUB_FETCH_OVERALL_DEADLINE_MS = 18s`. If the deadline runs out mid-retry, the loop throws `GitHubOutageError` immediately rather than waiting another three seconds for a delay it cannot afford.
 
@@ -84,6 +84,8 @@ The full client contract (cache TTL, fail-open behaviour, `bypassCache` semantic
 ## Recovery and clear semantics
 
 A list fetch that lands a trusted persist clears both flags. `clearParserBreakage` runs unconditionally; `clearGitHubOutage` runs through `maybeClearGitHubOutageAfterListSuccess`, which respects one wave-scoped suppression rule.
+
+The diagram below is only the healthy ↔ outage lifecycle. The four inner states match the reasons in [Four `GitHubOutageReason` values, four different stories](#four-githuboutagereason-values-four-different-stories) (banner copy, Statuspage gating, and what triggered each reason).
 
 ```mermaid
 ---
@@ -106,7 +108,7 @@ stateDiagram-v2
     }
 
     note right of Outage
-      Reason decides the banner (see the table above).
+      Reason picks banner copy.
       ListChurn is the exception to recovery: it clears
       only when the next wave begins (beginPrListHealthWave),
       because a churn signal on assigned suppresses
@@ -114,7 +116,7 @@ stateDiagram-v2
     end note
 ```
 
-There are only two transitions that matter at this altitude: `Healthy` arms exactly one outage flag through `signalGitHubOutage(reason)`, and the next trusted list update clears it through `clearGitHubOutage()`. The four boxes inside **Outage flag set** are the four reasons the flag can carry; which trigger produces which reason is the table above. `ListChurn` is the one reason that does not clear on the very next trusted update, for the suppression reason in the note.
+There are only two transitions that matter at this altitude: `Healthy` arms exactly one outage flag through `signalGitHubOutage(reason)`, and the next trusted list update clears it through `clearGitHubOutage()`. The four boxes inside **Outage flag set** are the four reasons the flag can carry; [which trigger produces which reason](#four-githuboutagereason-values-four-different-stories) is spelled out in that section's table. `ListChurn` is the one reason that does not clear on the very next trusted update, for the suppression reason in the note.
 
 The wave suppression is small but load-bearing. `PRService.suppressGitHubOutageClearForListChurnWave` flips on when [applyTombstoneFilter](https://github.com/dragosdev-code/pullwatch/blob/main/extension/background/services/PRService.ts) records a resurrection during the assigned fetch; merged and authored fetches in the same wave still call `maybeClearGitHubOutageAfterListSuccess`, but the suppression turns those calls into no-ops. `EventService.handleAlarm` (and the install/startup paths) call `prService.beginPrListHealthWave()` before each wave, which clears the flag and lets the next round assess from scratch.
 
