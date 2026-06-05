@@ -114,6 +114,7 @@ describe('PRService trust-policy split (operational partial drop)', () => {
       notificationService: {
         createAssignedPRVisuals,
         createMergedPRVisuals,
+        warmNotificationAudio: vi.fn().mockResolvedValue(undefined),
         playAssignedSound,
         playMergedSound,
         showAssignedPRNotifications: vi.fn(),

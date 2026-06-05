@@ -136,6 +136,7 @@ describe('PRService account swap (silent baseline)', () => {
       notificationService: {
         createAssignedPRVisuals,
         createMergedPRVisuals,
+        warmNotificationAudio: vi.fn().mockResolvedValue(undefined),
         playAssignedSound,
         playMergedSound,
         showAssignedPRNotifications: vi.fn(),
@@ -360,6 +361,7 @@ describe('PRService.persistResolvedViewerIdentity — F3 partial-refresh swap', 
       notificationService: {
         createAssignedPRVisuals: vi.fn().mockResolvedValue({ fired: true }),
         createMergedPRVisuals: vi.fn().mockResolvedValue({ fired: true }),
+        warmNotificationAudio: vi.fn().mockResolvedValue(undefined),
         playAssignedSound: vi.fn(),
         playMergedSound: vi.fn(),
         showAssignedPRNotifications: vi.fn(),

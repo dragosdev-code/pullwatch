@@ -88,6 +88,7 @@ describe('PRService TTL list cache (tryTtlCachedPrList)', () => {
       notificationService: {
         createAssignedPRVisuals,
         createMergedPRVisuals,
+        warmNotificationAudio: vi.fn().mockResolvedValue(undefined),
         playAssignedSound,
         playMergedSound,
         showAssignedPRNotifications: vi.fn(),

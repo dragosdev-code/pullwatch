@@ -108,6 +108,7 @@ describe('PRService outage gate', () => {
       notificationService: {
         createAssignedPRVisuals,
         createMergedPRVisuals,
+        warmNotificationAudio: vi.fn().mockResolvedValue(undefined),
         playAssignedSound,
         playMergedSound,
         showAssignedPRNotifications: vi.fn(),
