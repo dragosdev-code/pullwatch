@@ -478,4 +478,36 @@ describe('PRService.persistResolvedViewerIdentity — F3 partial-refresh swap', 
 
     expect(setStoredPRs).not.toHaveBeenCalled();
   });
+
+  it('first alarm after swap: last fetch resolves no login — all three keep new-account data, no empty flash', async () => {
+    // baseline stored = alice (old); fresh lists are bob's. Assigned + merged resolve bob, then
+    // authored's last bucket (and the persist read) resolve null, mirroring an empty/headerless
+    // draft page that parses no viewer login. Sticky cycle login must keep the wave on 'bob'.
+    const pr = makeService();
+    getLastResolvedViewerLogin.mockReturnValue('bob');
+    await pr.fetchAndUpdateAssignedPRs(false, true);
+    await pr.updateMergedPRs(false, true);
+    getLastResolvedViewerLogin.mockReturnValue(null); // draft bucket parsed no viewer login
+    await pr.updateAuthoredPRs(false, true);
+
+    setStoredPRs.mockClear();
+    await pr.persistResolvedViewerIdentity();
+
+    // No list cleared to [] by the swap barrier.
+    const cleared = setStoredPRs.mock.calls.filter(
+      (c) => Array.isArray(c[1]) && c[1].length === 0
+    );
+    expect(cleared).toHaveLength(0);
+    // Authored holds the fresh (bob) row, not the preserved old-account row.
+    expect(storedByKey[STORAGE_KEY_AUTHORED_PRS]!.prs.some((p) => p.id === 'old-authored')).toBe(
+      false
+    );
+    expect(storedByKey[STORAGE_KEY_AUTHORED_PRS]!.prs.some((p) => p.id === 'fresh-authored')).toBe(
+      true
+    );
+    // Identity persisted as the sticky new login.
+    expect(setGitHubViewerIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({ login: 'bob' })
+    );
+  });
 });

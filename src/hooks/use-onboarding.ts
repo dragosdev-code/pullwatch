@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
+  STORAGE_KEY_ASSIGNED_PRS,
+  STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_HAS_SEEN_ONBOARDING,
   STORAGE_KEY_INSTALL_SESSION_CHECK_COMPLETE,
+  STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
 } from '@common/constants';
-import type { GitHubViewerIdentity } from '@common/types';
+import type { GitHubViewerIdentity, StoredPRs } from '@common/types';
 import { runWithTransientStorageRetry } from '@common/transient-storage-retry';
 import {
   chromeExtensionService,
@@ -54,6 +57,33 @@ function readViewerLogin(items: Record<string, unknown>): string | null {
   const raw = items[STORAGE_KEY_GITHUB_VIEWER_IDENTITY] as GitHubViewerIdentity | undefined;
   const login = raw?.login?.trim();
   return login && login.length > 0 ? login : null;
+}
+
+const VIEWER_SCOPED_PR_STORAGE_ROWS = [
+  { storageKey: STORAGE_KEY_ASSIGNED_PRS, queryKey: queryKeys.assignedPrs },
+  { storageKey: STORAGE_KEY_MERGED_PRS, queryKey: queryKeys.mergedPrs },
+  { storageKey: STORAGE_KEY_AUTHORED_PRS, queryKey: queryKeys.authoredPrs },
+] as const;
+
+/**
+ * Re-reads the viewer-scoped PR lists from storage and applies them to the query cache.
+ *
+ * WHY [re-read, not blank]: On an account swap (A → B) the background swap barrier persists this
+ * viewer's lists — or clears the ones that did not refresh — *before* it writes
+ * `github_viewer_identity`. So by the time the identity-change event fires, storage already holds
+ * B's data. Blanking the caches to `[]` here wiped those freshly synced lists and flashed all-empty
+ * until the next fetch. Reading storage and applying it shows B's actual rows (or a legitimate
+ * empty list) with no flash, while still never rendering A's rows.
+ */
+async function applyViewerScopedListsFromStorage(queryClient: QueryClient): Promise<void> {
+  const keys = VIEWER_SCOPED_PR_STORAGE_ROWS.map((row) => row.storageKey);
+  const snapshot = await runWithTransientStorageRetry(() =>
+    chromeExtensionService.storage.local.get(keys)
+  );
+  for (const { storageKey, queryKey } of VIEWER_SCOPED_PR_STORAGE_ROWS) {
+    const prs = (snapshot[storageKey] as StoredPRs | undefined)?.prs ?? [];
+    queryClient.setQueryData(queryKey, prs);
+  }
 }
 
 /**
@@ -228,15 +258,23 @@ export function useOnboarding() {
         const nextLogin = readViewerLogin({ [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: next });
         if (previousLogin && previousLogin !== nextLogin) {
           // WHY [account boundary]: PR query keys are shared across GitHub users, while their
-          // storage snapshots are viewer-scoped. Clear active observers immediately and drop
-          // inactive cache entries so an account swap cannot render the previous viewer's lists.
+          // storage snapshots are viewer-scoped, so the previous viewer's rows must never linger.
           // WHY [require previousLogin]: a first login (null → login) is NOT a swap — the same
           // fetch wave persists this viewer's lists *before* the identity key, so the caches
-          // already hold the correct data. Clearing here would wipe lists the wave just wrote
-          // and leave onboarding handoff empty until the next alarm/manual refresh.
-          for (const queryKey of VIEWER_SCOPED_PR_QUERY_KEYS) {
-            queryClient.setQueryData(queryKey, []);
-            queryClient.removeQueries({ queryKey, exact: true, type: 'inactive' });
+          // already hold the correct data and must not be touched.
+          if (nextLogin) {
+            // Swap A → B: storage already holds B's lists (persisted before the identity write),
+            // so re-read and apply them instead of blanking — never A's rows, never an empty flash.
+            void applyViewerScopedListsFromStorage(queryClient).catch((e) => {
+              console.error('[useOnboarding] applyViewerScopedListsFromStorage failed', e);
+            });
+          } else {
+            // Logout A → null: no new viewer; drop A's lists so nothing stale renders behind the
+            // logged-out gate.
+            for (const queryKey of VIEWER_SCOPED_PR_QUERY_KEYS) {
+              queryClient.setQueryData(queryKey, []);
+              queryClient.removeQueries({ queryKey, exact: true, type: 'inactive' });
+            }
           }
         }
         setViewerLogin(nextLogin);

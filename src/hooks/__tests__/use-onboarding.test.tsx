@@ -3,8 +3,11 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  STORAGE_KEY_ASSIGNED_PRS,
+  STORAGE_KEY_AUTHORED_PRS,
   STORAGE_KEY_GITHUB_VIEWER_IDENTITY,
   STORAGE_KEY_HAS_SEEN_ONBOARDING,
+  STORAGE_KEY_MERGED_PRS,
   STORAGE_KEY_ONBOARDING_REAUTH_GATE_PENDING,
 } from '@common/constants';
 import { queryKeys } from '@src/constants/query-keys';
@@ -175,10 +178,16 @@ describe('useOnboarding', () => {
     expect(result.current.showLoggedOutLayer).toBe(false);
   });
 
-  it('clears viewer-scoped PR caches when viewer identity changes', async () => {
+  it('swap A -> B re-reads the new viewer lists from storage (no empty flash, no prev-viewer rows)', async () => {
     getMock.mockResolvedValueOnce({
       [STORAGE_KEY_HAS_SEEN_ONBOARDING]: true,
       [STORAGE_KEY_GITHUB_VIEWER_IDENTITY]: { login: 'alice' },
+    });
+    // Re-read on swap: storage already holds bob's lists (background persists them before identity).
+    getMock.mockResolvedValueOnce({
+      [STORAGE_KEY_ASSIGNED_PRS]: { prs: [{ id: 'assigned-bob' }] },
+      [STORAGE_KEY_MERGED_PRS]: { prs: [{ id: 'merged-bob' }] },
+      [STORAGE_KEY_AUTHORED_PRS]: { prs: [{ id: 'authored-bob' }] },
     });
     queryClient.setQueryData(queryKeys.assignedPrs, [{ id: 'assigned-alice' }]);
     queryClient.setQueryData(queryKeys.mergedPrs, [{ id: 'merged-alice' }]);
@@ -200,9 +209,12 @@ describe('useOnboarding', () => {
       );
     });
 
-    expect(queryClient.getQueryData(queryKeys.assignedPrs)).toBeUndefined();
-    expect(queryClient.getQueryData(queryKeys.mergedPrs)).toBeUndefined();
-    expect(queryClient.getQueryData(queryKeys.authoredPrs)).toBeUndefined();
+    // New viewer's rows are applied from storage — never blanked, never alice's rows.
+    await waitFor(() =>
+      expect(queryClient.getQueryData(queryKeys.assignedPrs)).toEqual([{ id: 'assigned-bob' }])
+    );
+    expect(queryClient.getQueryData(queryKeys.mergedPrs)).toEqual([{ id: 'merged-bob' }]);
+    expect(queryClient.getQueryData(queryKeys.authoredPrs)).toEqual([{ id: 'authored-bob' }]);
     expect(result.current.isLoggedIn).toBe(true);
   });
 

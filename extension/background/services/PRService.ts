@@ -89,6 +89,13 @@ export class PRService implements IPRService {
   >();
   private cycleBaselineLogin: string | null = null;
   private cycleBaselineLoaded = false;
+  /**
+   * Last non-null viewer login resolved during the current wave. One wave = one browser session,
+   * but a page variant can parse no viewer login (and authored's last bucket often does). Holding
+   * the last non-null value keeps swap detection / refresh markers / identity persist on the same
+   * account even when an individual fetch's HTML yields no login. See {@link resolveCycleLogin}.
+   */
+  private cycleResolvedLogin: string | null = null;
   private clearedRouteHintForSwapKey: string | null = null;
   /**
    * Viewer login observed when each PR list was successfully written during the current wave.
@@ -164,7 +171,7 @@ export class PRService implements IPRService {
    */
   async persistResolvedViewerIdentity(): Promise<void> {
     try {
-      const login = this.gitHubService.getLastResolvedViewerLogin();
+      const login = this.resolveCycleLogin();
       if (!login) {
         this.debugService.log('[PRService] Skipping viewer identity persist — no resolved login');
         return;
@@ -229,16 +236,31 @@ export class PRService implements IPRService {
     return this.cycleBaselineLogin;
   }
 
+  /**
+   * WHY [sticky resolved login]: {@link IGitHubService.getLastResolvedViewerLogin} is reset to null
+   * at the start of every `fetchPRs` and only set when a page yields a parseable viewer login.
+   * Authored fetches four sequential buckets, so the raw value reflects only the last bucket —
+   * frequently an empty/headerless page that resolves null. Caching the last non-null login for the
+   * cycle keeps {@link detectAccountSwap}, {@link markListRefreshedForCurrentViewer}, and
+   * {@link persistResolvedViewerIdentity} agreeing on the wave's single account.
+   */
+  private resolveCycleLogin(): string | null {
+    const live = this.gitHubService.getLastResolvedViewerLogin();
+    if (live) this.cycleResolvedLogin = live;
+    return this.cycleResolvedLogin;
+  }
+
   private resetSwapCycleState(): void {
     this.cycleBaselineLoaded = false;
     this.cycleBaselineLogin = null;
+    this.cycleResolvedLogin = null;
     this.clearedRouteHintForSwapKey = null;
     this.cycleListRefreshLogins.clear();
   }
 
   /** WHY [write provenance]: a successful list write only counts for swap cleanup if it belongs to the final viewer. */
   private markListRefreshedForCurrentViewer(kind: 'assigned' | 'merged' | 'authored'): void {
-    this.cycleListRefreshLogins.set(kind, this.gitHubService.getLastResolvedViewerLogin());
+    this.cycleListRefreshLogins.set(kind, this.cycleResolvedLogin);
   }
 
   /**
@@ -270,7 +292,7 @@ export class PRService implements IPRService {
     logSuffix: string
   ): Promise<{ accountSwap: boolean; baselineLogin: string | null; currentLogin: string | null }> {
     const baselineLogin = await this.getCycleBaselineLogin();
-    const currentLogin = this.gitHubService.getLastResolvedViewerLogin();
+    const currentLogin = this.resolveCycleLogin();
     const accountSwap = Boolean(baselineLogin && currentLogin && baselineLogin !== currentLogin);
 
     if (accountSwap && baselineLogin && currentLogin) {
