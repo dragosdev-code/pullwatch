@@ -5,6 +5,7 @@ import mermaid from 'astro-mermaid';
 import tailwindcss from '@tailwindcss/vite';
 
 import { pullwatchMermaidConfig } from './mermaid.config';
+import { rehypeExternalLinksNewTab } from './src/plugins/rehype-external-links-new-tab';
 
 // https://astro.build/config
 
@@ -12,6 +13,10 @@ export default defineConfig({
   site: 'https://dragosdev-code.github.io',
 
   base: '/pullwatch',
+
+  markdown: {
+    rehypePlugins: [rehypeExternalLinksNewTab],
+  },
 
   vite: {
     plugins: [tailwindcss()],
