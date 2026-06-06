@@ -24,7 +24,10 @@ const themeLabels: Record<(typeof THEMES)[number], string> = {
 
 <script is:inline define:vars={{ THEME_STORAGE_KEY, DEFAULT_THEME }}>
   function applyDocsTheme(name) {
-    document.documentElement.setAttribute('data-theme', name);
+    const current = document.documentElement.getAttribute('data-theme');
+    if (current !== name) {
+      document.documentElement.setAttribute('data-theme', name);
+    }
     try {
       localStorage.setItem(THEME_STORAGE_KEY, name);
     } catch {
@@ -32,19 +35,23 @@ const themeLabels: Record<(typeof THEMES)[number], string> = {
     }
     const select = document.getElementById('pw-docs-theme-select');
     if (select && select.value !== name) select.value = name;
-    document.documentElement.dataset.mermaidTheme =
-      name === 'light' ? 'default' : 'dark';
+  }
+
+  function loadSavedTheme() {
+    try {
+      const saved = localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch {
+      /* private mode */
+    }
+    return DEFAULT_THEME;
   }
 
   const select = document.getElementById('pw-docs-theme-select');
   if (!select) return;
   const themes = JSON.parse(select.dataset.themes || '[]');
-  const current = document.documentElement.getAttribute('data-theme');
-  if (current && themes.includes(current)) {
-    select.value = current;
-  } else {
-    applyDocsTheme(DEFAULT_THEME);
-  }
+
+  applyDocsTheme(loadSavedTheme());
 
   select.addEventListener('change', (e) => {
     const value = e.target?.value;

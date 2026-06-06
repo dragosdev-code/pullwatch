@@ -1,10 +1,9 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import { starlightBasePath } from 'starlight-base-path';
-import mermaid from 'astro-mermaid';
 import tailwindcss from '@tailwindcss/vite';
 
-import { pullwatchMermaidConfig } from './mermaid.config';
+import mermaidMarkdown from './src/integrations/mermaid-markdown';
 import { rehypeExternalLinksNewTab } from './src/plugins/rehype-external-links-new-tab';
 
 // https://astro.build/config
@@ -23,15 +22,7 @@ export default defineConfig({
   },
 
   integrations: [
-    mermaid({
-      theme: 'base',
-
-      autoTheme: true,
-
-      enableLog: false,
-
-      mermaidConfig: pullwatchMermaidConfig,
-    }),
+    mermaidMarkdown(),
 
     starlight({
       plugins: [starlightBasePath()],
@@ -62,6 +53,8 @@ export default defineConfig({
       ],
 
       components: {
+        ThemeProvider: './src/components/DocsThemeProvider.astro',
+
         ThemeSelect: './src/components/DocsThemeSelect.astro',
 
         Head: './src/components/HeadWithTheme.astro',

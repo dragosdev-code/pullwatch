@@ -1,22 +1,6 @@
 ---
-import { DEFAULT_THEME, THEME_STORAGE_KEY } from "../lib/themes";
+import { themeInitInlineScript } from "../lib/theme-init-snippet";
 ---
 
 <!-- Apply saved DaisyUI theme before paint (same key as the extension). -->
-<script
-  is:inline
-  define:vars={{ THEME_STORAGE_KEY, DEFAULT_THEME }}
->
-  (function () {
-    function apply(theme) {
-      document.documentElement.setAttribute("data-theme", theme);
-    }
-    try {
-      var saved = localStorage.getItem(THEME_STORAGE_KEY);
-      if (saved === "light" || saved === "dark") apply(saved);
-      else apply(DEFAULT_THEME);
-    } catch {
-      apply(DEFAULT_THEME);
-    }
-  })();
-</script>
+<script is:inline set:html={themeInitInlineScript} />

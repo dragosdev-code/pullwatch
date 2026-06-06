@@ -1,0 +1,17 @@
+---
+import { themeInitInlineScript } from "../lib/theme-init-snippet";
+---
+
+<!-- Authoritative theme init: pr-extension-theme (replaces Starlight ThemeProvider). -->
+<script is:inline set:html={themeInitInlineScript} />
+
+<script is:inline>
+  window.StarlightThemeProvider = {
+    updatePickers(theme) {
+      const select = document.getElementById("pw-docs-theme-select");
+      if (select instanceof HTMLSelectElement && theme) {
+        select.value = theme === "auto" ? select.value : theme;
+      }
+    },
+  };
+</script>
