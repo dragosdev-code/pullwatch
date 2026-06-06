@@ -12,7 +12,7 @@ The store is a **vanilla zustand store** (`zustand/vanilla`, not `zustand`). The
 type GameStore = StoreApi<GameState & GameActions>;
 ```
 
-`GameState` is the whole observable surface — every field on it is reachable by selectors and is part of the contract. `GameActions` is the mutator set; actions are only ever called from the loop, the shell, or the click handler.
+`GameState` is the whole observable surface: every field on it is reachable by selectors and is part of the contract. `GameActions` is the mutator set; actions are only ever called from the loop, the shell, or the click handler.
 
 ### `GameState` fields ([`game-store.ts`](../game-store.ts#L29-L66))
 
@@ -31,10 +31,10 @@ type GameStore = StoreApi<GameState & GameActions>;
 | Action                                  | Caller                                                | Guarantees                                                                                |
 | --------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `startGame(mode, now)`                  | Shell, on mount and replay                            | Resets the grid, reseeds spawn timers from `now`, assigns a fresh `roundId`               |
-| `resumeFromCheckpoint(checkpoint, now)` | Shell, when a checkpoint exists on first mount        | Restores counters/timers/`gridSize` only — see below                                      |
+| `resumeFromCheckpoint(checkpoint, now)` | Shell, when a checkpoint exists on first mount        | Restores counters/timers/`gridSize` only (see below)                                      |
 | `endGame()`                             | External (e.g. test harness, future "give up" button) | No-op unless `status === 'playing'`; clears the grid, flips status to `'finished'`        |
 | `reset()`                               | Shell cleanup                                         | Wipes back to `buildIdleState()` so the next session starts cold                          |
-| `tick(now)`                             | Loop                                                  | Single owner of phase ordering — see [simulation-invariants.md](simulation-invariants.md) |
+| `tick(now)`                             | Loop                                                  | Single owner of phase ordering (see [simulation-invariants.md](simulation-invariants.md)) |
 | `clickCell(cellIndex, now)`             | `Cell`, primary `pointerup` (after capture) or `click` (keyboard) | Returns the `ClickOutcome` synchronously and updates `lastClick`                          |
 
 ## What lives in the closure, not in state
@@ -45,7 +45,7 @@ Some state is **deliberately invisible** to subscribers. The most important is:
 const recentlyDespawned = new Map<number, { target: Target; at: number }>();
 ```
 
-It lives in the `createGameStore` closure ([`game-store.ts`](../game-store.ts#L149-L155)) and is passed by reference into the helpers that need it — [`applyDespawnsForTick`](../game-tick.ts#L161-L174) writes to it, [`evictExpiredGraceEntries`](../game-tick.ts#L180-L189) prunes it, and [`clickCell`](../game-store.ts#L344-L350) reads from it.
+It lives in the `createGameStore` closure ([`game-store.ts`](../game-store.ts#L149-L155)) and is passed by reference into the helpers that need it: [`applyDespawnsForTick`](../game-tick.ts#L161-L174) writes to it, [`evictExpiredGraceEntries`](../game-tick.ts#L180-L189) prunes it, and [`clickCell`](../game-store.ts#L344-L350) reads from it.
 
 WHY [out of `GameState`]: a `Map` reference would defeat zustand's shallow equality. Every despawn tick would notify every subscribed React component because the map's identity changed, even though no subscribed slice did. Keeping it closure-private makes the despawn race entirely an implementation detail of the store.
 
@@ -79,7 +79,7 @@ interface GameStoreDeps {
 }
 ```
 
-Production code passes nothing — the defaults are `Math.random` and a monotonic `target_${n}` counter. Tests inject seeded sources so a tick that picks a "random" empty cell is deterministic. See [`__tests__/tick_ordering.test.ts`](../__tests__/tick_ordering.test.ts#L10-L31) for the canonical wiring; the helpers that consume these deps are [`pickOne`](../game-tick.ts#L27-L29) and [`runSpawnForTick`](../game-tick.ts#L94-L138).
+Production code passes nothing, so the defaults are `Math.random` and a monotonic `target_${n}` counter. Tests inject seeded sources so a tick that picks a "random" empty cell is deterministic. See [`__tests__/tick_ordering.test.ts`](../__tests__/tick_ordering.test.ts#L10-L31) for the canonical wiring; the helpers that consume these deps are [`pickOne`](../game-tick.ts#L27-L29) and [`runSpawnForTick`](../game-tick.ts#L94-L138).
 
 There is also a test-only escape hatch: [`__resetSessionRoundIdForTests`](../game-store.ts#L96-L99) resets the module-scoped `roundId` counter so each test file starts at `roundId = 1`.
 

@@ -2,7 +2,7 @@
 
 > See also: [simulation-invariants.md](simulation-invariants.md) · [mode-rules.md](mode-rules.md) · [store-contract.md](store-contract.md) · [loop-lifecycle.md](loop-lifecycle.md)
 
-The minigame keeps its simulation core off React's render path. Cells, the HUD, the FCT canvas, and the audio engine all read from the same vanilla zustand store the loop drives — but they read it in different ways depending on whether they need a render or just a side effect. This doc explains the patterns and the footguns.
+The minigame keeps its simulation core off React's render path. Cells, the HUD, the FCT canvas, and the audio engine all read from the same vanilla zustand store the loop drives, but they read it in different ways depending on whether they need a render or just a side effect. This doc explains the patterns and the footguns.
 
 > Anchors below are best-effort line ranges. Refresh them if [`squash-minigame-shell.tsx`](../squash-minigame-shell.tsx), [`context/game-store-context.tsx`](../context/game-store-context.tsx), or the consumer hooks are rewritten.
 
@@ -20,14 +20,14 @@ export function useGameStore(): GameStore { … }
 
 The provider does **not** create the store. The shell owns store lifetime ([`squash-minigame-shell.tsx`](../squash-minigame-shell.tsx#L84-L104)) and hands the same `StoreApi` reference into the provider for the lifetime of the session ([L165-L177](../squash-minigame-shell.tsx#L165-L177)). Tests inject deterministic stores; the shell rebuilds the store cleanly across mounts without context churn ([`context/game-store-context.tsx`](../context/game-store-context.tsx#L11-L19)).
 
-`useGameStore()` throws if called outside the provider — that's a developer error, never a runtime fallback.
+`useGameStore()` throws if called outside the provider: that's a developer error, never a runtime fallback.
 
 ## Two consumer patterns
 
 | Pattern                                    | Use when                                                          | Triggers React render?                   |
 | ------------------------------------------ | ----------------------------------------------------------------- | ---------------------------------------- |
-| `useStore(store, selector)` from `zustand` | A component's render output depends on the value                  | Yes — when the selector's result changes |
-| `store.subscribe(listener)`                | A side effect needs to fire on changes (audio, canvas, telemetry) | No — listener runs outside React         |
+| `useStore(store, selector)` from `zustand` | A component's render output depends on the value                  | Yes, when the selector's result changes  |
+| `store.subscribe(listener)`                | A side effect needs to fire on changes (audio, canvas, telemetry) | No, the listener runs outside React      |
 
 Both pull from the same store. The choice is about whether you want to participate in reconciliation or not.
 
@@ -43,9 +43,9 @@ const targetLifetimeMs = useStore(store, (s) => s.config.targetLifetimeMs);
 
 Inputs call `clickCell` from primary-button `pointerup` (after `setPointerCapture` on `pointerdown` so a slightly sliding tap still counts) and from `click` for keyboard activation; a trailing synthetic `click` after `pointerup` is deduped.
 
-Each `useStore` call subscribes to **one primitive slice**. Sibling cells subscribe to different indices, so a spawn into cell 4 only re-renders cell 4 — the other eight cells see no work because their selector results are identical-by-`Object.is` to the previous tick.
+Each `useStore` call subscribes to **one primitive slice**. Sibling cells subscribe to different indices, so a spawn into cell 4 only re-renders cell 4. The other eight cells see no work because their selector results are identical-by-`Object.is` to the previous tick.
 
-This works because the store treats `activeTargets` immutably ([store-contract.md](store-contract.md#what-never-mutates-outside-the-store)) — a tick that mutates one slot replaces the whole array, and zustand notifies subscribers; selectors that returned the unchanged sibling slot return the same reference, so React skips them.
+This works because the store treats `activeTargets` immutably ([store-contract.md](store-contract.md#what-never-mutates-outside-the-store)): a tick that mutates one slot replaces the whole array, and zustand notifies subscribers; selectors that returned the unchanged sibling slot return the same reference, so React skips them.
 
 #### ⚠️ Zustand v5 footgun: don't return new references
 
@@ -78,12 +78,12 @@ useEffect(() => {
 Three things to notice:
 
 1. **Listener fires on every store change.** The current shape subscribes to the whole store; `lastClick.id` is the dedupe key. A tick that doesn't update `lastClick` produces one quick `id === lastClickId` check and exits. Cheap, but not free.
-2. **Dedupe on `id`, not `at`.** Two clicks could share the same `at` (`performance.now()` resolution) but never the same `id` — `nextClickId` is monotonic per session ([`game-store.ts`](../game-store.ts#L420-L430)).
+2. **Dedupe on `id`, not `at`.** Two clicks could share the same `at` (`performance.now()` resolution) but never the same `id`: `nextClickId` is monotonic per session ([`game-store.ts`](../game-store.ts#L420-L430)).
 3. **Engines live in refs.** The FCT engine and the AudioContext are created lazily inside `useRef` so React renders never churn them ([`fct-overlay.tsx`](../fct/fct-overlay.tsx#L70-L72), [`use-audio-effects.ts`](../hooks/use-audio-effects.ts#L18-L22)).
 
 #### Optional optimisation: `subscribeWithSelector`
 
-If profiling ever flags the per-tick `id === lastClickId` check as meaningful, both subscribers can narrow with `subscribeWithSelector` middleware so the listener only fires when `state.lastClick` actually changes. That's a micro-optimisation, not a present requirement — current measurements don't justify the middleware churn.
+If profiling ever flags the per-tick `id === lastClickId` check as meaningful, both subscribers can narrow with `subscribeWithSelector` middleware so the listener only fires when `state.lastClick` actually changes. That's a micro-optimisation, not a present requirement: current measurements don't justify the middleware churn.
 
 ## Checkpoint flow
 
@@ -106,4 +106,4 @@ A new component or hook that reads the store should pick the smallest tool that 
 - **Hook fires a side effect when something changes** → `store.subscribe` inside `useEffect`, dedupe on a monotonic id (`lastClick.id`, `roundId`), unsubscribe in cleanup.
 - **Hook needs to dispatch an action** → `store.getState().action(args)` directly. No selector subscription needed.
 
-Whichever path you take, never read `store.getState()` inline during render — that bypasses the subscription and you'll observe stale state on the next tick.
+Whichever path you take, never read `store.getState()` inline during render. That bypasses the subscription and you'll observe stale state on the next tick.
