@@ -11,6 +11,10 @@
     <a href="https://vite.dev/"><img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 8" /></a>
     <a href="https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3"><img src="https://img.shields.io/badge/Manifest-V3-F7DF1E?style=flat-square&logo=googlechrome&logoColor=black" alt="Manifest V3" /></a>
   </p>
+
+  <p>
+    <a href="https://dragosdev-code.github.io/pullwatch/">Documentation</a>
+  </p>
 </div>
 
 ---
