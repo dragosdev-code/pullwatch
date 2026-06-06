@@ -14,6 +14,8 @@
 
   <p>
     <a href="https://dragosdev-code.github.io/pullwatch/">Documentation</a>
+    ·
+    <a href="https://ko-fi.com/dragosdev">Support on Ko-fi</a>
   </p>
 </div>
 
@@ -199,6 +201,10 @@ Pullwatch logging is always on, including in production builds, so you do not ne
 The most useful thing you can attach is the console output captured while reproducing the bug: open the relevant console first, trigger the problem, then paste the lines from around that moment (any `[DEBUG ERROR]` lines especially).
 
 Thanks for taking the time. It really does help.
+
+## Support
+
+Pullwatch is a personal project I build in my spare time. If it saves you a tab or two on GitHub, a tip on [Ko-fi](https://ko-fi.com/dragosdev) helps keep it maintained. You can also use the **Sponsor** button on this repository (same link).
 
 ## License
 
