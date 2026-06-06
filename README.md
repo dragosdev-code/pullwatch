@@ -31,8 +31,6 @@ Pullwatch keeps the pull requests you care about visible without you having to l
 
 **Chrome Web Store:** coming soon (the listing link will be added when the store item is live).
 
-**Privacy policy:** [PRIVACY.md](PRIVACY.md) (also on the [docs site](https://dragosdev-code.github.io/pullwatch/privacy/)).
-
 **From source:** see [Development](#development) below, then load the unpacked `dist/` folder in `chrome://extensions`.
 
 ## Features
@@ -49,7 +47,7 @@ Pullwatch keeps the pull requests you care about visible without you having to l
 
 ## Privacy and safety
 
-Pullwatch is built so that you do not have to take its word for it. The whole codebase is open and the rules below are easy to verify.
+Pullwatch is built so that you do not have to take its word for it. The whole codebase is open and the rules below are easy to verify. The full policy is in [PRIVACY.md](PRIVACY.md) and on the [docs site](https://dragosdev-code.github.io/pullwatch/privacy/).
 
 - **No tokens. No OAuth app.** Pullwatch never asks for a token and never creates an OAuth integration on your account. It reads the same pages your browser would render if you typed `github.com/pulls` in the address bar yourself.
 - **Outbound network (four host origins, all declared in the manifest).** Pullwatch does not run its own servers and does not use analytics or third-party SDKs. The only destinations it contacts are:
