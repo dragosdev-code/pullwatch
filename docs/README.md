@@ -14,13 +14,13 @@ npm run check    # astro check (types + content)
 
 ## Content
 
-Markdown lives in `src/content/docs/`. To re-run the one-time wiki import from `../wiki/`:
+Markdown lives in `src/content/docs/`. The privacy page is generated from the repo-root `PRIVACY.md`:
 
 ```bash
-node scripts/migrate-wiki.mjs
+node docs/scripts/sync-privacy.mjs
 ```
 
-(from repo root)
+Run that after editing `PRIVACY.md` so the docs site stays in sync.
 
 ## Theming (DaisyUI)
 

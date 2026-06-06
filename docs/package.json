@@ -9,7 +9,8 @@
     "preview": "astro preview",
     "astro": "astro",
     "check": "astro check",
-    "typecheck": "astro check"
+    "typecheck": "astro check",
+    "sync-privacy": "node scripts/sync-privacy.mjs"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",
