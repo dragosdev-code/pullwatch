@@ -31,7 +31,7 @@ Pullwatch keeps the pull requests you care about visible without you having to l
 
 **Chrome Web Store:** coming soon (the listing link will be added when the store item is live).
 
-**Privacy policy:** [PRIVACY.md](PRIVACY.md) (also on the [docs site](https://dragosdev-code.github.io/pullwatch/privacy/) after the next docs deploy).
+**Privacy policy:** [PRIVACY.md](PRIVACY.md) (also on the [docs site](https://dragosdev-code.github.io/pullwatch/privacy/)).
 
 **From source:** see [Development](#development) below, then load the unpacked `dist/` folder in `chrome://extensions`.
 
