@@ -11,7 +11,7 @@ This page gets Pullwatch running on your machine in about five minutes, and then
 
 ### From the Chrome Web Store
 
-Coming soon. The listing link will be added here once it is live.
+**[Add to Chrome](https://chromewebstore.google.com/detail/pullwatch-pr-dashboard-fo/occmgmijpfljojcfifhhjoaeedmcbppl)** from the Chrome Web Store. Sign in to GitHub in Chrome as you normally would, then pin the toolbar icon.
 
 ### From source (unpacked)
 

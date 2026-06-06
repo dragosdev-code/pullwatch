@@ -13,6 +13,8 @@
   </p>
 
   <p>
+    <a href="https://chromewebstore.google.com/detail/pullwatch-pr-dashboard-fo/occmgmijpfljojcfifhhjoaeedmcbppl"><strong>Add to Chrome</strong></a>
+    ·
     <a href="https://dragosdev-code.github.io/pullwatch/">Documentation</a>
     ·
     <a href="https://ko-fi.com/dragosdev">Support on Ko-fi</a>
@@ -31,7 +33,7 @@ Pullwatch keeps the pull requests you care about visible without you having to l
 
 ## Install
 
-**Chrome Web Store:** coming soon (the listing link will be added when the store item is live).
+**[Add to Chrome](https://chromewebstore.google.com/detail/pullwatch-pr-dashboard-fo/occmgmijpfljojcfifhhjoaeedmcbppl)** from the Chrome Web Store.
 
 **From source:** see [Development](#development) below, then load the unpacked `dist/` folder in `chrome://extensions`.
 
